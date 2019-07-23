@@ -1,1 +1,2 @@
-# My
+*EarthQuakePlateKDE_FFT_Compare
+指定されたファイルの全ベクトル誤差を比較

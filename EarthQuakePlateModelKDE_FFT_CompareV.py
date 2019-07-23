@@ -51,7 +51,7 @@ class EarthQuakePlateModel:
 
     #--------------------------
     #データの読み込み
-    def loadABLV(self):
+    def loadABLV(self,isVariance=False):
         self.data = open(self.logFullPath).readlines()
         
         # A, B, Lの取得
@@ -80,6 +80,9 @@ class EarthQuakePlateModel:
                 flag = True
             else:
                 self.V = np.vstack([self.V,tmp])
+        
+        if isVariance:
+            return self.B,self.V
 
     #--------------------------
     
@@ -179,6 +182,10 @@ class EarthQuakePlateModel:
 
         self.X = self.X.T
         pdb.set_trace()
+        
+class VarianceData:
+    def __init__(self,):
+       
 
 class CompareData:
     def __init__(self,standdata,comparedata):
@@ -273,6 +280,14 @@ if __name__ == "__main__":
         log.loadABLV()
         # 比較データ取得
         nankaiyV,tonankaiyV,tokaiyV,IDs = log.convV2YearlyData()
+        
+        #  bとVの分散を調べるときコメントアウト外す
+        log = EarthQuakePlateModel(dataPath,file,nCell=8,nYear=10000)
+        b,V = log.loadABLV()
+        variance = VariancebV(dataPath)
+        
+        
+        
         """
         # KDE
         log.KDE()

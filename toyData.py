@@ -10,7 +10,7 @@ import random
 import string
 
 import matplotlib as mpl
-mpl.use('Agg')
+#mpl.use('Agg')
 import matplotlib.pylab as plt
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -24,17 +24,17 @@ class Data():
     object variable: x1 = sin(y) + 1/log(y) + noise, x2 = cos(y) + log(y) + noise
     noise : 0±sigma(to decide by oneself)
     """
-    def __init__(self,sigma,nClass,nTrain,nTest):
+    def __init__(self,sigma,nClass):
         # 学習データ割合
         trainRatio = 0.125
         # 全データ数
         self.nData = 8000
         # 学習データ数
-        #self.nTrain = int(self.nData * trainRatio)
+        self.nTrain = int(self.nData * trainRatio)
         # 評価データ数
-        #self.nTest = int(self.nData - self.nTrain)
-        self.nTrain = nTrain
-        self.nTest = nTest
+        self.nTest = int(self.nData - self.nTrain)
+        #self.nTrain = nTrain
+        #self.nTest = nTest
         self.batchSize = 500
         self.batchCnt = 0
         self.batchRandInd = np.random.permutation(self.nTrain)
@@ -50,7 +50,7 @@ class Data():
     def TrainTest(self,pNum=6):
         # 目的変数の最小、最大値
         targetMin = 2
-        targetMax = 6
+        targetMax = 10
         # 小数以下丸める
         limitDecimal = 6
         
@@ -71,19 +71,74 @@ class Data():
         x1Test = x1[self.nTrain:][:,np.newaxis]
         x2Test = x2[self.nTrain:][:,np.newaxis]
         yTest = y[self.nTrain:][:,np.newaxis]
+        
+        """
+        # 2次元の不定問題
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+    
+        plt.scatter(x1,y)
+        plt.xlabel(r"$x_1$",fontsize=18)
+        plt.ylabel(r"$y$",fontsize=18)
+        plt.grid(True)
+        
+        ax.axvline(0.5,ls="--",color="red",linewidth=3.0)
+        
+        plt.rcParams["mathtext.fontset"] = "stix"
+        plt.show()
+        plt.savefig("toyData_scatter.png")
+        pdb.set_trace()
+        
+        
+        # sigmoid
+        x = np.arange(-5,5,0.1)
+        y = 1/(1+np.exp(-5*x))
+        
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        
+        plt.plot(x,y,color="black",linewidth=8.0)
+        
+        ax.grid(color="gray")
+        ax.axvline(-1,ls="--",color="m",linewidth=5.0)
+        ax.axvline(1,ls="--",color="m",linewidth=5.0)
 
-        ''' 
+        #ax.axvline(0.1,ls="--",color="darkorange",linewidth=3.0,label=r"$\alpha=2$")
+        #ax.axvline(-3,ls="--",color="gold",linewidth=3.0)
+        
+        plt.rcParams["mathtext.fontset"] = "stix"
+       
+        plt.rcParams["xtick.labelsize"] = 25
+        plt.rcParams["ytick.labelsize"] = 25
+        
+        ax.set_xlabel(r"$r^n$",fontsize=22)
+        ax.set_ylabel(r"$r^n_\mathrm{atr}$",fontsize=22)
+        plt.title(r"$r^n_\mathrm{atr}=1/(1+\exp(-5r^n))$",fontsize=20)
+        plt.subplots_adjust(wspace=0.8)
+        plt.tight_layout()
+        
+        plt.savefig("sigmoid_trunc.png")
+        """
+    
         # 全データplot
         fig = plt.figure()
         ax = Axes3D(fig)
-        ax.set_xlabel("x1")
-        ax.set_ylabel("x2")
-        ax.set_zlabel("y")
+        ax.set_xlabel(r'$x_1$',fontsize=18)
+        ax.set_ylabel(r'$x_2$',fontsize=18)
+        ax.set_zlabel(r"$y$",fontsize=18)
+    
+        plt.rcParams["xtick.labelsize"] = 18
+        plt.rcParams["ytick.labelsize"] = 18
         
-        ax.plot(np.reshape(x1,[-1,]),np.reshape(x2,[-1,]),np.reshape(y,[-1,]),"o",color="b",label="GT")
-        plt.savefig("Data.png")
-        '''
+        plt.rcParams["mathtext.fontset"] = "stix"
 
+        ax.plot(np.reshape(x1,[-1,]),np.reshape(x2,[-1,]),np.reshape(y,[-1,]),"o",color="b")
+        
+        plt.show()
+        plt.savefig("Data.eps")
+        pdb.set_trace()
+        
+        
         #[データ数、次元数]
         #return np.round(x1Train,limitDecimal),np.round(x2Train,limitDecimal),np.round(yTrain,limitDecimal),np.round(x1Test,limitDecimal),np.round(x2Test,limitDecimal),np.round(yTest,limitDecimal),np.round(y,limitDecimal)
         return x1Train, x2Train, yTrain, x1Test, x2Test, yTest, y
@@ -494,7 +549,7 @@ if __name__ == "__main__":
     
      
     testPeriod = 500
-    
+    """
     # nTrain,nTest:1000,7000 3200,800 500,3500 6400,1600
     nTrain = 1000
     nTest = 7000
@@ -508,11 +563,11 @@ if __name__ == "__main__":
         x1Test = pickle.load(fp)
         x2Test = pickle.load(fp)
         yTest = pickle.load(fp)
-        yData = pickle.load(fp)
+        yData = pickle.load(fp)"""
     #-----------------------------------------------------------------------
     # データ作成
-    myData = Data(sigma,nClass,nTrain,nTest)
-    #x1Train,x2Train,yTrain,x1Test,x2Test,yTest,yData = myData.TrainTest(pNum=pNum)
+    myData = Data(sigma,nClass)
+    x1Train,x2Train,yTrain,x1Test,x2Test,yTest,yData = myData.TrainTest(pNum=pNum)
     # クラスラベル付け
     yTrainlabel,yTestlabel,yMin,yMax = myData.Anotation(yData)
     # 入力ベクトル作成:[データ数、次元数(x,y)
