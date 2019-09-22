@@ -19,7 +19,7 @@ methodModel = int(sys.argv[1])
 # noize of x1, x2
 sigma = np.float(sys.argv[2])
 # number of class
-# nankai nClass = 10 or 12 or 20 or 50
+# nankai nClass = 11 or 21 or 51
 nClass = int(sys.argv[3])
 # number of rotation -> sin(pNum*pi) & cos(pNum*pi)
 pNum = int(sys.argv[4])
@@ -43,7 +43,7 @@ pickleFullPath = os.path.join(results,pickles)
 # -----------------------------------------------------------------------------
 
 # --------------------------- parameters --------------------------------------
-# number of nankai cell
+# number of nankai cell(input)
 nCell = 5
 # number of sliding window
 nWindow = 10
@@ -86,8 +86,7 @@ tkMin = 0.0165
 # Toy
 if dataMode == 0:
     dInput = 2
-    # node of output in Regression 
-    nRegOutput = 1    
+    dOutput = 1
     # round decimal 
     limitdecimal = 3
     # Width class
@@ -96,8 +95,7 @@ if dataMode == 0:
 # Nankai
 else:
     dInput = nCell*nWindow
-    # node of output in Regression 
-    nRegOutput = 3    
+    dOutput = 3
     # round decimal 
     limitdecimal = 6
     # Width class
@@ -111,8 +109,11 @@ first_cls_center_nk = np.round(nkMin + (beta / 2),limitdecimal)
 first_cls_center_tk = np.round(tkMin + (beta / 2),limitdecimal)
 
 
-# select nankai data 
+# select nankai data(3/5) 
 nameInds = [0,1,2] 
+
+# select cells(3/5) nankai(0or1),tonakai(2or3),tokai(4)
+cellInds = [1,3,4]
 
 # dropout
 keepProbTrain = 1.0
@@ -135,7 +136,7 @@ if dataMode == 0:
     myData.createData(trialID,beta=beta)
     myData.loadNankaiRireki()
 else:
-    myData = loadingNankai.NankaiData(nClass=nClass)
+    myData = loadingNankai.NankaiData(nCell=nCell,nClass=nClass,nWindow=nWindow,cellInds=cellInds)
     myData.loadTrainTestData(nameInds=nameInds)
 # -----------------------------------------------------------------------------
 
@@ -146,9 +147,9 @@ x_cls = tf.placeholder(tf.float32,shape=[None,dInput])
 x_reg = tf.placeholder(tf.float32,shape=[None,dInput])
 x_reg_test = tf.placeholder(tf.float32,shape=[None,dInput])
 # GT output of placeholder (target)
-y = tf.placeholder(tf.float32,shape=[None,1])
+y = tf.placeholder(tf.float32,shape=[None,dOutput])
 # GT output of label
-y_label = tf.placeholder(tf.int32,shape=[None,nClass])
+y_label = tf.placeholder(tf.int32,shape=[None,nClass*dOutput])
 
 # -----------------------------------------------------------------------------
 
@@ -181,7 +182,7 @@ def fc(inputs,w,b,keepProb):
      fc = tf.nn.dropout(fc, keepProb)
      return fc
 #-----------------------------------------------------------------------------#
-def Classify(x,reuse=False, keepProb=1.0):
+def Classify(x, reuse=False, keepProb=1.0,isNankai=False):
     
     """
     4 layer fully-connected classification networks.
@@ -208,12 +209,30 @@ def Classify(x,reuse=False, keepProb=1.0):
         w2 = weight_variable('w2',[nHidden,nHidden2])
         bias2 = bias_variable('bias2',[nHidden2])
         h2 = fc_relu(h1,w2,bias2,keepProb) 
-        
-        # 3rd layar
-        w3 = weight_variable('w3',[nHidden2,nClass])
-        bias3 = bias_variable('bias3',[nClass])
-        y = fc(h2,w3,bias3,keepProb)
-        
+       
+        # Toy
+        if dataMode == 0:
+            # 3rd layar
+            w3 = weight_variable('w3',[nHidden2,nClass])
+            bias3 = bias_variable('bias3',[nClass])
+            y = fc(h2,w3,bias3,keepProb)
+        # Nankai
+        else:
+            w3_1 = weight_variable('w3_1',[nHidden2,nClass])
+            bias3_1 = bias_variable('bias3_1',[nClass])
+            
+            w3_2 = weight_variable('w3_2',[nHidden2,nClass])
+            bias3_2 = bias_variable('bias3_2',[nClass])
+            
+            w3_3 = weight_variable('w3_3',[nHidden2,nClass])
+            bias3_3 = bias_variable('bias3_3',[nClass])
+            
+            y1 = fc(h2,w3_1,bias3_1,keepProb)
+            y2 = fc(h2,w3_2,bias3_2,keepProb)
+            y3 = fc(h2,w3_3,bias3_3,keepProb)
+            # [number of data, cell(=3) * number of class]
+            y = tf.concat((y1,y2,y3),1)
+    
         # shape=[None,number of class]
         return y
 #-----------------------------------------------------------------------------#
@@ -247,8 +266,8 @@ def Regress(x_reg,reuse=False,isATR=False,depth=0,keepProb=1.0):
         
         if depth == 3:
             # 2nd layer
-            w2_reg = weight_variable('w2_reg',[nRegHidden,nRegOutput])
-            bias2_reg = bias_variable('bias2_reg',[nRegOutput])
+            w2_reg = weight_variable('w2_reg',[nRegHidden,dOutput])
+            bias2_reg = bias_variable('bias2_reg',[dOutput])
             
             if isATR:
                 # shape=[None,number of dimention (y)]
@@ -263,8 +282,8 @@ def Regress(x_reg,reuse=False,isATR=False,depth=0,keepProb=1.0):
             h2 = fc_relu(h1,w2_reg,bias2_reg,keepProb)
             
             # 3rd layer
-            w3_reg = weight_variable('w3_reg',[nRegHidden2,nRegOutput])
-            bias3_reg = bias_variable('bias3_reg',[nRegOutput])
+            w3_reg = weight_variable('w3_reg',[nRegHidden2,dOutput])
+            bias3_reg = bias_variable('bias3_reg',[dOutput])
             
             if isATR:
                 return fc_sigmoid(h2,w3_reg,bias3_reg,keepProb)
@@ -283,8 +302,8 @@ def Regress(x_reg,reuse=False,isATR=False,depth=0,keepProb=1.0):
             h3 = fc_relu(h2,w3_reg,bias3_reg,keepProb)
             
             # 4th layer
-            w4_reg = weight_variable('w4_reg',[nRegHidden3,nRegOutput])
-            bias4_reg = bias_variable('bias4_reg',[nRegOutput])
+            w4_reg = weight_variable('w4_reg',[nRegHidden3,dOutput])
+            bias4_reg = bias_variable('bias4_reg',[dOutput])
             
             if isATR:
                 return fc_sigmoid(h3,w4_reg,bias4_reg,keepProb)
@@ -315,14 +334,14 @@ def ResidualRegress(x_reg,reuse=False,isATR=False,depth=0,keepProb=1.0):
             scope.reuse_variables()
 
         # 1st layer
-        w1_reg = weight_variable('w1_reg',[nRegOutput + dInput,nRegHidden])
+        w1_reg = weight_variable('w1_reg',[dOutput + dInput,nRegHidden])
         bias1_reg = bias_variable('bias1_reg',[nRegHidden])
         h1 = fc_relu(x_reg,w1_reg,bias1_reg,keepProb)
         
         if depth == 3:
             # 2nd layer
-            w2_reg = weight_variable('w2_reg',[nRegHidden,nRegOutput])
-            bias2_reg = bias_variable('bias2_reg',[nRegOutput])
+            w2_reg = weight_variable('w2_reg',[nRegHidden,dOutput])
+            bias2_reg = bias_variable('bias2_reg',[dOutput])
             
             
             if isATR:
@@ -338,8 +357,8 @@ def ResidualRegress(x_reg,reuse=False,isATR=False,depth=0,keepProb=1.0):
             h2 = fc_relu(h1,w2_reg,bias2_reg,keepProb)
             
             # 3rd layer
-            w3_reg = weight_variable('w3_reg',[nRegHidden2,nRegOutput])
-            bias3_reg = bias_variable('bias3_reg',[nRegOutput])
+            w3_reg = weight_variable('w3_reg',[nRegHidden2,dOutput])
+            bias3_reg = bias_variable('bias3_reg',[dOutput])
             
             if isATR:
                 return fc_sigmoid(h2,w3_reg,bias3_reg,keepProb)
@@ -358,8 +377,8 @@ def ResidualRegress(x_reg,reuse=False,isATR=False,depth=0,keepProb=1.0):
             h3 = fc_relu(h2,w3_reg,bias3_reg,keepProb)
             
             # 4th layer
-            w4_reg = weight_variable('w4_reg',[nRegHidden3,nRegOutput])
-            bias4_reg = bias_variable('bias4_reg',[nRegOutput])
+            w4_reg = weight_variable('w4_reg',[nRegHidden3,dOutput])
+            bias4_reg = bias_variable('bias4_reg',[dOutput])
             
             if isATR:
                 return fc_sigmoid(h3,w4_reg,bias4_reg,keepProb)
@@ -380,19 +399,41 @@ def CreateRegInputOutput(x,y,cls_score,isEval=False):
         r: residual for regression (gt anchor-based) 
         cls_cener_x: center variable of class for regression input
     """
-    pdb.set_trace()
-    # Max class of predicted class
-    pred_maxcls = tf.expand_dims(tf.cast(tf.argmax(cls_score,axis=1),tf.float32),1)  
-    # Center variable of class        
-    pred_cls_center = pred_maxcls * beta + first_cls_center
-    # feature vector + center variable of class
-    cls_center_x =  tf.concat((pred_cls_center,x),axis=1)
-    # residual = objective - center variavle of class 
-    r = y - pred_cls_center
+    if dataMode == 0:
+
+        # Max class of predicted class
+        pred_maxcls = tf.expand_dims(tf.cast(tf.argmax(cls_score,axis=1),tf.float32),1)  
+        # Center variable of class        
+        pred_cls_center = pred_maxcls * beta + first_cls_center
+    
+    else:
+
+        # Max class of predicted class
+        pred_maxcls1 = tf.expand_dims(tf.cast(tf.argmax(cls_score[:,:nClass],axis=1),tf.float32),1)  
+        # Max class of predicted class
+        pred_maxcls2 = tf.expand_dims(tf.cast(tf.argmax(cls_score[:,nClass:nClass+nClass],axis=1),tf.float32),1)  
+        # Max class of predicted class
+        pred_maxcls3 = tf.expand_dims(tf.cast(tf.argmax(cls_score[:,nClass+nClass:],axis=1),tf.float32),1)
+
+        # Center variable of class for nankai       
+        pred_cls_center1 = pred_maxcls1 * beta + first_cls_center_nk
+        # Center variable of class for tonaki        
+        pred_cls_center2 = pred_maxcls2 * beta + first_cls_center_tk
+        # Center variable of class for tokai       
+        pred_cls_center3 = pred_maxcls3 * beta + first_cls_center_tk
+        # [number of data, cell(=3)] 
+        pred_cls_center = tf.concat((pred_cls_center1,pred_cls_center2,pred_cls_center3),1)
+    
     
     if isEval:
         return pred_cls_center
     else:
+        
+        # residual = objective - center variavle of class 
+        r = y - pred_cls_center
+        # feature vector + center variable of class
+        cls_center_x =  tf.concat((pred_cls_center,x),axis=1)
+        
         return pred_cls_center, r, cls_center_x
 #-----------------------------------------------------------------------------#
 def TruncatedResidual(r,reuse=False):
@@ -411,7 +452,7 @@ def TruncatedResidual(r,reuse=False):
         if reuse:
             scope.reuse_variables()
         
-        alpha = alpha_variable("alpha",[1]) 
+        alpha = alpha_variable("alpha",[dOutput]) 
         
         r_at = 1/(1 + tf.exp(- alpha * r))
         
@@ -433,7 +474,7 @@ def Reduce(r_at,param,reuse=False):
     with tf.variable_scope('TrResidual') as scope:  
         if reuse:
             scope.reuse_variables()
-        
+
         #pred_r = (-1/param) * tf.log((1/r_at) - 1)
         pred_r = 1/param * tf.log(r_at/(1-r_at + 1e-8))
         
@@ -450,7 +491,10 @@ def Loss(y,predict,isCE=False):
         isR=False: CE, isR=True: MAE
     """
     if isCE:
-        return tf.losses.softmax_cross_entropy(y,predict)
+        if dataMode == 0:
+            return tf.losses.softmax_cross_entropy(y,predict)
+        else:
+            return tf.losses.softmax_cross_entropy(y[:,:nClass],predict[:,:nClass]) + tf.losses.softmax_cross_entropy(y[:,nClass:nClass+nClass],predict[:,nClass:nClass+nClass]) + tf.losses.softmax_cross_entropy(y[:,nClass+nClass:],predict[:,nClass+nClass:])
     else:
         return tf.reduce_mean(tf.abs(y - predict))
 #-----------------------------------------------------------------------------#
@@ -477,34 +521,39 @@ def Optimizer(loss,name_scope="Regress"):
 # OUT -> cls_op: one-hot vector
 cls_op = Classify(x_cls,keepProb=keepProbTrain)
 cls_op_test = Classify(x_cls,reuse=True,keepProb=1.0)
+#cls_op_eval = Classify(x_cls,reuse=True,keepProb=1.0)
 
 # ============== Make Regression Input & Output ========================= #
 # IN -> x_cls: feature vector x = x1 + x2, cls_op: one-hot vector
 # OUT -> pred_cls_center: center of predicted class, res: gt residual, reg_in: x + pred_cls_center
 pred_cls_center, res, reg_in = CreateRegInputOutput(x_cls,y,cls_op)
 pred_cls_center_test, res_test, reg_in_test = CreateRegInputOutput(x_cls,y,cls_op_test)
-pred_cls_center_eval = CreateRegInputOutput(x_cls,y,cls_op_test,isEval=True)
+#pred_cls_center_eval = CreateRegInputOutput(x_cls,y,cls_op_eval,isEval=True)
 # ====================== Regression networks ============================ #
 # IN -> x_reg: feature vector x = x1 + x2 (only baseline) or x + predicted center of class, 
 #       isATR: bool (if ATR-Nets, isATR=True), depth: number of layer (command args)
 # OUT -> reg_res: predicted of target variables y (baseline), predicted residual (Anchor-based), predicted truncated residual (ATR-Nets)
 reg_res = ResidualRegress(reg_in,isATR=isATR,depth=depth,keepProb=keepProbTrain)
 reg_res_test = ResidualRegress(reg_in_test,reuse=True,isATR=isATR,depth=depth,keepProb=1.0)
+#reg_res_eval = ResidualRegress(reg_in_eval,reuse=True,isATR=isATR,depth=depth,keepProb=1.0)
 
 reg_y = Regress(x_reg,isATR=isATR,depth=depth,keepProb=keepProbTrain)
 reg_y_test = Regress(x_reg_test,reuse=True,isATR=isATR,depth=depth,keepProb=1.0)
+#reg_y_eval = Regress(x_reg_eval,reuse=True,isATR=isATR,depth=depth,keepProb=1.0)
 
 # =================== Truncated residual ================================ #
 # IN -> res: residual, [None,1]
 # OUT -> res_at: truncated range residual, [None,1], alpha: truncated parameter, [1]  
 res_atr, alpha = TruncatedResidual(res)
 res_atr_test, alpha_test = TruncatedResidual(res_test,reuse=True)
+#res_atr_eval, alpha_eval = TruncatedResidual(res_eval,reuse=True)
 
 # ================== Reduce truncated residual ========================== #
 # IN -> reg_res: predicted truncated regression
 # OUT -> reduce_res: reduced residual, [None,1] 
 reduce_res_op = Reduce(reg_res,alpha,reuse=True)
 reduce_res_op_test = Reduce(reg_res_test,alpha_test,reuse=True)
+#reduce_res_op_test = Reduce(reg_res_test,alpha_test,reuse=True)
 
 # predicted y by ATR-Nets
 pred_y = pred_cls_center + reduce_res_op

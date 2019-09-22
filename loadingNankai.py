@@ -12,26 +12,35 @@ import pickle
 import numpy as np
 
 class NankaiData:
-    def __init__(self,nClass=10):
+    def __init__(self,nCell=5,nClass=10,nWindow=10,cellInds=[1,3,4]):
         #----------------------------- paramters --------------------------------------
 		
+        # number of input cell
+        self.nCell = nCell
+        # number of class
         self.nClass = nClass
-        
+        # number of sliding window
+        self.nWindow = nWindow
+        # init batch count
         self.batchCnt = 0
+        # cell index nankai(1,2), tonankai(3,4), tokai(5) -> 3/5
+        self.cellInds = cellInds
         
-        self.batchRandInd = np.random.permutation(self.nTrain)
-        
+        # -----------------------------------------------------------------------------
+
+        # ------------------------------- path ----------------------------------------
         self.features = "features"
         self.nankaipkls = "nankaipickles"
         self.nankairireki = "nankairireki"
+        # -----------------------------------------------------------------------------
     
-	#-----------------------------------------------------------------------------#
+    #-----------------------------------------------------------------------------#      
     def loadTrainTestData(self,nameInds=[0,1,2]):
         
         # name of train pickles
         trainNames = ["b2b3b4b5b6_train{}{}".format(num,self.nClass) for num in np.arange(1,6)]
         # name of test picles
-        testNames = ["b2b3b4b5b6_test{}{}".format(num,self.nClass) for num in np.arange(1,2)]
+        testNames = ["b2b3b4b5b6_test{}{}".format(num,self.nClass) for num in np.arange(1,3)]
         
         
 		# reading train data from pickle
@@ -89,7 +98,7 @@ class NankaiData:
             self.y31Test = pickle.load(fp)
             self.y41Test = pickle.load(fp)
             self.y51Test = pickle.load(fp)
-        
+
         # test data2
         with open(os.path.join(self.features,self.nankaipkls,testNames[1]),'rb') as fp:
             self.x2Test = pickle.load(fp)
@@ -104,15 +113,38 @@ class NankaiData:
             self.y42Test = pickle.load(fp)
             self.y52Test = pickle.load(fp)
        
-        pdb.set_trace()
-        self.xTest = np.concatenate((self.x1Test,self.x2Test),0)
-        self.y1TestLabel = np.concatenate((self.y21TestLabel,self.y22TestLabel),0)
-        self.y2TestLabel = np.concatenate((self.y41TestLabel,self.y42TestLabel),0)
-        self.y3TestLabel = np.concatenate((self.y51TestLabel,self.y52TestLabel),0)
-        self.y1Test = np.concatenate((self.y21Test,self.y22Test),0)
-        self.y2Test = np.concatenate((self.y41Test,self.y42Test),0)
-        self.y3Test = np.concatenate((self.y51Test,self.y52Test),0)
-    
+        # [number of data, cell(=5,nankai2 & tonakai2 & tokai1), dimention of features(=10)]
+        teX = np.concatenate((self.x1Test[:,1:6,:],self.x2Test[:,1:6,:]),0) 
+        # [number of data, cell(=5)*dimention of features(=10)]
+        self.xTest = np.reshape(teX,[-1,self.nCell*self.nWindow])
+        
+        # test all labels
+        telabel1 = [self.y11TestLabel,self.y21TestLabel,self.y31TestLabel,self.y41TestLabel,self.y51TestLabel]
+        telabel2 = [self.y12TestLabel,self.y22TestLabel,self.y32TestLabel,self.y42TestLabel,self.y52TestLabel]
+        
+        # test class label (y1=nankai, y2=tonakai, y3=tokai)
+        self.y1TestLabel = np.concatenate((telabel1[self.cellInds[0]],telabel2[self.cellInds[0]]),0)
+        self.y2TestLabel = np.concatenate((telabel1[self.cellInds[1]],telabel2[self.cellInds[1]]),0)
+        self.y3TestLabel = np.concatenate((telabel1[self.cellInds[2]],telabel2[self.cellInds[2]]),0)
+        # [number of data, number of class(self.nClass), cell(=3)] 
+        self.yTestLabel = np.concatenate((self.y1TestLabel[:,:,np.newaxis],self.y2TestLabel[:,:,np.newaxis],self.y3TestLabel[:,:,np.newaxis]),2)
+        
+        # test all targets
+        teY1 = [self.y11Test,self.y21Test,self.y31Test,self.y41Test,self.y51Test]
+        teY2 = [self.y12Test,self.y22Test,self.y32Test,self.y42Test,self.y52Test]
+        # test target
+        self.y1Test = np.concatenate((teY1[self.cellInds[0]],teY2[self.cellInds[0]]),0)
+        self.y2Test = np.concatenate((teY1[self.cellInds[1]],teY2[self.cellInds[1]]),0)
+        self.y3Test = np.concatenate((teY1[self.cellInds[2]],teY2[self.cellInds[2]]),0)
+        # [number of data, cell(=3)] 
+        self.yTest = np.concatenate((self.y1Test[:,np.newaxis],self.y2Test[:,np.newaxis],self.y3Test[:,np.newaxis]),1)
+        
+        # number of train data
+        self.nTrain =  self.x11Train.shape[0]
+        self.batchRandInd = np.random.permutation(self.nTrain)
+        #self.batchRandInd2 = np.random.permutation(self.nTrain)
+        #self.batchRandInd3 = np.random.permutation(self.nTrain)
+
     #-----------------------------------------------------------------------------#    
     def loadNankaiRireki(self):
         
@@ -120,9 +152,8 @@ class NankaiData:
         nankairirekiPath = os.path.join(self.features,self.nankairireki)
         
         with open(nankairirekiPath,"rb") as fp:
-            evalX = pickle.load(fp)
+            self.evalX = pickle.load(fp)
             
-        return evalX
         
     #-----------------------------------------------------------------------------#
     def nextBatch(self,batchSize):
@@ -130,25 +161,39 @@ class NankaiData:
         sInd = batchSize * self.batchCnt
         eInd = sInd + batchSize
        
-        x1,x2,x3= self.x11Train[self.batchRandInd[sInd:eInd]],self.x13Train[self.batchRandInd[sInd:eInd]],self.x14Train[self.batchRandInd[sInd:eInd]]
-        y11,y12,y13 = self.y21Train[self.batchRandInd[sInd:eInd]],self.y23Train[self.batchRandInd[sInd:eInd]],self.y24Train[self.batchRandInd[sInd:eInd]]
-        y21,y22,y23 = self.y41Train[self.batchRandInd[sInd:eInd]],self.y43Train[self.batchRandInd[sInd:eInd]],self.y44Train[self.batchRandInd[sInd:eInd]]
-        y31,y32,y33 = self.y51Train[self.batchRandInd[sInd:eInd]],self.y53Train[self.batchRandInd[sInd:eInd]],self.y54Train[self.batchRandInd[sInd:eInd]]
-        yl11,yl12,yl13 = self.y21TrainLabel[self.batchRandInd[sInd:eInd]],self.y23TrainLabel[self.batchRandInd[sInd:eInd]],self.y24TrainLabel[self.batchRandInd[sInd:eInd]]
-        yl21,yl22,yl23 = self.y41TrainLabel[self.batchRandInd[sInd:eInd]],self.y43TrainLabel[self.batchRandInd[sInd:eInd]],self.y44TrainLabel[self.batchRandInd[sInd:eInd]]
-        yl31,yl32,yl33 = self.y51TrainLabel[self.batchRandInd[sInd:eInd]],self.y53TrainLabel[self.batchRandInd[sInd:eInd]],self.y54TrainLabel[self.batchRandInd[sInd:eInd]]
+        #pdb.set_trace() 
+        # [number of data, cell(=5,nankai2 & tonakai2 & tokai1), dimention of features(=10)]
+        trX = np.concatenate((self.x11Train[self.batchRandInd[sInd:eInd],1:6,:],self.x12Train[self.batchRandInd[sInd:eInd],1:6,:],self.x13Train[self.batchRandInd[sInd:eInd],1:6,:]),0) 
+        # [number of data, cell(=5)*dimention of features(=10)]
+        batchX = np.reshape(trX,[-1,self.nCell*self.nWindow])
         
-        batchX = np.concatenate((x1,x2,x3),0)
-        batchY1,batchY1Label = np.concatenate((y11,y12,y13),0),np.concatenate((yl11,yl12,yl13),0)
-        batchY2,batchY2Label = np.concatenate((y21,y22,y23),0),np.concatenate((yl21,yl22,yl23),0)
-        batchY3,batchY3Label = np.concatenate((y31,y32,y33),0),np.concatenate((yl31,yl32,yl33),0)
+        # test all labels
+        trlabel1 = [self.y11TrainLabel[self.batchRandInd[sInd:eInd]],self.y21TrainLabel[self.batchRandInd[sInd:eInd]],self.y31TrainLabel[self.batchRandInd[sInd:eInd]],self.y41TrainLabel[self.batchRandInd[sInd:eInd]],self.y51TrainLabel[self.batchRandInd[sInd:eInd]]]
+        trlabel2 = [self.y12TrainLabel[self.batchRandInd[sInd:eInd]],self.y22TrainLabel[self.batchRandInd[sInd:eInd]],self.y32TrainLabel[self.batchRandInd[sInd:eInd]],self.y42TrainLabel[self.batchRandInd[sInd:eInd]],self.y52TrainLabel[self.batchRandInd[sInd:eInd]]]
+        trlabel3 = [self.y13TrainLabel[self.batchRandInd[sInd:eInd]],self.y23TrainLabel[self.batchRandInd[sInd:eInd]],self.y33TrainLabel[self.batchRandInd[sInd:eInd]],self.y43TrainLabel[self.batchRandInd[sInd:eInd]],self.y53TrainLabel[self.batchRandInd[sInd:eInd]]]
         
+        # test class label (y1=nankai, y2=tonakai, y3=tokai)
+        self.batchlabelY1 = np.concatenate((trlabel1[self.cellInds[0]],trlabel2[self.cellInds[0]],trlabel3[self.cellInds[0]]),0)
+        self.batchlabelY2 = np.concatenate((trlabel1[self.cellInds[1]],trlabel2[self.cellInds[1]],trlabel3[self.cellInds[1]]),0)
+        self.batchlabelY3 = np.concatenate((trlabel1[self.cellInds[2]],trlabel2[self.cellInds[2]],trlabel3[self.cellInds[2]]),0)
+        # [number of data, number of class(self.nClass), cell(=3)] 
+        batchlabelY = np.concatenate((self.batchlabelY1[:,:,np.newaxis],self.batchlabelY2[:,:,np.newaxis],self.batchlabelY3[:,:,np.newaxis]),2)
         
+        # test all targets
+        trY1 = [self.y11Train[self.batchRandInd[sInd:eInd]],self.y21Train[self.batchRandInd[sInd:eInd]],self.y31Train[self.batchRandInd[sInd:eInd]],self.y41Train[self.batchRandInd[sInd:eInd]],self.y51Train[self.batchRandInd[sInd:eInd]]]
+        trY2 = [self.y12Train[self.batchRandInd[sInd:eInd]],self.y22Train[self.batchRandInd[sInd:eInd]],self.y32Train[self.batchRandInd[sInd:eInd]],self.y42Train[self.batchRandInd[sInd:eInd]],self.y52Train[self.batchRandInd[sInd:eInd]]]
+        trY3 = [self.y13Train[self.batchRandInd[sInd:eInd]],self.y23Train[self.batchRandInd[sInd:eInd]],self.y33Train[self.batchRandInd[sInd:eInd]],self.y43Train[self.batchRandInd[sInd:eInd]],self.y53Train[self.batchRandInd[sInd:eInd]]]
+        # test target
+        self.batchY1 = np.concatenate((trY1[self.cellInds[0]],trY2[self.cellInds[0]],trY3[self.cellInds[0]]),0)
+        self.batchY2 = np.concatenate((trY1[self.cellInds[1]],trY2[self.cellInds[1]],trY3[self.cellInds[0]]),0)
+        self.batchY3 = np.concatenate((trY1[self.cellInds[2]],trY2[self.cellInds[2]],trY3[self.cellInds[0]]),0)
+        # [number of data, cell(=3)] 
+        batchY = np.concatenate((self.batchY1[:,np.newaxis],self.batchY2[:,np.newaxis],self.batchY3[:,np.newaxis]),1)
+
         if eInd + batchSize > self.nTrain:
             self.batchCnt = 0
         else:
             self.batchCnt += 1
-        pdb.set_trace()
-        #return batchX,batchY,batchlabelY
-        return batchX,batchY1,batchY1Label,batchY2,batchY2Label,batchY3,batchY3Label
+        
+        return batchX, batchY, batchlabelY
     #-----------------------------------------------------------------------------#
