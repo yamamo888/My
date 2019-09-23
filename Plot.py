@@ -51,7 +51,7 @@ def Plot_3D(x1,x2,yGT,yPred,isPlot=False,methodModel=1,sigma=0,nClass=0,alpha=0,
         plt.savefig(fullPath)
     
 #-----------------------------------------------------------------------------#              
-def Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainRegLosses, testRegLosses, testPeriod, isPlot=False,methodModel=0,sigma=0,nClass=0,alpha=0,pNum=0,depth=0):
+def Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainRegLosses, testRegLosses, testPeriod, isPlot=False, methodModel=0, dataName=dataName, sigma=0,nClass=0,alpha=0,pNum=0,depth=0):
     if isPlot:
         if methodModel==2 or methodModel==1:
             # lossPlot
@@ -66,7 +66,7 @@ def Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLoss
             plt.xlabel("iteration x {}".format(testPeriod))
             plt.legend()
             
-            fullPath = os.path.join(visualPath,lossPath,"Loss_{}_{}_{}_{}_{}_{}.png".format(methodModel,sigma,nClass,alpha,pNum,depth))
+            fullPath = os.path.join(visualPath,lossPath,"Loss_{}_{}_{}_{}_{}_{}_{}.png".format(dataName,methodModel,sigma,nClass,alpha,pNum,depth))
         else:
             
             plt.plot(np.arange(trainRegLosses.shape[0]),trainRegLosses,label="trainRegLosses",color="c")
@@ -76,73 +76,38 @@ def Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLoss
             plt.xlabel("iteration x {}".format(testPeriod))
             plt.legend()
             
-            fullPath = os.path.join(visualPath,lossPath,"Loss_{}_{}_{}_{}_{}_{}.png".format(methodModel,sigma,nClass,alpha,pNum,depth))
+            fullPath = os.path.join(visualPath,lossPath,"Loss_{}_{}_{}_{}_{}_{}_{}.png".format(dataName,methodModel,sigma,nClass,alpha,pNum,depth))
         
         plt.savefig(fullPath)
         plt.close()
 #-----------------------------------------------------------------------------#      
-    def Line(self,data):
 
-        x = np.arange(np.min(data),np.max(data)+0.001,0.001)
-        y = x
-        return x,y
-
-    def Plot_Scatter(self,gt,pred,depth=0,nClass=0,isAnchor=False):
-
-        x1,y1 = self.Line(test1)
-        x2,y2 = self.Line(test2)
-        x3,y3 = self.Line(test3)
-        if isAnchor:
-            plt.plot(test1,pred1,".",color="y",linestyle="None",label='Anchor-based')
+def Plot_Scatter(gt,pred,isPlot=False, methodModel=1, nClass=0, alpha=0, depth=0, isTrain=0, color="m", label="Baseline",cellName="nankai"):
+    if isPlot:
+        # 45° line
+        line = np.arange(np.min(gt),np.max(gt)+0.001,0.001)
         
-        else:
-            plt.plot(test1,pred1,".",color='m',linestyle="None",label='Regression')
-
-        plt.plot(test1,pro1,".",color='c',linestyle="None",label='ATR-Nets')
-        plt.plot(x1,y1,"-",color="black",linewidth=4)
+        # scatter
+        plt.plot(gt,pred,".",color=color,linestyle="None",label=label)
+        # line
+        plt.plot(line,line,"-",color="black",linewidth=4)
+        
         plt.xlabel('ground truth')
         plt.ylabel('predict')
-        plt.ylim([np.min(test1),np.max(test1)])
-        plt.xlim([np.min(test1),np.max(test1)])
+        
+        plt.ylim([np.min(gt),np.max(gt)])
+        plt.xlim([np.min(gt),np.max(gt)])
+        
         plt.legend(loc="best")
-        savePath = os.path.join(self.visualPath,"nankai2_{}_{}.png".format(depth,nClass))
+        
+        if methodModel == 0 or methodModel==1:
+            savePath = os.path.join(visualPath,"Scatter_{}_{}_{}_{}_{}_{}.png".format(methodModel,nClass,depth,isTrain))
+        else:
+            savePath = os.path.join(visualPath,"Scatter_{}_{}_{}_{}_{}_{}_{}.png".format(methodModel,nClass,alpha,depth,isTrain))
         plt.savefig(savePath)
         plt.close()
         
-        if isAnchor:
-            plt.plot(test2,pred2,".",color="y",linestyle="None",label='Anchor-based')
-        
-        else:
-            plt.plot(test2,pred2,".",color='m',linestyle="None",label='Regression')
-
-
-        plt.plot(test2,pro2,".",color='c',linestyle="None",label='ATR-Nets')
-        plt.plot(x2,y2,"-",color="black",linewidth=4)
-        plt.xlabel('ground truth')
-        plt.ylabel('predict')
-        plt.ylim([np.min(test2),np.max(test2)])
-        plt.xlim([np.min(test2),np.max(test2)])
-        plt.legend(loc="best")
-        savePath = os.path.join(self.visualPath,"tonankai2_{}_{}.png".format(depth,nClass))
-        plt.savefig(savePath)
-        plt.close()
-        
-        if isAnchor:
-            plt.plot(test3,pred3,".",color="y",linestyle="None",label='Anchor-based')
-        
-        else:
-            plt.plot(test3,pred3,".",color='m',linestyle="None",label='Regression')
-
-        plt.plot(test3,pro3,".",color='c',linestyle="None",label='ATR-Nets')
-        plt.plot(x3,y3,"-",color="black",linewidth=4)
-        plt.xlabel('ground truth')
-        plt.ylabel('predict')
-        plt.ylim([np.min(test3),np.max(test3)])
-        plt.xlim([np.min(test3),np.max(test3)])
-        plt.legend(loc="best")
-        savePath = os.path.join(self.visualPath,"tokai2_{}_{}.png".format(depth,nClass))
-        plt.savefig(savePath)
-        plt.close()
+#-----------------------------------------------------------------------------#      
 def Plot_Alpha(trainAlpha,testAlpha,testPeriod, isPlot=False,methodModel=0,sigma=0,nClass=0,alpha=0,pNum=0,depth=0):
     if isPlot:
         plt.close()

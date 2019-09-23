@@ -745,31 +745,55 @@ if methodModel == 0:
         myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=0, alpha=0, pNum=pNum, depth=depth, isTrain=0)
         myPlot.Plot_3D(batchX[:,0],batchX[:,1],batchY,trainPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=0, alpha=0, pNum=pNum, depth=depth, isTrain=1)
     else:
+        colors = ["m","c","y"]
+        names = ["nankai","tonankai","tokai"]
+        cellinds = [0,1,2]
+        for color,name,cind in zip(colors,names,cellInds):
+            myPlot.Plot_Scatter(myData.xTest[:,cind], testPred[:,cind], isPlot=isPlot, methodModel=methodModel, nClass=0, alpha=0, depth=depth, isTrain=0, color=color, label="Baseline", cellName=name)
+            #myPlot.Plot_Scatter(batchX[:,cind], batchY[:,cind], isPlot=isPlot, methodModel=methodModel, nClass=nClass, alpha=alpha, depth=depth, isTrain=1, color=color, label="Baseline", cellName=name)
 
-
-    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}_{}.pkl".format(dataMode,methodModel,sigma,nClass,pNum,depth)),"wb") as fp:
+    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}_{}.pkl".format(dataName,methodModel,sigma,nClass,pNum,depth)),"wb") as fp:
             pickle.dump(batchY,fp)
             pickle.dump(trainPred,fp)
             pickle.dump(myData.yTest,fp)
             pickle.dump(testPred,fp)
 
 elif methodModel == 1:
-    myPlot.Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainResLosses, testResLosses, testPeriod, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=nClass, alpha=0, pNum=pNum, depth=depth)   
-    myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=nClass, alpha=0, pNum=pNum, depth=depth, isTrain=0)
-    myPlot.Plot_3D(batchX[:,0],batchX[:,1],batchY,trainPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=nClass, alpha=0, pNum=pNum, depth=depth, isTrain=1)
+    myPlot.Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainResLosses, testResLosses, testPeriod, isPlot=isPlot, methodModel=methodModel, dataName=dataName, sigma=sigma, nClass=nClass, alpha=0, pNum=pNum, depth=depth)   
     
-    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}_{}.pkl".format(dataMode,methodModel,sigma,nClass,pNum,depth)),"wb") as fp:
+    if dataMode == 0:
+        myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=nClass, alpha=0, pNum=pNum, depth=depth, isTrain=0)
+        myPlot.Plot_3D(batchX[:,0],batchX[:,1],batchY,trainPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=nClass, alpha=0, pNum=pNum, depth=depth, isTrain=1)
+    else:
+        colors = ["m","c","y"]
+        names = ["nankai","tonankai","tokai"]
+        cellinds = [0,1,2]
+        for color,name,cind in zip(colors,names,cellInds):
+            myPlot.Plot_Scatter(myData.xTest[:,cind], testPred[:,cind], isPlot=isPlot, methodModel=methodModel, nClass=nClass, alpha=alpha, depth=depth, isTrain=0, color=color, label="Anchor-based", cellName=name)
+            #myPlot.Plot_Scatter(batchX[:,cind], batchY[:,cind], isPlot=isPlot, methodModel=methodModel, nClass=nClass, alpha=alpha, depth=depth, isTrain=1, color=color, label="Anchor-based", cellName=name)
+
+    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}_{}.pkl".format(dataName,methodModel,sigma,nClass,pNum,depth)),"wb") as fp:
             pickle.dump(batchY,fp)
             pickle.dump(trainPred,fp)
             pickle.dump(myData.yTest,fp)
             pickle.dump(testPred,fp)
     
 elif methodModel == 2: 
-    myPlot.Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainResLosses, testResLosses, testPeriod,isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=nClass, alpha=testAlpha, pNum=pNum, depth=depth)    
-    myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=nClass, alpha=testAlpha, pNum=pNum, depth=depth, isTrain=0)
-    myPlot.Plot_3D(batchX[:,0],batchX[:,1],batchY,trainPred, isPlot=isPlot,methodModel=methodModel,sigma=sigma,nClass=nClass,alpha=trainAlpha,pNum=pNum,depth=depth,isTrain=1)
+    myPlot.Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainResLosses, testResLosses, testPeriod,isPlot=isPlot, methodModel=methodModel, dataName=dataName, sigma=sigma, nClass=nClass, alpha=testAlpha, pNum=pNum, depth=depth)    
     
-    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}_{}_{}.pkl".format(dataMode,methodModel,sigma,nClass,testAlpha,pNum,depth)),"wb") as fp:
+    if dataMode == 0:
+        myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=nClass, alpha=testAlpha, pNum=pNum, depth=depth, isTrain=0)
+        myPlot.Plot_3D(batchX[:,0],batchX[:,1],batchY,trainPred, isPlot=isPlot,methodModel=methodModel,sigma=sigma,nClass=nClass,alpha=trainAlpha,pNum=pNum,depth=depth,isTrain=1)
+    else:
+        colors = ["m","c","y"]
+        names = ["nankai","tonankai","tokai"]
+        cellinds = [0,1,2]
+        for color,name,cind in zip(colors,names,cellInds):
+            myPlot.Plot_Scatter(myData.xTest[:,cind], testPred[:,cind], isPlot=isPlot, methodModel=methodModel, nClass=nClass, alpha=alpha, depth=depth, isTrain=0, color=color, label="ATR-Nets", cellName=name)
+            #myPlot.Plot_Scatter(batchX[:,cind], batchY[:,cind], isPlot=isPlot, methodModel=methodModel, nClass=nClass, alpha=alpha, depth=depth, isTrain=1, color=color, label="ATR-Nets", cellName=name)
+
+    
+    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}_{}_{}.pkl".format(dataName,methodModel,sigma,nClass,testAlpha,pNum,depth)),"wb") as fp:
             pickle.dump(batchY,fp)
             pickle.dump(trainPred,fp)
             pickle.dump(myData.yTest,fp)
