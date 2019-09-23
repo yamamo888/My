@@ -38,7 +38,12 @@ dataMode = int(sys.argv[10])
 
 # ------------------------------- path ----------------------------------------
 results = "results"
-pickles = "pickles"
+
+if dataMode == 0:
+    pickles = "toypickles"
+else:
+    pickles = "nankaipickles"
+
 pickleFullPath = os.path.join(results,pickles)
 # -----------------------------------------------------------------------------
 
@@ -91,6 +96,7 @@ if dataMode == 0:
     limitdecimal = 3
     # Width class
     beta = np.round((yMax - yMin) / nClass,limitdecimal)
+    dataName = "toy"
 
 # Nankai
 else:
@@ -100,6 +106,7 @@ else:
     limitdecimal = 6
     # Width class
     beta = np.round((nkMax - nkMin) / nClass,limitdecimal)
+    dataName = "nankai"
 
 # Center variable of the first class
 first_cls_center = np.round(yMin + (beta / 2),limitdecimal)
@@ -134,10 +141,10 @@ print(pNum)
 if dataMode == 0:    
     myData = makingData.toyData(trainRatio=trainRatio, nData=nData, pNum=pNum, sigma=sigma)
     myData.createData(trialID,beta=beta)
-    myData.loadNankaiRireki()
 else:
     myData = loadingNankai.NankaiData(nCell=nCell,nClass=nClass,nWindow=nWindow,cellInds=cellInds)
     myData.loadTrainTestData(nameInds=nameInds)
+    myData.loadNankaiRireki()
 # -----------------------------------------------------------------------------
 
 #------------------------- placeholder ----------------------------------------
@@ -426,7 +433,7 @@ def CreateRegInputOutput(x,y,cls_score,isEval=False):
     
     
     if isEval:
-        return pred_cls_center
+        return pred_cls_center, cls_center_x
     else:
         
         # residual = objective - center variavle of class 
@@ -546,14 +553,12 @@ reg_y_test = Regress(x_reg_test,reuse=True,isATR=isATR,depth=depth,keepProb=1.0)
 # OUT -> res_at: truncated range residual, [None,1], alpha: truncated parameter, [1]  
 res_atr, alpha = TruncatedResidual(res)
 res_atr_test, alpha_test = TruncatedResidual(res_test,reuse=True)
-#res_atr_eval, alpha_eval = TruncatedResidual(res_eval,reuse=True)
 
 # ================== Reduce truncated residual ========================== #
 # IN -> reg_res: predicted truncated regression
 # OUT -> reduce_res: reduced residual, [None,1] 
 reduce_res_op = Reduce(reg_res,alpha,reuse=True)
 reduce_res_op_test = Reduce(reg_res_test,alpha_test,reuse=True)
-#reduce_res_op_test = Reduce(reg_res_test,alpha_test,reuse=True)
 
 # predicted y by ATR-Nets
 pred_y = pred_cls_center + reduce_res_op
@@ -714,7 +719,7 @@ for i in range(nTraining):
             print("-----------------------------------")
             print("itr:%d,trainClsLoss:%f,trainRegLoss:%f, trainTotalLoss:%f, trainTotalVar:%f" % (i,trainClsLoss,trainResLoss, trainTotalLoss, trainTotalVar))
             print("itr:%d,testClsLoss:%f,testRegLoss:%f, testTotalLoss:%f, testTotalVar:%f" % (i,testClsLoss,testResLoss, testTotalLoss, testTotalVar)) 
-            
+            pdb.set_trace()
             if not flag:
                 trainResLosses,testResLosses = trainResLoss[np.newaxis],testResLoss[np.newaxis]
                 trainClassLosses,testClassLosses = trainClsLoss[np.newaxis],testClsLoss[np.newaxis]
@@ -727,18 +732,22 @@ for i in range(nTraining):
 
 # ------------------------- save model  --------------------------------- #
 """
-modelFileName = "model_{}_{}_{}_{}_{}_{}.ckpt".format(methodModel,sigma,nClass,pNum,nTrain,nTest)
+modelFileName = "model_{}_{}_{}_{}_{}_{}_{}.ckpt".format(methodModel,dataName,sigma,nClass,pNum,nTrain,nTest)
 modelPath = "models"
 modelfullPath = os.path.join(modelPath,modelFileName)
 saver.save(sess,modelfullPath)
 """
 # ------------------------- plot loss & toydata ------------------------- #
 if methodModel == 0:
-    myPlot.Plot_loss(0,0,0,0,trainRegLosses, testRegLosses,testPeriod,isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=0, alpha=0, pNum=pNum, depth=depth)
-    myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=0, alpha=0, pNum=pNum, depth=depth, isTrain=0)
-    myPlot.Plot_3D(batchX[:,0],batchX[:,1],batchY,trainPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=0, alpha=0, pNum=pNum, depth=depth, isTrain=1)
+    myPlot.Plot_loss(0,0,0,0,trainRegLosses, testRegLosses,testPeriod,isPlot=isPlot, methodModel=methodModel, dataName=dataName, sigma=sigma, nClass=0, alpha=0, pNum=pNum, depth=depth)
     
-    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}.pkl".format(methodModel,sigma,nClass,pNum,depth)),"wb") as fp:
+    if dataMode == 0:
+        myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=0, alpha=0, pNum=pNum, depth=depth, isTrain=0)
+        myPlot.Plot_3D(batchX[:,0],batchX[:,1],batchY,trainPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=0, alpha=0, pNum=pNum, depth=depth, isTrain=1)
+    else:
+
+
+    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}_{}.pkl".format(dataMode,methodModel,sigma,nClass,pNum,depth)),"wb") as fp:
             pickle.dump(batchY,fp)
             pickle.dump(trainPred,fp)
             pickle.dump(myData.yTest,fp)
@@ -749,7 +758,7 @@ elif methodModel == 1:
     myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=nClass, alpha=0, pNum=pNum, depth=depth, isTrain=0)
     myPlot.Plot_3D(batchX[:,0],batchX[:,1],batchY,trainPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=nClass, alpha=0, pNum=pNum, depth=depth, isTrain=1)
     
-    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}.pkl".format(methodModel,sigma,nClass,pNum,depth)),"wb") as fp:
+    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}_{}.pkl".format(dataMode,methodModel,sigma,nClass,pNum,depth)),"wb") as fp:
             pickle.dump(batchY,fp)
             pickle.dump(trainPred,fp)
             pickle.dump(myData.yTest,fp)
@@ -760,7 +769,7 @@ elif methodModel == 2:
     myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=nClass, alpha=testAlpha, pNum=pNum, depth=depth, isTrain=0)
     myPlot.Plot_3D(batchX[:,0],batchX[:,1],batchY,trainPred, isPlot=isPlot,methodModel=methodModel,sigma=sigma,nClass=nClass,alpha=trainAlpha,pNum=pNum,depth=depth,isTrain=1)
     
-    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}_{}.pkl".format(methodModel,sigma,nClass,testAlpha,pNum,depth)),"wb") as fp:
+    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}_{}_{}.pkl".format(dataMode,methodModel,sigma,nClass,testAlpha,pNum,depth)),"wb") as fp:
             pickle.dump(batchY,fp)
             pickle.dump(trainPred,fp)
             pickle.dump(myData.yTest,fp)

@@ -81,6 +81,68 @@ def Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLoss
         plt.savefig(fullPath)
         plt.close()
 #-----------------------------------------------------------------------------#      
+    def Line(self,data):
+
+        x = np.arange(np.min(data),np.max(data)+0.001,0.001)
+        y = x
+        return x,y
+
+    def Plot_Scatter(self,gt,pred,depth=0,nClass=0,isAnchor=False):
+
+        x1,y1 = self.Line(test1)
+        x2,y2 = self.Line(test2)
+        x3,y3 = self.Line(test3)
+        if isAnchor:
+            plt.plot(test1,pred1,".",color="y",linestyle="None",label='Anchor-based')
+        
+        else:
+            plt.plot(test1,pred1,".",color='m',linestyle="None",label='Regression')
+
+        plt.plot(test1,pro1,".",color='c',linestyle="None",label='ATR-Nets')
+        plt.plot(x1,y1,"-",color="black",linewidth=4)
+        plt.xlabel('ground truth')
+        plt.ylabel('predict')
+        plt.ylim([np.min(test1),np.max(test1)])
+        plt.xlim([np.min(test1),np.max(test1)])
+        plt.legend(loc="best")
+        savePath = os.path.join(self.visualPath,"nankai2_{}_{}.png".format(depth,nClass))
+        plt.savefig(savePath)
+        plt.close()
+        
+        if isAnchor:
+            plt.plot(test2,pred2,".",color="y",linestyle="None",label='Anchor-based')
+        
+        else:
+            plt.plot(test2,pred2,".",color='m',linestyle="None",label='Regression')
+
+
+        plt.plot(test2,pro2,".",color='c',linestyle="None",label='ATR-Nets')
+        plt.plot(x2,y2,"-",color="black",linewidth=4)
+        plt.xlabel('ground truth')
+        plt.ylabel('predict')
+        plt.ylim([np.min(test2),np.max(test2)])
+        plt.xlim([np.min(test2),np.max(test2)])
+        plt.legend(loc="best")
+        savePath = os.path.join(self.visualPath,"tonankai2_{}_{}.png".format(depth,nClass))
+        plt.savefig(savePath)
+        plt.close()
+        
+        if isAnchor:
+            plt.plot(test3,pred3,".",color="y",linestyle="None",label='Anchor-based')
+        
+        else:
+            plt.plot(test3,pred3,".",color='m',linestyle="None",label='Regression')
+
+        plt.plot(test3,pro3,".",color='c',linestyle="None",label='ATR-Nets')
+        plt.plot(x3,y3,"-",color="black",linewidth=4)
+        plt.xlabel('ground truth')
+        plt.ylabel('predict')
+        plt.ylim([np.min(test3),np.max(test3)])
+        plt.xlim([np.min(test3),np.max(test3)])
+        plt.legend(loc="best")
+        savePath = os.path.join(self.visualPath,"tokai2_{}_{}.png".format(depth,nClass))
+        plt.savefig(savePath)
+        plt.close()
 def Plot_Alpha(trainAlpha,testAlpha,testPeriod, isPlot=False,methodModel=0,sigma=0,nClass=0,alpha=0,pNum=0,depth=0):
     if isPlot:
         plt.close()
