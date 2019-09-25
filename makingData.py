@@ -133,11 +133,11 @@ class toyData:
 	def nextBatch(self, batchSize):	
 		sInd = batchSize * self.batchCnt
 		eInd = sInd + batchSize
-		
-		batchX = self.xTrain[self.batchRandInd[sInd:eInd],:]
+
+        batchX = self.xTrain[self.batchRandInd[sInd:eInd],:]
 		batchY = self.yTrain[self.batchRandInd[sInd:eInd],:]
 		batchlabelY = self.yTrainLabel[self.batchRandInd[sInd:eInd],:]
-		
+        
 		if eInd + batchSize > self.nTrain:
 			self.batchCnt = 0
 		else:
