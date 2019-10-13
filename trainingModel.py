@@ -1,13 +1,19 @@
-# -*- co    ding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 import sys
 import os
+import time
 
 import numpy as np
 import tensorflow as tf
 
 import pickle
 import pdb
+import random
+
+import matplotlib as mpl
+mpl.use('Agg')
+import matplotlib.pylab as plt
 
 import makingData
 import loadingNankai
@@ -17,34 +23,45 @@ import Plot as myPlot
 # Model type 0: ordinary regression, 1: anhor-based, 2: atr-nets
 methodModel = int(sys.argv[1])
 # noize of x1, x2
-sigma = np.float(sys.argv[2])
+#sigma = float(sys.argv[2])
 # number of class
 # nankai nClass = 11 or 21 or 51
-nClass = int(sys.argv[3])
+nClass = int(sys.argv[2])
 # number of rotation -> sin(pNum*pi) & cos(pNum*pi)
-pNum = int(sys.argv[4])
+#pNum = int(sys.argv[4])
 # number of layer for Regression NN
-depth = int(sys.argv[5])
+depth = int(sys.argv[3])
+# error 0:square, 1:abs
+errorMode =int(sys.argv[4])
 # batch size
-batchSize = int(sys.argv[6])
+#batchSize = int(sys.argv[6])
+batchMode = int(sys.argv[5])
 # trial ID
-trialID = int(sys.argv[7])
+#trialID = sys.argv[8]
 # data size
-nData = int(sys.argv[8])
-trainRatio = float(sys.argv[9])
+#nData = int(sys.argv[9])
+# rate of training
+#trainRatio = float(sys.argv[10])
+# alpha
+alphaMode = float(sys.argv[6])
 # 0: toydata var., 1: nankai var.
-dataMode = int(sys.argv[10])
+dataMode = int(sys.argv[7])
+# 実験の管理ID(削除予定)
+exID = sys.argv[8]
 # -----------------------------------------------------------------------------
 
 # ------------------------------- path ----------------------------------------
 results = "results"
+modelPath = "models"
+visualPath = "visualization"
+scatterPath = "scatter"
 
 if dataMode == 0:
-    pickles = "toypickles"
+    savePath = "toypickles"
 else:
-    pickles = "nankaipickles"
+    savePath = "nankaipickles"
 
-pickleFullPath = os.path.join(results,pickles)
+pickleFullPath = os.path.join(results,savePath)
 # -----------------------------------------------------------------------------
 
 # --------------------------- parameters --------------------------------------
@@ -96,7 +113,9 @@ if dataMode == 0:
     limitdecimal = 3
     # Width class
     beta = np.round((yMax - yMin) / nClass,limitdecimal)
-    dataName = "toy"
+    dataName = f"toy_{trialID}"
+    # number of training
+    nTraining = 50000
 
 # Nankai
 else:
@@ -106,7 +125,9 @@ else:
     limitdecimal = 6
     # Width class
     beta = np.round((nkMax - nkMin) / nClass,limitdecimal)
-    dataName = "nankai"
+    dataName = f"nankai"
+    nTraining = 100000
+
 
 # Center variable of the first class
 first_cls_center = np.round(yMin + (beta / 2),limitdecimal)
@@ -117,7 +138,9 @@ first_cls_center_tk = np.round(tkMin + (beta / 2),limitdecimal)
 
 
 # select nankai data(3/5) 
-nameInds = [0,1,2] 
+nametrInds = [0,1,2,3,4,5,6]
+# random sample loading train data
+nameInds = random.sample(nametrInds,3) 
 
 # select cells(3/5) nankai(0or1),tonakai(2or3),tokai(4)
 cellInds = [1,3,4]
@@ -126,17 +149,19 @@ cellInds = [1,3,4]
 keepProbTrain = 1.0
 # Learning rate
 lr = 1e-3
-# number of training
-nTraining = 100000
 # test count
 testPeriod = 500
+# file change timing
+filePeriod = nTraining / 10
 # if plot == True
 isPlot = True
+# if plot == True
+isSaveModel = True
 # -----------------------------------------------------------------------------
 
 # --------------------------- data --------------------------------------------
 # Get train & test data, shape=[number of data, dimention]
-print(pNum)
+#print(pNum)
 # select toydata or nankaidata
 if dataMode == 0:    
     myData = makingData.toyData(trainRatio=trainRatio, nData=nData, pNum=pNum, sigma=sigma)
@@ -144,7 +169,13 @@ if dataMode == 0:
 else:
     myData = loadingNankai.NankaiData(nCell=nCell,nClass=nClass,nWindow=nWindow,cellInds=cellInds)
     myData.loadTrainTestData(nameInds=nameInds)
-    myData.loadNankaiRireki()
+    #myData.loadNankaiRireki()
+    if nClass == 10:
+        nClass = 11
+    elif nClass == 20:
+        nClass = 21
+    else:
+        mClass =  51
 # -----------------------------------------------------------------------------
 
 #------------------------- placeholder ----------------------------------------
@@ -155,8 +186,13 @@ x_reg = tf.placeholder(tf.float32,shape=[None,dInput])
 x_reg_test = tf.placeholder(tf.float32,shape=[None,dInput])
 # GT output of placeholder (target)
 y = tf.placeholder(tf.float32,shape=[None,dOutput])
-# GT output of label
-y_label = tf.placeholder(tf.int32,shape=[None,nClass*dOutput])
+alpha_base = tf.placeholder(tf.float32)
+
+if dataMode == 0:
+    # GT output of label
+    y_label = tf.placeholder(tf.int32,shape=[None,nClass])
+else:
+    y_label = tf.placeholder(tf.int32,shape=[None,nClass,dOutput])
 
 # -----------------------------------------------------------------------------
 
@@ -169,7 +205,18 @@ def bias_variable(name,shape):
 #-----------------------------------------------------------------------------#
 def alpha_variable(name,shape):
     #alphaInit = tf.random_normal_initializer(mean=0.5,stddev=0.1)
-    alphaInit = tf.random_normal_initializer(mean=20,stddev=0)
+    if alphaMode == 0.01:
+        mean = 0.01
+    elif alphaMode == 1:
+        mean = 1
+    elif alphaMode == 10:
+        mean = 10
+    elif alphaMode == 20:
+        mean = 20
+    elif alphaMode == 100:
+        mean = 100
+
+    alphaInit = tf.random_normal_initializer(mean=mean,stddev=0)
     return tf.get_variable(name,shape,initializer=alphaInit)
 #-----------------------------------------------------------------------------#
 def fc_sigmoid(inputs,w,b,keepProb):
@@ -237,8 +284,8 @@ def Classify(x, reuse=False, keepProb=1.0,isNankai=False):
             y1 = fc(h2,w3_1,bias3_1,keepProb)
             y2 = fc(h2,w3_2,bias3_2,keepProb)
             y3 = fc(h2,w3_3,bias3_3,keepProb)
-            # [number of data, cell(=3) * number of class]
-            y = tf.concat((y1,y2,y3),1)
+            # [number of data, number of class, cell(=3)]
+            y = tf.concat((tf.expand_dims(y1,2),tf.expand_dims(y2,2),tf.expand_dims(y3,2)),2)
     
         # shape=[None,number of class]
         return y
@@ -414,13 +461,12 @@ def CreateRegInputOutput(x,y,cls_score,isEval=False):
         pred_cls_center = pred_maxcls * beta + first_cls_center
     
     else:
-
         # Max class of predicted class
-        pred_maxcls1 = tf.expand_dims(tf.cast(tf.argmax(cls_score[:,:nClass],axis=1),tf.float32),1)  
+        pred_maxcls1 = tf.expand_dims(tf.cast(tf.argmax(cls_score[:,:,0],axis=1),tf.float32),1)  
         # Max class of predicted class
-        pred_maxcls2 = tf.expand_dims(tf.cast(tf.argmax(cls_score[:,nClass:nClass+nClass],axis=1),tf.float32),1)  
+        pred_maxcls2 = tf.expand_dims(tf.cast(tf.argmax(cls_score[:,:,1],axis=1),tf.float32),1)  
         # Max class of predicted class
-        pred_maxcls3 = tf.expand_dims(tf.cast(tf.argmax(cls_score[:,nClass+nClass:],axis=1),tf.float32),1)
+        pred_maxcls3 = tf.expand_dims(tf.cast(tf.argmax(cls_score[:,:,2],axis=1),tf.float32),1)
 
         # Center variable of class for nankai       
         pred_cls_center1 = pred_maxcls1 * beta + first_cls_center_nk
@@ -443,7 +489,7 @@ def CreateRegInputOutput(x,y,cls_score,isEval=False):
         
         return pred_cls_center, r, cls_center_x
 #-----------------------------------------------------------------------------#
-def TruncatedResidual(r,reuse=False):
+def TruncatedResidual(r,alpha_base,reuse=False):
     """
     Truncated range of residual by sigmoid function.
     
@@ -460,9 +506,12 @@ def TruncatedResidual(r,reuse=False):
             scope.reuse_variables()
         
         alpha = alpha_variable("alpha",[dOutput]) 
+        #alpha_final = tf.multiply(alpha,alpha_base)
         
+        #r_at = 1/(1 + tf.exp(- alpha_final * r))
         r_at = 1/(1 + tf.exp(- alpha * r))
         
+        #return r_at, alpha_final
         return r_at, alpha
 #-----------------------------------------------------------------------------#
 #reduce_res_op = Reduce(reg_res,alpha,reuse=True)
@@ -501,9 +550,9 @@ def Loss(y,predict,isCE=False):
         if dataMode == 0:
             return tf.losses.softmax_cross_entropy(y,predict)
         else:
-            return tf.losses.softmax_cross_entropy(y[:,:nClass],predict[:,:nClass]) + tf.losses.softmax_cross_entropy(y[:,nClass:nClass+nClass],predict[:,nClass:nClass+nClass]) + tf.losses.softmax_cross_entropy(y[:,nClass+nClass:],predict[:,nClass+nClass:])
+            return tf.losses.softmax_cross_entropy(y[:,:,0],predict[:,:,0]) + tf.losses.softmax_cross_entropy(y[:,:,1],predict[:,:,1]) + tf.losses.softmax_cross_entropy(y[:,:,2],predict[:,:,2])
     else:
-        return tf.reduce_mean(tf.abs(y - predict))
+        return tf.reduce_mean(tf.square(y - predict))
 #-----------------------------------------------------------------------------#
 def LossGroup(self,weight1): 
     group_weight = tf.reduce_sum(tf.square(weight1),axis=0)
@@ -551,8 +600,8 @@ reg_y_test = Regress(x_reg_test,reuse=True,isATR=isATR,depth=depth,keepProb=1.0)
 # =================== Truncated residual ================================ #
 # IN -> res: residual, [None,1]
 # OUT -> res_at: truncated range residual, [None,1], alpha: truncated parameter, [1]  
-res_atr, alpha = TruncatedResidual(res)
-res_atr_test, alpha_test = TruncatedResidual(res_test,reuse=True)
+res_atr, alpha = TruncatedResidual(res,alpha_base)
+res_atr_test, alpha_test = TruncatedResidual(res_test,alpha_base,reuse=True)
 
 # ================== Reduce truncated residual ========================== #
 # IN -> reg_res: predicted truncated regression
@@ -587,8 +636,18 @@ loss_atr_test = Loss(res_atr_test,reg_res_test)
 
 # Training alpha loss
 # gt value (y) vs predicted value (pred_yz = pred_cls_center + reduce_res)
-loss_alpha = Loss(y,pred_y)
-loss_alpha_test = Loss(y,pred_y_test)
+#loss_alpha = Loss(y,pred_y)
+#loss_alpha_test = Loss(y,pred_y_test)
+#_, var_train = tf.nn.moments(pred_y,[0])
+#_, var_test = tf.nn.moments(pred_y_test,[0])
+grad_x = tf.gradients(pred_y,x_cls)
+grad_x_test = tf.gradients(pred_y,x_cls)
+max_grad_x = tf.reduce_max(tf.abs(grad_x))
+max_grad_x_test = tf.reduce_max(tf.abs(grad_x_test))
+_, var_train = tf.nn.moments(grad_x[0],[0])
+_, var_test = tf.nn.moments(grad_x_test[0],[0])
+loss_alpha = max_grad_x #tf.reduce_sum(var_train)
+loss_alpha_test = Loss(y,pred_y_test) + max_grad_x_test #tf.reduce_sum(var_test)
 
 # ========================== Optimizer ================================== #
 # for classification 
@@ -607,20 +666,36 @@ trainer_atr = Optimizer(loss_atr,name_scope="ResidualRegress")
 trainer_alpha = Optimizer(loss_alpha,name_scope="TrResidual")
 
 #------------------------------------------------------------------------ # 
+if isSaveModel:
+    # save model, every test steps
+    saver = tf.train.Saver(max_to_keep=0)
 config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.1,allow_growth=True)) 
 sess = tf.Session(config=config)
 sess.run(tf.global_variables_initializer())
-# save model
-saver = tf.train.Saver()
+
 #------------------------------------------------------------------------ #
 #------------------------------------------------------------------------ #
 # start training
 flag = False
 for i in range(nTraining):
     
+    if batchMode == 0:
+        # all data (not mini-batch)
+        #batchSize = int(myData.yTrain.shape[0])
+        batchSize = 500
+    elif batchMode == 1:
+        # half data
+        batchSize = int(myData.yTrain.shape[0] / 2)
+    else:
+        # few data
+        batchSize = int(myData.yTrain.shape[0] / 10)
     # Get mini-batch
     batchX,batchY,batchlabelY = myData.nextBatch(batchSize)
     
+    if i % filePeriod == 0:
+        nameInds = random.sample(nametrInds,3) 
+        myData.loadTrainTestData(nameInds=nameInds)
+
     # ==================== Baseline regression ========================== #
     if methodModel == 0:
         # regression
@@ -631,12 +706,15 @@ for i in range(nTraining):
             # regression
             testPred, testRegLoss = sess.run([reg_y_test, loss_reg_test], feed_dict={x_reg_test:myData.xTest, y:myData.yTest})
         
-            trainTotalVar  = np.var(np.abs(batchY - trainPred))
-            testTotalVar = np.var(np.abs(myData.yTest - testPred))
+            trainTotalVar  = np.var(np.square(batchY - trainPred))
+            testTotalVar = np.var(np.square(myData.yTest - testPred))
             
-            print("itr:%d, trainRegLoss:%f, trainTotalVar:%f" % (i, trainRegLoss, trainTotalVar))
+            print("tr:%d, trainRegLoss:%f, trainTotalVar:%f" % (i, trainRegLoss, trainTotalVar))
             print("itr:%d, testRegLoss:%f, testTotalVar:%f" % (i, testRegLoss, testTotalVar)) 
             
+            # save model
+            if isSaveModel:
+                saver.save(sess,os.path.join(modelPath,savePath,"model_{}_{}_{}_{}.ckpt".format(methodModel,dataName,nClass,exID)),global_step=i)
             
             if not flag:
                 trainRegLosses,testRegLosses = trainRegLoss[np.newaxis],testRegLoss[np.newaxis]
@@ -646,7 +724,8 @@ for i in range(nTraining):
         
     # ==================== Anchor-based regression ====================== #
     elif methodModel == 1:
-        _, _, trainClsCenter, trainResPred, trainClsLoss, trainResLoss, trainRes = sess.run([trainer_cls, trainer_anc, pred_cls_center, reg_res, loss_anc, loss_cls, res],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY})
+        #pdb.set_trace()
+        _, _, trainClsCenter, trainResPred, trainClsLoss, trainResLoss, trainRes = sess.run([trainer_cls, trainer_anc, pred_cls_center, reg_res, loss_cls, loss_anc, res],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY})
         
         # -------------------- Test ------------------------------------- #
         if i % testPeriod == 0:
@@ -659,13 +738,17 @@ for i in range(nTraining):
             testPred = testClsCenter + testResPred     
             
             # total loss (mean) & variance
-            trainTotalLoss = np.mean(np.abs(batchY - trainPred))
-            trainTotalVar  = np.var(np.abs(batchY - trainPred))
-            testTotalLoss  = np.mean(np.abs(myData.yTest - testPred))
-            testTotalVar  = np.var(np.abs(myData.yTest - testPred))
+            trainTotalLoss = np.mean(np.square(batchY - trainPred))
+            trainTotalVar  = np.var(np.square(batchY - trainPred))
+            testTotalLoss  = np.mean(np.square(myData.yTest - testPred))
+            testTotalVar  = np.var(np.square(myData.yTest - testPred))
             
             print("itr:%d,trainClsLoss:%f,trainRegLoss:%f, trainTotalLoss:%f, trainTotalVar:%f" % (i,trainClsLoss,trainResLoss, trainTotalLoss, trainTotalVar))
             print("itr:%d,testClsLoss:%f,testRegLoss:%f, testTotalLoss:%f, testTotalVar:%f" % (i,testClsLoss,testResLoss, testTotalLoss, testTotalVar)) 
+            
+            # save model
+            if isSaveModel:
+                saver.save(sess,os.path.join(modelPath,savePath,"model_{}_{}_{}_{}.ckpt".format(methodModel,dataName,nClass,exID)),global_step=i)
             
             if not flag:
                 trainResLosses,testResLosses = trainResLoss[np.newaxis],testResLoss[np.newaxis]
@@ -680,30 +763,41 @@ for i in range(nTraining):
     # ======================== Atr-Nets ================================= #
     elif methodModel == 2:
 
-        #_, _, _, trainClsCenter, trainResPred, trainAlpha, trainClsLoss, trainResLoss, trainAlphaLoss, trainRResPred = \
-        #sess.run([trainer_cls, trainer_atr, trainer_alpha, pred_cls_center, reg_res, alpha, loss_cls, loss_atr, loss_alpha, reduce_res_op],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY})
-        _, _, trainClsCenter, trainResPred, trainAlpha, trainClsLoss, trainResLoss, trainRResPred = \
-        sess.run([trainer_cls, trainer_atr, pred_cls_center, reg_res, alpha, loss_cls, loss_atr, reduce_res_op],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY})
-        '''
-        _, trainAlpha, trainAlphaLoss = \
-        sess.run([trainer_alpha, alpha, loss_alpha],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY})
-        '''
+        if i==0: alpha_base_value = 0.1
+
+        #_, _, _, trainClsCenter, trainResPred, trainAlpha, trainClsLoss, trainResLoss, trainAlphaLoss, trainRResPred, grad_x_value = \
+        #sess.run([trainer_cls, trainer_atr, trainer_alpha, pred_cls_center, reg_res, alpha, loss_cls, loss_atr, loss_alpha, reduce_res_op, grad_x],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY})
+        _, _, trainClsCenter, trainCls, trainResPred, trainAlpha, trainClsLoss, trainResLoss, trainRResPred = \
+        sess.run([trainer_cls, trainer_atr, pred_cls_center, cls_op, reg_res, alpha, loss_cls, loss_atr, reduce_res_op],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY,alpha_base:alpha_base_value})
+
+        #_, trainAlpha, trainAlphaLoss, grad_x_value, max_grad_x_value = \
+        #sess.run([trainer_alpha, alpha, loss_alpha, grad_x, max_grad_x],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY})
 
         # -------------------- Test ------------------------------------- #
         if i % testPeriod == 0:
-        
+            """
+            #------------
+            # entropy
+            e = np.exp(trainCls - np.tile(np.max(trainCls,axis=1,keepdims=True),[1,nClass]))
+            #prob=np.exp(trainCls)/np.tile(np.sum(np.exp(trainCls),axis=1,keepdims=True),[1,nClass])
+            prob = e/np.tile(np.sum(e,axis=1,keepdims=True),[1,nClass])
+            entropy = np.mean(np.sum(prob*np.log(prob+10e-5),axis=1))
+            print(f"entropy = {entropy}")
+            """
             testClsCenter, testResPred, testAlpha, testClsLoss, testResLoss, testAlphaLoss, testRResPred = \
-            sess.run([pred_cls_center_test, reg_res_test, alpha_test, loss_cls_test, loss_atr_test, loss_alpha_test, reduce_res_op_test],feed_dict={x_cls:myData.xTest, y:myData.yTest, y_label:myData.yTestLabel})
+            sess.run([pred_cls_center_test, reg_res_test, alpha_test, loss_cls_test, loss_atr_test, loss_alpha_test, reduce_res_op_test],feed_dict={x_cls:myData.xTest, y:myData.yTest, y_label:myData.yTestLabel,alpha_base:alpha_base_value})
             
             # Recover
             trainPred = trainClsCenter + trainRResPred
             testPred = testClsCenter + testRResPred
         
             # total loss (mean) & variance
-            trainTotalLoss = np.mean(np.abs(batchY - trainPred))
-            trainTotalVar  = np.var(np.abs(batchY - trainPred))
-            testTotalLoss  = np.mean(np.abs(myData.yTest - testPred))
-            testTotalVar  = np.var(np.abs(myData.yTest - testPred))
+            trainTotalLoss = np.mean(np.square(batchY - trainPred))
+            trainTotalVar  = np.var(np.square(batchY - trainPred))
+            testTotalLoss  = np.mean(np.square(myData.yTest - testPred))
+            testTotalVar  = np.var(np.square(myData.yTest - testPred))
+
+            alpha_base_value = np.max([0.01,trainTotalLoss])
             
             TrainResidualat = 1/(1+np.exp(-trainAlpha * trainResPred))
             TrainBigResidual = np.where((0.0==TrainResidualat)|(TrainResidualat==1.0))
@@ -719,7 +813,11 @@ for i in range(nTraining):
             print("-----------------------------------")
             print("itr:%d,trainClsLoss:%f,trainRegLoss:%f, trainTotalLoss:%f, trainTotalVar:%f" % (i,trainClsLoss,trainResLoss, trainTotalLoss, trainTotalVar))
             print("itr:%d,testClsLoss:%f,testRegLoss:%f, testTotalLoss:%f, testTotalVar:%f" % (i,testClsLoss,testResLoss, testTotalLoss, testTotalVar)) 
-            pdb.set_trace()
+            
+            # save model
+            if isSaveModel:
+                saver.save(sess,os.path.join(modelPath,savePath,"model_{}_{}_{}_{}.ckpt".format(methodModel,dataName,nClass,exID)),global_step=i)
+
             if not flag:
                 trainResLosses,testResLosses = trainResLoss[np.newaxis],testResLoss[np.newaxis]
                 trainClassLosses,testClassLosses = trainClsLoss[np.newaxis],testClsLoss[np.newaxis]
@@ -730,72 +828,94 @@ for i in range(nTraining):
                 trainClassLosses,testClassLosses = np.hstack([trainClassLosses,trainClsLoss[np.newaxis]]),np.hstack([testClassLosses,testClsLoss[np.newaxis]])
                 trainTotalLosses,testTotalLosses = np.hstack([trainTotalLosses,trainTotalLoss[np.newaxis]]),np.hstack([testTotalLosses,testTotalLoss[np.newaxis]])
 
-# ------------------------- save model  --------------------------------- #
-"""
-modelFileName = "model_{}_{}_{}_{}_{}_{}_{}.ckpt".format(methodModel,dataName,sigma,nClass,pNum,nTrain,nTest)
-modelPath = "models"
-modelfullPath = os.path.join(modelPath,modelFileName)
-saver.save(sess,modelfullPath)
-"""
 # ------------------------- plot loss & toydata ------------------------- #
 if methodModel == 0:
-    myPlot.Plot_loss(0,0,0,0,trainRegLosses, testRegLosses,testPeriod,isPlot=isPlot, methodModel=methodModel, dataName=dataName, sigma=sigma, nClass=0, alpha=0, pNum=pNum, depth=depth)
+    myPlot.Plot_loss(0,0,0,0,trainRegLosses, testRegLosses,testPeriod,isPlot=isPlot, methodModel=methodModel, dataName=dataName, sigma=0, nClass=0, alpha=0, pNum=0, depth=depth)
     
     if dataMode == 0:
-        myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=0, alpha=0, pNum=pNum, depth=depth, isTrain=0)
-        myPlot.Plot_3D(batchX[:,0],batchX[:,1],batchY,trainPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=0, alpha=0, pNum=pNum, depth=depth, isTrain=1)
+        myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, methodModel=methodModel, dataName=dataName, sigma=sigma, nClass=0, alpha=0, pNum=pNum, depth=depth, isTrain=0,exID=exID,errorMode=errorMode,batchMode=batchMode,nData=nData)
     else:
+        """
         colors = ["m","c","y"]
         names = ["nankai","tonankai","tokai"]
-        cellinds = [0,1,2]
-        for color,name,cind in zip(colors,names,cellInds):
-            myPlot.Plot_Scatter(myData.xTest[:,cind], testPred[:,cind], isPlot=isPlot, methodModel=methodModel, nClass=0, alpha=0, depth=depth, isTrain=0, color=color, label="Baseline", cellName=name)
+        cells = [0,1,2]
+        for color,name,cind in zip(colors,names,cells):
+            myPlot.Plot_Scatter(myData.yTest[:,cind], testPred[:,cind], isPlot=isPlot, methodModel=methodModel, nClass=0, alpha=0, depth=depth, isTrain=0, color=color, label="Baseline", cellName=name)
             #myPlot.Plot_Scatter(batchX[:,cind], batchY[:,cind], isPlot=isPlot, methodModel=methodModel, nClass=nClass, alpha=alpha, depth=depth, isTrain=1, color=color, label="Baseline", cellName=name)
-
-    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}_{}.pkl".format(dataName,methodModel,sigma,nClass,pNum,depth)),"wb") as fp:
+            savePath = os.path.join(visualPath,scatterPath,"Scatter_{}_{}_{}_{}_{}.eps".format(methodModel,nClass,depth,0,name))
+            plt.savefig(savePath)
+            plt.close()
+        """
+    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}.pkl".format(dataName,methodModel,nClass,depth,exID)),"wb") as fp:
             pickle.dump(batchY,fp)
             pickle.dump(trainPred,fp)
             pickle.dump(myData.yTest,fp)
             pickle.dump(testPred,fp)
+            pickle.dump(trainRegLosses,fp)
+            pickle.dump(trainTotalVar,fp)
+            pickle.dump(testRegLosses,fp)
+            pickle.dump(testTotalVar,fp)
 
 elif methodModel == 1:
-    myPlot.Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainResLosses, testResLosses, testPeriod, isPlot=isPlot, methodModel=methodModel, dataName=dataName, sigma=sigma, nClass=nClass, alpha=0, pNum=pNum, depth=depth)   
+    myPlot.Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainResLosses, testResLosses, testPeriod, isPlot=isPlot, methodModel=methodModel, dataName=dataName, sigma=0, nClass=nClass, alpha=0, pNum=0, depth=depth)   
     
     if dataMode == 0:
-        myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=nClass, alpha=0, pNum=pNum, depth=depth, isTrain=0)
-        myPlot.Plot_3D(batchX[:,0],batchX[:,1],batchY,trainPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=nClass, alpha=0, pNum=pNum, depth=depth, isTrain=1)
+        myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, methodModel=methodModel, dataName=dataName, sigma=sigma, nClass=nClass, alpha=0, pNum=pNum, depth=depth, isTrain=0,exID=exID,batchMode=batchMode,nData=nData)
     else:
+        """
         colors = ["m","c","y"]
         names = ["nankai","tonankai","tokai"]
-        cellinds = [0,1,2]
-        for color,name,cind in zip(colors,names,cellInds):
-            myPlot.Plot_Scatter(myData.xTest[:,cind], testPred[:,cind], isPlot=isPlot, methodModel=methodModel, nClass=nClass, alpha=alpha, depth=depth, isTrain=0, color=color, label="Anchor-based", cellName=name)
+        cells = [0,1,2]
+        for color,name,cind in zip(colors,names,cells):
+            myPlot.Plot_Scatter(myData.yTest[:,cind], testPred[:,cind], isPlot=isPlot, methodModel=methodModel, nClass=nClass, alpha=alpha, depth=depth, isTrain=0, color=color, label="Anchor-based", cellName=name)
             #myPlot.Plot_Scatter(batchX[:,cind], batchY[:,cind], isPlot=isPlot, methodModel=methodModel, nClass=nClass, alpha=alpha, depth=depth, isTrain=1, color=color, label="Anchor-based", cellName=name)
-
-    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}_{}.pkl".format(dataName,methodModel,sigma,nClass,pNum,depth)),"wb") as fp:
+            savePath = os.path.join(visualPath,scatterPath,"Scatter_{}_{}_{}_{}_{}.eps".format(methodModel,nClass,depth,0,name))
+            plt.savefig(savePath)
+            plt.close()
+        """
+    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}.pkl".format(dataName,methodModel,nClass,depth,exID)),"wb") as fp:
             pickle.dump(batchY,fp)
             pickle.dump(trainPred,fp)
             pickle.dump(myData.yTest,fp)
             pickle.dump(testPred,fp)
+            pickle.dump(trainTotalLosses,fp)
+            pickle.dump(trainTotalVar,fp)
+            pickle.dump(testTotalLosses,fp)
+            pickle.dump(testTotalVar,fp)
+            pickle.dump(trainClassLosses,fp)
+            pickle.dump(testClassLosses,fp)
+            pickle.dump(trainResLosses,fp)
+            pickle.dump(testResLosses,fp)
+
     
 elif methodModel == 2: 
-    myPlot.Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainResLosses, testResLosses, testPeriod,isPlot=isPlot, methodModel=methodModel, dataName=dataName, sigma=sigma, nClass=nClass, alpha=testAlpha, pNum=pNum, depth=depth)    
+    myPlot.Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainResLosses, testResLosses, testPeriod,isPlot=isPlot, methodModel=methodModel, dataName=dataName, sigma=0, nClass=nClass, alpha=testAlpha, pNum=0, depth=depth)    
     
     if dataMode == 0:
-        myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, methodModel=methodModel, sigma=sigma, nClass=nClass, alpha=testAlpha, pNum=pNum, depth=depth, isTrain=0)
-        myPlot.Plot_3D(batchX[:,0],batchX[:,1],batchY,trainPred, isPlot=isPlot,methodModel=methodModel,sigma=sigma,nClass=nClass,alpha=trainAlpha,pNum=pNum,depth=depth,isTrain=1)
+        myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, methodModel=methodModel, dataName=dataName, sigma=sigma, nClass=nClass, alpha=testAlpha, pNum=pNum, depth=depth, isTrain=0,exID=exID,batchMode=batchMode,nData=nData)
     else:
+        """
         colors = ["m","c","y"]
         names = ["nankai","tonankai","tokai"]
-        cellinds = [0,1,2]
-        for color,name,cind in zip(colors,names,cellInds):
-            myPlot.Plot_Scatter(myData.xTest[:,cind], testPred[:,cind], isPlot=isPlot, methodModel=methodModel, nClass=nClass, alpha=alpha, depth=depth, isTrain=0, color=color, label="ATR-Nets", cellName=name)
-            #myPlot.Plot_Scatter(batchX[:,cind], batchY[:,cind], isPlot=isPlot, methodModel=methodModel, nClass=nClass, alpha=alpha, depth=depth, isTrain=1, color=color, label="ATR-Nets", cellName=name)
-
-    
-    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}_{}_{}.pkl".format(dataName,methodModel,sigma,nClass,testAlpha,pNum,depth)),"wb") as fp:
+        cells = [0,1,2]
+        for color,name,cind in zip(colors,names,cells):
+            myPlot.Plot_Scatter(myData.yTest[:,cind], testPred[:,cind], isPlot=isPlot, methodModel=methodModel, nClass=nClass, alpha=testAlpha, depth=depth, isTrain=0, color=color, label="ATR-Nets", cellName=name)
+            #myPlot.Plot_Scatter(batchX[:,cind], batchY[:,cind], isPlot=isPlot, methodModel=methodModel, nClass=nClass, alpha=trainAlpha, depth=depth, isTrain=1, color=color, label="ATR-Nets", cellName=name)
+            savePath = os.path.join(visualPath,scatterPath,"Scatter_{}_{}_{}_{}_{}_{}.eps".format(methodModel,nClass,testAlpha,depth,0,name))
+            plt.savefig(savePath)
+            plt.close()
+        """
+    with open(os.path.join(pickleFullPath,"test_{}_{}_{}_{}_{}_{}.pkl".format(dataName,methodModel,nClass,testAlpha,depth,exID)),"wb") as fp:
             pickle.dump(batchY,fp)
             pickle.dump(trainPred,fp)
             pickle.dump(myData.yTest,fp)
             pickle.dump(testPred,fp)
+            pickle.dump(trainTotalLosses,fp)
+            pickle.dump(trainTotalVar,fp)
+            pickle.dump(testTotalLosses,fp)
+            pickle.dump(testTotalVar,fp)
+            pickle.dump(trainClassLosses,fp)
+            pickle.dump(testClassLosses,fp)
+            pickle.dump(trainResLosses,fp)
+            pickle.dump(testResLosses,fp)
 # ----------------------------------------------------------------------- #  
