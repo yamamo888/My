@@ -22,9 +22,11 @@ import numpy as np
 visualPath = "visualization"
 # save loss path
 lossPath = "loss"
+# save scatter paht
+scatterPath = "scatter"
 
 #-----------------------------------------------------------------------------#      
-def Plot_3D(x1,x2,yGT,yPred,isPlot=False,methodModel=1,sigma=0,nClass=0,alpha=0,pNum=0,depth=0,isTrain=0):
+def Plot_3D(x1,x2,yGT,yPred,isPlot=False,methodModel=1,sigma=0,nClass=0,alpha=0,pNum=0,depth=0,isTrain=0,exID=0,errorMode=0,batchMode=0,nData=0):
 
     """
     Visualization: Point cloud of evaluation data is blue with 3 axes of (x1, x2, y)
@@ -46,12 +48,12 @@ def Plot_3D(x1,x2,yGT,yPred,isPlot=False,methodModel=1,sigma=0,nClass=0,alpha=0,
         # 予測値plot
         ax.plot(np.reshape(x1,[-1,]),np.reshape(x2,[-1,]),np.reshape(yPred,[-1,]),"o",color="r",label="Pred")
         plt.legend()
-        fullPath = os.path.join(visualPath,"Pred_{}_{}_{}_{}_{}_{}_{}_{}.png".format(methodModel,sigma,nClass,alpha,pNum,depth,isTrain,yGT.shape[0]))
+        fullPath = os.path.join(visualPath,"Pred_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.png".format(methodModel,sigma,nClass,alpha,pNum,depth,errorMode,batchMode,isTrain,nData,yGT.shape[0],exID))
         
         plt.savefig(fullPath)
     
 #-----------------------------------------------------------------------------#              
-def Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainRegLosses, testRegLosses, testPeriod, isPlot=False, methodModel=0, dataName=dataName, sigma=0,nClass=0,alpha=0,pNum=0,depth=0):
+def Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainRegLosses, testRegLosses, testPeriod, isPlot=False, methodModel=0, dataName="toy", sigma=0,nClass=0,alpha=0,batchSize=0,pNum=0,depth=0,exID=0):
     if isPlot:
         if methodModel==2 or methodModel==1:
             # lossPlot
@@ -66,7 +68,7 @@ def Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLoss
             plt.xlabel("iteration x {}".format(testPeriod))
             plt.legend()
             
-            fullPath = os.path.join(visualPath,lossPath,"Loss_{}_{}_{}_{}_{}_{}_{}.png".format(dataName,methodModel,sigma,nClass,alpha,pNum,depth))
+            fullPath = os.path.join(visualPath,lossPath,"Loss_{}_{}_{}_{}_{}_{}_{}.png".format(dataName,methodModel,nClass,alpha,depth,batchSize,exID))
         else:
             
             plt.plot(np.arange(trainRegLosses.shape[0]),trainRegLosses,label="trainRegLosses",color="c")
@@ -76,7 +78,7 @@ def Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLoss
             plt.xlabel("iteration x {}".format(testPeriod))
             plt.legend()
             
-            fullPath = os.path.join(visualPath,lossPath,"Loss_{}_{}_{}_{}_{}_{}_{}.png".format(dataName,methodModel,sigma,nClass,alpha,pNum,depth))
+            fullPath = os.path.join(visualPath,lossPath,"Loss_{}_{}_{}_{}_{}.png".format(dataName,methodModel,nClass,depth,exID))
         
         plt.savefig(fullPath)
         plt.close()
@@ -99,14 +101,14 @@ def Plot_Scatter(gt,pred,isPlot=False, methodModel=1, nClass=0, alpha=0, depth=0
         plt.xlim([np.min(gt),np.max(gt)])
         
         plt.legend(loc="best")
-        
+        """ 
         if methodModel == 0 or methodModel==1:
-            savePath = os.path.join(visualPath,"Scatter_{}_{}_{}_{}_{}_{}.png".format(methodModel,nClass,depth,isTrain))
+            savePath = os.path.join(visualPath,scatterPath,"Scatter_{}_{}_{}_{}.png".format(methodModel,nClass,depth,isTrain))
         else:
-            savePath = os.path.join(visualPath,"Scatter_{}_{}_{}_{}_{}_{}_{}.png".format(methodModel,nClass,alpha,depth,isTrain))
+            savePath = os.path.join(visualPath,scatterPath,"Scatter_{}_{}_{}_{}_{}.png".format(methodModel,nClass,alpha,depth,isTrain))
         plt.savefig(savePath)
         plt.close()
-        
+        """
 #-----------------------------------------------------------------------------#      
 def Plot_Alpha(trainAlpha,testAlpha,testPeriod, isPlot=False,methodModel=0,sigma=0,nClass=0,alpha=0,pNum=0,depth=0):
     if isPlot:
