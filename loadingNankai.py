@@ -4,7 +4,7 @@ Created on Fri Sep 20 23:59:09 2019
 
 @author: yu
 """
-import sys
+
 import os
 import pdb
 import pickle
@@ -12,7 +12,7 @@ import pickle
 import numpy as np
 
 class NankaiData:
-    def __init__(self,nCell=5,nClass=10,nWindow=10,cellInds=[1,3,4]):
+    def __init__(self,nCell=5,nClass=10,nWindow=10):
         #----------------------------- paramters --------------------------------------
 		
         # number of input cell
@@ -23,8 +23,6 @@ class NankaiData:
         self.nWindow = nWindow
         # init batch count
         self.batchCnt = 0
-        # cell index nankai(1,2), tonankai(3,4), tokai(5) -> 3/5
-        self.cellInds = cellInds
         
         # -----------------------------------------------------------------------------
 
@@ -39,13 +37,12 @@ class NankaiData:
         
         # name of train pickles
         trainNames = ["b2b3b4b5b6_train{}{}".format(num,self.nClass) for num in np.arange(1,8)]
+        pdb.set_trace()
         # name of test pickles
         testNames = ["b2b3b4b5b6_test1{}".format(self.nClass)]
         
-        #print(nameInds)	
-        #print(trainNames) 
         
-        # reading train data from pickle
+		# reading train data from pickle
         with open(os.path.join(self.features,self.nankaipkls,trainNames[nameInds[0]]),'rb') as fp:
             self.x11Train = pickle.load(fp)
             self.y11TrainLabel = pickle.load(fp)
@@ -101,8 +98,6 @@ class NankaiData:
             self.y41Test = pickle.load(fp)
             self.y51Test = pickle.load(fp)
         
-        
-        #pdb.set_trace()
         #[number of data,]
         self.xTest = self.xTest[:,1:6,:]
         self.xTest = np.reshape(self.xTest,[-1,self.nCell*self.nWindow])
@@ -113,8 +108,9 @@ class NankaiData:
         
         # number of train data
         self.nTrain =  int(self.x11Train.shape[0] + self.x12Train.shape[0] + self.x13Train.shape[0])
+        # random train index
         self.batchRandInd = np.random.permutation(self.nTrain)
-
+        
     #-----------------------------------------------------------------------------#    
     def loadNankaiRireki(self):
         
@@ -140,6 +136,7 @@ class NankaiData:
         
         sInd = batchSize * self.batchCnt
         eInd = sInd + batchSize
+       
         # [number of data, cell(=5,nankai2 & tonakai2 & tokai1), dimention of features(=10)]
         trX = np.concatenate((self.x11Train[:,1:6,:],self.x12Train[:,1:6,:],self.x13Train[:,1:6,:]),0) 
         # mini-batch, [number of data, cell(=5)*dimention of features(=10)]
@@ -157,13 +154,11 @@ class NankaiData:
         trlabel3 = np.concatenate((self.y51TrainLabel,self.y52TrainLabel,self.y53TrainLabel),0)
         # [number of data, number of class(self.nClass), cell(=3)] 
         batchlabelY = np.concatenate((trlabel1[sInd:eInd,:,np.newaxis],trlabel2[sInd:eInd,:,np.newaxis],trlabel3[sInd:eInd,:,np.newaxis]),2)
+        
         if eInd + batchSize > self.nTrain:
             self.batchCnt = 0
         else:
             self.batchCnt += 1
-        
+
         return batchX, batchY, batchlabelY
     #-----------------------------------------------------------------------------#
-#mydata = NankaiData(nCell=5,nClass=10,nWindow=10,cellInds=[1,3,4])
-#mydata.loadTrainTestData(nameInds=[1,2,3,4,5,6,7])
-    
