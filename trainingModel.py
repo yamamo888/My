@@ -5,6 +5,7 @@ import os
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.contrib.slim.nets import resnet_v1
 
 import random
 import pickle
@@ -109,7 +110,7 @@ if dataMode == 0:
     # Width class
     beta = np.round((yMax - yMin) / nClass,limitdecimal)
     dataName = f"toy_{trialID}"
-    nTraining = 50000
+    nTraining = 5000
     # not training alpha
     trainAlpha = True
 # Nankai
@@ -121,7 +122,7 @@ else:
     # Width class
     beta = np.round((nkMax - nkMin) / nClass,limitdecimal)
     dataName = f"nankai_{trialID}"
-    nTraining = 100000
+    nTraining = 1000
     # not training alpha
     trainAlpha = False
 
@@ -144,11 +145,13 @@ lr = 1e-3
 # nankai file change timing
 filePeriod = nTraining / 10
 # test count
-testPeriod = 500
+testPeriod = 100
 # if plot == True
 isPlot = True
 # if save model == True
 isSaveModel = True
+# if restore model == True
+isRestoreModel = False
 # -----------------------------------------------------------------------------
 
 # --------------------------- data --------------------------------------------
@@ -665,8 +668,6 @@ trainer_atr = Optimizer(loss_atr,name_scope="ResidualRegress")
 trainer_alpha = Optimizer(loss_alpha,name_scope="TrResidual")
 
 #------------------------------------------------------------------------ # 
-
-#------------------------------------------------------------------------ # 
 if isSaveModel:
     # save model, every test steps
     saver = tf.train.Saver(max_to_keep=0)
@@ -675,6 +676,14 @@ if isSaveModel:
 config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.1,allow_growth=True)) 
 sess = tf.Session(config=config)
 sess.run(tf.global_variables_initializer())
+
+if isRestoreModel:
+    # restore saved model, latest
+    savedmodelDir = os.path.join(modelPath,savePath)
+    if os.path.exists(savedmodelDir):
+        saver = tf.train.Saver()
+        saver.restore(sess,tf.train.latest_checkpoint(savedmodelDir))
+
 #------------------------------------------------------------------------ #
 #------------------------------------------------------------------------ #
 # start training
@@ -684,33 +693,48 @@ for i in range(nTraining):
     # Get mini-batch
     batchX,batchY,batchlabelY = myData.nextBatch(batchSize)
     
-    # ------------------------------------------------------------------- #
-    # Change nankai data
     if dataMode == 1:
+    # ------------------------------------------------------------------- #
+        # Change nankai date
         if i % filePeriod == 0:
             nameInds = random.sample(nametrInds,3) 
             myData.loadTrainTestData(nameInds=nameInds)
-    # ------------------------------------------------------------------- #
-    
+    # ------------------------------------------------------------------- #    
+        
     # ==================== Baseline regression ========================== #
     if methodModel == 0:
         # regression
         _, trainPred, trainRegLoss = sess.run([trainer_reg, reg_y, loss_reg], feed_dict={x_reg:batchX, y:batchY})
         
+        testPred, testRegLoss = sess.run([reg_y_test, loss_reg_test], feed_dict={x_reg_test:myData.xTest, y:myData.yTest})
+        
+        trainTotalVar  = np.var(np.square(batchY - trainPred))
+        testTotalVar = np.var(np.square(myData.yTest - testPred))
+        
+        # save nankai params
+        if dataMode == 1:
+            savefilePath = "{}_{}_{}_{}_{}_{}".format(i,dataName,methodModel,depth,batchSize,trialID)
+            with open(os.path.join(pickleFullPath,"test_{}.pkl".format(savefilePath)),"wb") as fp:
+                pickle.dump(batchY,fp)
+                pickle.dump(trainPred,fp)
+                pickle.dump(myData.yTest,fp)
+                pickle.dump(testPred,fp)
+                pickle.dump(trainRegLoss,fp)
+                pickle.dump(trainTotalVar,fp)
+                pickle.dump(testRegLoss,fp)
+                pickle.dump(testTotalVar,fp)
+                
         # -------------------- Test ------------------------------------- #
         if i % testPeriod == 0:   
             # regression
             testPred, testRegLoss = sess.run([reg_y_test, loss_reg_test], feed_dict={x_reg_test:myData.xTest, y:myData.yTest})
         
-            trainTotalVar  = np.var(np.square(batchY - trainPred))
-            testTotalVar = np.var(np.square(myData.yTest - testPred))
-            
             print("tr:%d, trainRegLoss:%f, trainTotalVar:%f" % (i, trainRegLoss, trainTotalVar))
             print("itr:%d, testRegLoss:%f, testTotalVar:%f" % (i, testRegLoss, testTotalVar)) 
             
             # save model
             if isSaveModel:
-                saver.save(sess,os.path.join(modelPath,savePath,"model_{}_{}_{}_{}.ckpt".format(methodModel,dataName,nClass)),global_step=i)
+                saver.save(sess,os.path.join(modelPath,savePath,"model"),global_step=i)
             
             if not flag:
                 trainRegLosses,testRegLosses = trainRegLoss[np.newaxis],testRegLoss[np.newaxis]
@@ -718,28 +742,54 @@ for i in range(nTraining):
             else:
                 trainRegLosses,testRegLosses = np.hstack([trainRegLosses,trainRegLoss[np.newaxis]]),np.hstack([testRegLosses,testRegLoss[np.newaxis]])
         
+            myPlot.Plot_loss(0,0,0,0,trainRegLosses, testRegLosses,testPeriod,isPlot=isPlot, methodModel=methodModel, savefilePath=savefilePath)
     # ==================== Anchor-based regression ====================== #
     elif methodModel == 1:
         _, _, trainClsCenter, trainResPred, trainClsLoss, trainResLoss, trainRes = sess.run([trainer_cls, trainer_anc, pred_cls_center, reg_res, loss_cls, loss_anc, res],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY})
+        
+        testClsLoss, testResLoss, testClsCenter, testResPred  = sess.run([loss_cls_test, loss_anc_test, pred_cls_center_test, reg_res_test], feed_dict={x_cls:myData.xTest, y:myData.yTest, y_label:myData.yTestLabel})
+
+        # Reduce
+        trainPred = trainClsCenter + trainResPred
+        testPred = testClsCenter + testResPred     
+        
+        # total loss (mean) & variance
+        trainTotalLoss = np.mean(np.square(batchY - trainPred))
+        trainTotalVar  = np.var(np.square(batchY - trainPred))
+        testTotalLoss  = np.mean(np.square(myData.yTest - testPred))
+        testTotalVar  = np.var(np.square(myData.yTest - testPred))
+        
+        if dataMode == 1:
+            savefilePath = "{}_{}_{}_{}_{}_{}_{}".format(i,dataName,methodModel,nClass,depth,batchSize,trialID)
+            with open(os.path.join(pickleFullPath,"test_{}.pkl".format(savefilePath)),"wb") as fp:
+                pickle.dump(batchY,fp)
+                pickle.dump(trainPred,fp)
+                pickle.dump(myData.yTest,fp)
+                pickle.dump(testPred,fp)
+                pickle.dump(trainClsCenter,fp)
+                pickle.dump(testClsCenter,fp)
+                pickle.dump(trainResPred,fp)
+                pickle.dump(testResPred,fp)
+                pickle.dump(trainClsLoss,fp)
+                pickle.dump(testClsLoss,fp)
+                pickle.dump(trainResLoss,fp)
+                pickle.dump(testResLoss,fp)
+                pickle.dump(trainTotalLoss,fp)
+                pickle.dump(trainTotalVar,fp)
+                pickle.dump(testTotalLoss,fp)
+                pickle.dump(testTotalVar,fp)
         
         # -------------------- Test ------------------------------------- #
         if i % testPeriod == 0:
 
             testClsLoss, testResLoss, testClsCenter, testResPred  = sess.run([loss_cls_test, loss_anc_test, pred_cls_center_test, reg_res_test], feed_dict={x_cls:myData.xTest, y:myData.yTest, y_label:myData.yTestLabel})
-
-            
-            # Reduce
-            trainPred = trainClsCenter + trainResPred
-            testPred = testClsCenter + testResPred     
-            
-            # total loss (mean) & variance
-            trainTotalLoss = np.mean(np.square(batchY - trainPred))
-            trainTotalVar  = np.var(np.square(batchY - trainPred))
-            testTotalLoss  = np.mean(np.square(myData.yTest - testPred))
-            testTotalVar  = np.var(np.square(myData.yTest - testPred))
             
             print("itr:%d,trainClsLoss:%f,trainRegLoss:%f, trainTotalLoss:%f, trainTotalVar:%f" % (i,trainClsLoss,trainResLoss, trainTotalLoss, trainTotalVar))
             print("itr:%d,testClsLoss:%f,testRegLoss:%f, testTotalLoss:%f, testTotalVar:%f" % (i,testClsLoss,testResLoss, testTotalLoss, testTotalVar)) 
+            
+            # save model
+            if isSaveModel:
+                saver.save(sess,os.path.join(modelPath,savePath,"model"),global_step=i)
             
             if not flag:
                 trainResLosses,testResLosses = trainResLoss[np.newaxis],testResLoss[np.newaxis]
@@ -751,31 +801,30 @@ for i in range(nTraining):
                 trainClassLosses,testClassLosses = np.hstack([trainClassLosses,trainClsLoss[np.newaxis]]),np.hstack([testClassLosses,testClsLoss[np.newaxis]])
                 trainTotalLosses,testTotalLosses = np.hstack([trainTotalLosses,trainTotalLoss[np.newaxis]]),np.hstack([testTotalLosses,testTotalLoss[np.newaxis]])
         
+            myPlot.Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainResLosses, testResLosses, testPeriod, isPlot=isPlot, methodModel=methodModel, savefilePath=savefilePath)
     # ======================== Atr-Nets ================================= #
     elif methodModel == 2:
 
-        if i==0: alpha_base_value = 0.1
-
-        #_, _, _, trainClsCenter, trainResPred, trainAlpha, trainClsLoss, trainResLoss, trainAlphaLoss, trainRResPred, grad_x_value = \
-        #sess.run([trainer_cls, trainer_atr, trainer_alpha, pred_cls_center, reg_res, alpha, loss_cls, loss_atr, loss_alpha, reduce_res_op, grad_x],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY})
-        _, _, trainClsCenter, trainCls, trainResPred, trainAlpha, trainClsLoss, trainResLoss, trainRResPred = \
-        sess.run([trainer_cls, trainer_atr, pred_cls_center, cls_op, reg_res, alpha, loss_cls, loss_atr, reduce_res_op],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY,alpha_base:alpha_base_value})
-
-        #_, trainAlpha, trainAlphaLoss, grad_x_value, max_grad_x_value = \
-        #sess.run([trainer_alpha, alpha, loss_alpha, grad_x, max_grad_x],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY})
-
-        # -------------------- Test ------------------------------------- #
-        if i % testPeriod == 0:
-            #------------
-            # entropy
-            e = np.exp(trainCls - np.tile(np.max(trainCls,axis=1,keepdims=True),[1,nClass]))
-            #prob=np.exp(trainCls)/np.tile(np.sum(np.exp(trainCls),axis=1,keepdims=True),[1,nClass])
-            prob = e/np.tile(np.sum(e,axis=1,keepdims=True),[1,nClass])
-            entropy = np.mean(np.sum(prob*np.log(prob+10e-5),axis=1))
-            print(f"entropy = {entropy}")
-        
-            testClsCenter, testResPred, testAlpha, testClsLoss, testResLoss, testAlphaLoss, testRResPred = \
-            sess.run([pred_cls_center_test, reg_res_test, alpha_test, loss_cls_test, loss_atr_test, loss_alpha_test, reduce_res_op_test],feed_dict={x_cls:myData.xTest, y:myData.yTest, y_label:myData.yTestLabel,alpha_base:alpha_base_value})
+        if i==0:
+            alpha_base_value = 0.1
+            if trainAlpha:
+                _, _, _, trainClsCenter, trainResPred, trainAlpha, trainClsLoss, trainResLoss, trainAlphaLoss, trainRResPred, grad_x_value = \
+                sess.run([trainer_cls, trainer_atr, trainer_alpha, pred_cls_center, reg_res, alpha, loss_cls, loss_atr, loss_alpha, reduce_res_op, grad_x],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY})
+                
+                testClsCenter, testResPred, testAlpha, testClsLoss, testResLoss, testAlphaLoss, testRResPred = \
+                sess.run([pred_cls_center_test, reg_res_test, alpha_test, loss_cls_test, loss_atr_test, loss_alpha_test, reduce_res_op_test],feed_dict={x_cls:myData.xTest, y:myData.yTest, y_label:myData.yTestLabel,alpha_base:alpha_base_value})
+            
+            else:
+                pdb.set_trace()
+                # fixing alpha
+                _, _, trainClsCenter, trainCls, trainResPred, trainAlpha, trainClsLoss, trainResLoss, trainRResPred = \
+                sess.run([trainer_cls, trainer_atr, pred_cls_center, cls_op, reg_res, alpha, loss_cls, loss_atr, reduce_res_op],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY,alpha_base:alpha_base_value})
+                
+                #_, trainAlpha, trainAlphaLoss, grad_x_value, max_grad_x_value = \
+                #sess.run([trainer_alpha, alpha, loss_alpha, grad_x, max_grad_x],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY})
+                
+                testClsCenter, testResPred, testAlpha, testClsLoss, testResLoss, testAlphaLoss, testRResPred = \
+                sess.run([pred_cls_center_test, reg_res_test, alpha_test, loss_cls_test, loss_atr_test, loss_alpha_test, reduce_res_op_test],feed_dict={x_cls:myData.xTest, y:myData.yTest, y_label:myData.yTestLabel,alpha_base:alpha_base_value})
             
             # Recover
             trainPred = trainClsCenter + trainRResPred
@@ -788,6 +837,41 @@ for i in range(nTraining):
             testTotalVar  = np.var(np.square(myData.yTest - testPred))
 
             alpha_base_value = np.max([0.01,trainTotalLoss])
+            
+            if dataMode == 1:
+                savefilePath = "{}_{}_{}_{}_{}_{}_{}_{}".format(i,dataName,methodModel,nClass,depth,batchSize,testAlpha,trialID)
+                with open(os.path.join(pickleFullPath,"test_{}.pkl".format(savefilePath)),"wb") as fp:
+                    pickle.dump(batchY,fp)
+                    pickle.dump(trainPred,fp)
+                    pickle.dump(myData.yTest,fp)
+                    pickle.dump(testPred,fp)
+                    pickle.dump(trainClsCenter,fp)
+                    pickle.dump(testClsCenter,fp)
+                    pickle.dump(trainResPred,fp)
+                    pickle.dump(testResPred,fp)
+                    pickle.dump(trainClsLoss,fp)
+                    pickle.dump(testClsLoss,fp)
+                    pickle.dump(trainResLoss,fp)
+                    pickle.dump(testResLoss,fp)
+                    pickle.dump(trainTotalLoss,fp)
+                    pickle.dump(trainTotalVar,fp)
+                    pickle.dump(testTotalLoss,fp)
+                    pickle.dump(testTotalVar,fp)
+                
+        # -------------------- Test ------------------------------------- #
+        if i % testPeriod == 0:
+            #------------
+            # entropy 
+            if dataMode == 0:
+                e = np.exp(trainCls - np.tile(np.max(trainCls,axis=1,keepdims=True),[1,nClass]))
+                #prob=np.exp(trainCls)/np.tile(np.sum(np.exp(trainCls),axis=1,keepdims=True),[1,nClass])
+                prob = e/np.tile(np.sum(e,axis=1,keepdims=True),[1,nClass])
+                entropy = np.mean(np.sum(prob*np.log(prob+10e-5),axis=1))
+                print(f"entropy = {entropy}")
+            
+            testClsCenter, testResPred, testAlpha, testClsLoss, testResLoss, testAlphaLoss, testRResPred = \
+            sess.run([pred_cls_center_test, reg_res_test, alpha_test, loss_cls_test, loss_atr_test, loss_alpha_test, reduce_res_op_test],feed_dict={x_cls:myData.xTest, y:myData.yTest, y_label:myData.yTestLabel,alpha_base:alpha_base_value})
+            
             
             TrainResidualat = 1/(1+np.exp(-trainAlpha * trainResPred))
             TrainBigResidual = np.where((0.0==TrainResidualat)|(TrainResidualat==1.0))
@@ -804,6 +888,10 @@ for i in range(nTraining):
             print("itr:%d,trainClsLoss:%f,trainRegLoss:%f, trainTotalLoss:%f, trainTotalVar:%f" % (i,trainClsLoss,trainResLoss, trainTotalLoss, trainTotalVar))
             print("itr:%d,testClsLoss:%f,testRegLoss:%f, testTotalLoss:%f, testTotalVar:%f" % (i,testClsLoss,testResLoss, testTotalLoss, testTotalVar)) 
             
+            # save model
+            if isSaveModel:
+                saver.save(sess,os.path.join(modelPath,savePath,"model"),global_step=i)
+            
             if not flag:
                 trainResLosses,testResLosses = trainResLoss[np.newaxis],testResLoss[np.newaxis]
                 trainClassLosses,testClassLosses = trainClsLoss[np.newaxis],testClsLoss[np.newaxis]
@@ -814,17 +902,19 @@ for i in range(nTraining):
                 trainClassLosses,testClassLosses = np.hstack([trainClassLosses,trainClsLoss[np.newaxis]]),np.hstack([testClassLosses,testClsLoss[np.newaxis]])
                 trainTotalLosses,testTotalLosses = np.hstack([trainTotalLosses,trainTotalLoss[np.newaxis]]),np.hstack([testTotalLosses,testTotalLoss[np.newaxis]])
 
+            myPlot.Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainResLosses, testResLosses, testPeriod, isPlot=isPlot, methodModel=methodModel, savefilePath=savefilePath)
 # ------------------------- plot loss & toydata ------------------------- #
 if methodModel == 0:
     
     if dataMode == 0:
         savefilePath = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(dataName,methodModel,sigma,pNum,depth,batchSize,nData,trainRatio,trialID)
         myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, savefilePath=savefilePath)
-    else:
-        savefilePath = "{}_{}_{}_{}_{}".format(dataName,methodModel,depth,batchSize,trialID)
-        myPlot.Plot_Scatter(myData.yTest,testPred,isPlot=isPlot,savefilePath)
         
-    myPlot.Plot_loss(0,0,0,0,trainRegLosses, testRegLosses,testPeriod,isPlot=isPlot, savefilePath=savefilePath)
+    else:
+        savefilePath = "{}_{}_{}_{}_{}_{}".format(i,dataName,methodModel,depth,batchSize,trialID)
+        #myPlot.Plot_Scatter(myData.yTest,testPred,isPlot=isPlot,savefilePath=savefilePath)
+        
+    myPlot.Plot_loss(0,0,0,0,trainRegLosses, testRegLosses,testPeriod,isPlot=isPlot, methodModel=methodModel, savefilePath=savefilePath)
     
     with open(os.path.join(pickleFullPath,"test_{}.pkl".format(savefilePath)),"wb") as fp:
             pickle.dump(batchY,fp)
@@ -835,31 +925,31 @@ if methodModel == 0:
             pickle.dump(trainTotalVar,fp)
             pickle.dump(testRegLosses,fp)
             pickle.dump(testTotalVar,fp)
-# ----------------------------------------------------------------------- #
+        
+    # ----------------------------------------------------------------------- #
 elif methodModel == 1:
     
     if dataMode == 0:
         savefilePath = "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(dataName,methodModel,sigma,nClass,pNum,depth,batchSize,nData,trainRatio,trialID)
         myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, savefilePath=savefilePath)
     else:
-        savefilePath = "{}_{}_{}_{}_{}_{}".format(dataName,methodModel,nClass,depth,batchSize,trialID)
-        myPlot.Plot_Scatter(myData.yTest,testPred,isPlot=isPlot,savefilePath)
+        savefilePath = "{}_{}_{}_{}_{}_{}_{}".format(i,dataName,methodModel,nClass,depth,batchSize,trialID)
+        #myPlot.Plot_Scatter(myData.yTest,testPred,isPlot=isPlot,savefilePath=savefilePath)
         
-    myPlot.Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainResLosses, testResLosses, testPeriod, isPlot=isPlot, savefilePath=savefilePath)
+    myPlot.Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainResLosses, testResLosses, testPeriod, isPlot=isPlot, methodModel=methodModel, savefilePath=savefilePath)
 
     with open(os.path.join(pickleFullPath,"test_{}.pkl".format(savefilePath)),"wb") as fp:
-            pickle.dump(batchY,fp)
-            pickle.dump(trainPred,fp)
-            pickle.dump(myData.yTest,fp)
-            pickle.dump(testPred,fp)
-            pickle.dump(trainTotalLosses,fp)
-            pickle.dump(trainTotalVar,fp)
-            pickle.dump(testTotalLosses,fp)
-            pickle.dump(testTotalVar,fp)
-            pickle.dump(trainClassLosses,fp)
-            pickle.dump(testClassLosses,fp)
-            pickle.dump(trainResLosses,fp)
-            pickle.dump(testResLosses,fp)
+        pickle.dump(batchY,fp)
+        pickle.dump(trainPred,fp)
+        pickle.dump(myData.yTest,fp)
+        pickle.dump(testPred,fp)
+        pickle.dump(trainTotalVar,fp)
+        pickle.dump(testTotalVar,fp)
+        pickle.dump(trainClassLosses,fp)
+        pickle.dump(testClassLosses,fp)
+        pickle.dump(trainResLosses,fp)
+        pickle.dump(testResLosses,fp)
+    
 # ----------------------------------------------------------------------- #
 elif methodModel == 2: 
     
@@ -867,22 +957,20 @@ elif methodModel == 2:
         savefilePath = "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(dataName,methodModel,sigma,nClass,pNum,depth,batchSize,nData,trainRatio,testAlpha,trialID)
         myPlot.Plot_3D(myData.xTest[:,0],myData.xTest[:,1],myData.yTest,testPred, isPlot=isPlot, savefilePath=savefilePath)
     else:
-        savefilePath = "{}_{}_{}_{}_{}_{}_{}".format(dataName,methodModel,nClass,depth,batchSize,testAlpha,trialID)
-        myPlot.Plot_Scatter(myData.yTest,testPred,isPlot=isPlot,savefilePath)
+        savefilePath = "{}_{}_{}_{}_{}_{}_{}_{}".format(i,dataName,methodModel,nClass,depth,batchSize,testAlpha,trialID)
+        myPlot.Plot_Scatter(myData.yTest,testPred,isPlot=isPlot,savefilePath=savefilePath)
         
-    myPlot.Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainResLosses, testResLosses, testPeriod, isPlot=isPlot, savefilePath=savefilePath)
-
+    myPlot.Plot_loss(trainTotalLosses, testTotalLosses, trainClassLosses, testClassLosses, trainResLosses, testResLosses, testPeriod, isPlot=isPlot, methodModel=methodModel, savefilePath=savefilePath)
+    
     with open(os.path.join(pickleFullPath,"test_{}.pkl".format(savefilePath)),"wb") as fp:
-            pickle.dump(batchY,fp)
-            pickle.dump(trainPred,fp)
-            pickle.dump(myData.yTest,fp)
-            pickle.dump(testPred,fp)
-            pickle.dump(trainTotalLosses,fp)
-            pickle.dump(trainTotalVar,fp)
-            pickle.dump(testTotalLosses,fp)
-            pickle.dump(testTotalVar,fp)
-            pickle.dump(trainClassLosses,fp)
-            pickle.dump(testClassLosses,fp)
-            pickle.dump(trainResLosses,fp)
-            pickle.dump(testResLosses,fp)
+        pickle.dump(batchY,fp)
+        pickle.dump(trainPred,fp)
+        pickle.dump(myData.yTest,fp)
+        pickle.dump(testPred,fp)
+        pickle.dump(trainTotalVar,fp)
+        pickle.dump(testTotalVar,fp)
+        pickle.dump(trainClassLosses,fp)
+        pickle.dump(testClassLosses,fp)
+        pickle.dump(trainResLosses,fp)
+        pickle.dump(testResLosses,fp)
 # ----------------------------------------------------------------------- #  
