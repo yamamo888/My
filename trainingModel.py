@@ -807,57 +807,57 @@ for i in range(nTraining):
 
         if i==0:
             alpha_base_value = 0.1
-            if trainAlpha:
-                _, _, _, trainClsCenter, trainResPred, trainAlpha, trainClsLoss, trainResLoss, trainAlphaLoss, trainRResPred, grad_x_value = \
-                sess.run([trainer_cls, trainer_atr, trainer_alpha, pred_cls_center, reg_res, alpha, loss_cls, loss_atr, loss_alpha, reduce_res_op, grad_x],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY})
-                
-                testClsCenter, testResPred, testAlpha, testClsLoss, testResLoss, testAlphaLoss, testRResPred = \
-                sess.run([pred_cls_center_test, reg_res_test, alpha_test, loss_cls_test, loss_atr_test, loss_alpha_test, reduce_res_op_test],feed_dict={x_cls:myData.xTest, y:myData.yTest, y_label:myData.yTestLabel,alpha_base:alpha_base_value})
+        if trainAlpha:
+            _, _, _, trainClsCenter, trainResPred, trainAlpha, trainClsLoss, trainResLoss, trainAlphaLoss, trainRResPred, grad_x_value = \
+            sess.run([trainer_cls, trainer_atr, trainer_alpha, pred_cls_center, reg_res, alpha, loss_cls, loss_atr, loss_alpha, reduce_res_op, grad_x],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY})
             
-            else:
-                pdb.set_trace()
-                # fixing alpha
-                _, _, trainClsCenter, trainCls, trainResPred, trainAlpha, trainClsLoss, trainResLoss, trainRResPred = \
-                sess.run([trainer_cls, trainer_atr, pred_cls_center, cls_op, reg_res, alpha, loss_cls, loss_atr, reduce_res_op],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY,alpha_base:alpha_base_value})
-                
-                #_, trainAlpha, trainAlphaLoss, grad_x_value, max_grad_x_value = \
-                #sess.run([trainer_alpha, alpha, loss_alpha, grad_x, max_grad_x],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY})
-                
-                testClsCenter, testResPred, testAlpha, testClsLoss, testResLoss, testAlphaLoss, testRResPred = \
-                sess.run([pred_cls_center_test, reg_res_test, alpha_test, loss_cls_test, loss_atr_test, loss_alpha_test, reduce_res_op_test],feed_dict={x_cls:myData.xTest, y:myData.yTest, y_label:myData.yTestLabel,alpha_base:alpha_base_value})
-            
-            # Recover
-            trainPred = trainClsCenter + trainRResPred
-            testPred = testClsCenter + testRResPred
+            testClsCenter, testResPred, testAlpha, testClsLoss, testResLoss, testAlphaLoss, testRResPred = \
+            sess.run([pred_cls_center_test, reg_res_test, alpha_test, loss_cls_test, loss_atr_test, loss_alpha_test, reduce_res_op_test],feed_dict={x_cls:myData.xTest, y:myData.yTest, y_label:myData.yTestLabel,alpha_base:alpha_base_value})
         
-            # total loss (mean) & variance
-            trainTotalLoss = np.mean(np.square(batchY - trainPred))
-            trainTotalVar  = np.var(np.square(batchY - trainPred))
-            testTotalLoss  = np.mean(np.square(myData.yTest - testPred))
-            testTotalVar  = np.var(np.square(myData.yTest - testPred))
-
-            alpha_base_value = np.max([0.01,trainTotalLoss])
+        else:
             
-            if dataMode == 1:
-                savefilePath = "{}_{}_{}_{}_{}_{}_{}_{}".format(i,dataName,methodModel,nClass,depth,batchSize,testAlpha,trialID)
-                with open(os.path.join(pickleFullPath,"test_{}.pkl".format(savefilePath)),"wb") as fp:
-                    pickle.dump(batchY,fp)
-                    pickle.dump(trainPred,fp)
-                    pickle.dump(myData.yTest,fp)
-                    pickle.dump(testPred,fp)
-                    pickle.dump(trainClsCenter,fp)
-                    pickle.dump(testClsCenter,fp)
-                    pickle.dump(trainResPred,fp)
-                    pickle.dump(testResPred,fp)
-                    pickle.dump(trainClsLoss,fp)
-                    pickle.dump(testClsLoss,fp)
-                    pickle.dump(trainResLoss,fp)
-                    pickle.dump(testResLoss,fp)
-                    pickle.dump(trainTotalLoss,fp)
-                    pickle.dump(trainTotalVar,fp)
-                    pickle.dump(testTotalLoss,fp)
-                    pickle.dump(testTotalVar,fp)
-                
+            # fixing alpha
+            _, _, trainClsCenter, trainCls, trainResPred, trainAlpha, trainClsLoss, trainResLoss, trainRResPred = \
+            sess.run([trainer_cls, trainer_atr, pred_cls_center, cls_op, reg_res, alpha, loss_cls, loss_atr, reduce_res_op],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY,alpha_base:alpha_base_value})
+            
+            #_, trainAlpha, trainAlphaLoss, grad_x_value, max_grad_x_value = \
+            #sess.run([trainer_alpha, alpha, loss_alpha, grad_x, max_grad_x],feed_dict={x_cls:batchX, y:batchY, y_label:batchlabelY})
+            
+            testClsCenter, testResPred, testAlpha, testClsLoss, testResLoss, testAlphaLoss, testRResPred = \
+            sess.run([pred_cls_center_test, reg_res_test, alpha_test, loss_cls_test, loss_atr_test, loss_alpha_test, reduce_res_op_test],feed_dict={x_cls:myData.xTest, y:myData.yTest, y_label:myData.yTestLabel,alpha_base:alpha_base_value})
+        
+        # Recover
+        trainPred = trainClsCenter + trainRResPred
+        testPred = testClsCenter + testRResPred
+    
+        # total loss (mean) & variance
+        trainTotalLoss = np.mean(np.square(batchY - trainPred))
+        trainTotalVar  = np.var(np.square(batchY - trainPred))
+        testTotalLoss  = np.mean(np.square(myData.yTest - testPred))
+        testTotalVar  = np.var(np.square(myData.yTest - testPred))
+
+        alpha_base_value = np.max([0.01,trainTotalLoss])
+        
+        if dataMode == 1:
+            savefilePath = "{}_{}_{}_{}_{}_{}_{}_{}".format(i,dataName,methodModel,nClass,depth,batchSize,testAlpha,trialID)
+            with open(os.path.join(pickleFullPath,"test_{}.pkl".format(savefilePath)),"wb") as fp:
+                pickle.dump(batchY,fp)
+                pickle.dump(trainPred,fp)
+                pickle.dump(myData.yTest,fp)
+                pickle.dump(testPred,fp)
+                pickle.dump(trainClsCenter,fp)
+                pickle.dump(testClsCenter,fp)
+                pickle.dump(trainResPred,fp)
+                pickle.dump(testResPred,fp)
+                pickle.dump(trainClsLoss,fp)
+                pickle.dump(testClsLoss,fp)
+                pickle.dump(trainResLoss,fp)
+                pickle.dump(testResLoss,fp)
+                pickle.dump(trainTotalLoss,fp)
+                pickle.dump(trainTotalVar,fp)
+                pickle.dump(testTotalLoss,fp)
+                pickle.dump(testTotalVar,fp)
+            
         # -------------------- Test ------------------------------------- #
         if i % testPeriod == 0:
             #------------
