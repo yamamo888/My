@@ -1,4 +1,12 @@
-# EnKF
+# 南海トラフ巨大地震シミュレーション用に改良したEnKF
+
+## 項目 [Contents]
+
+1. [1. 真の南海トラフ巨大地震履歴地震時データ　&　累積変位データ作成 : `NankaiTrough.py & EnKF.py`](#ID_1)
+2. [2. 最小年数取得 : `makingData.py`](#ID_2)
+3. [3.Ensamble Kalman Filter : `EnKF.py`](#ID_3)
+  1. [3-1. 使い方](#ID_3-1)
+  2. [3-2. アンサンブル変数読み取り](#ID_3-2)
 
 
 
@@ -21,13 +29,17 @@
   
 - 470 ~ 472 行目
 - U, theta, V をlogファイルに書き込み
+
 ``` python  
 printf("%d,%lf,%lE,%lE,%lE,%lE,%lE,%lE,%lE,%lE\n", nr, Xyr, u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7]);
 printf("%d,%lf,%lE,%lE,%lE,%lE,%lE,%lE,%lE,%lE\n", nr, Xyr, th[0], th[1], th[2], th[3], th[4], th[5], th[6], th[7]);
 printf("%d,%lf,%lE,%lE,%lE,%lE,%lE,%lE,%lE,%lE\n", nr, Xyr, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]);
 ```
 
-## 0. 真の南海トラフ巨大地震履歴地震時データ　&　累積変位データ作成 : NankaiTrough.py & EnKF.py
+***
+<a id="ID_1"></a>
+
+## 1. 真の南海トラフ巨大地震履歴地震時データ　&　累積変位データ作成 : `NankaiTrough.py & EnKF.py`
 - 実行すると地震時データを作成 -> pickle保存(nankairireki.pkl) <br>
 ※すべり速度指定できる
 - convV2YearlyData & main 内のコメントアウトを外すと作成->pickle保存(NankaiCD.pkl) <br>
@@ -35,7 +47,10 @@ printf("%d,%lf,%lE,%lE,%lE,%lE,%lE,%lE,%lE,%lE\n", nr, Xyr, v[0], v[1], v[2], v[
 - 【注意】試すときもファイル数2つ以上でないと、アンサンブルの計算ができない
 
 
-## 最小年数取得 : `makingData.py`
+***
+<a id="ID_2"></a>
+
+## 2. 最小年数取得 : `makingData.py`
 ``` python
 sInd = sumAllError.argmin()
 # last index
@@ -44,8 +59,6 @@ eInd = sInd + Year
 - `sumAllError` : 真の地震発生回数 < 予測した地震発生回数　場合は、大きい値を代入
 - `sInd` : 8000年から1400年間に切り取るときの開始年数. すべて真の地震発生回数 < 予測した地震発生回数の場合は`sInd = 0`、2000年が開始年数
 
-
-***
 ***
 <br>
 
@@ -56,18 +69,8 @@ eInd = sInd + Year
 - `firstEnsemble`ディレクトリにコピーある
 - ** 初期アンサンブル作成年数をtとしていいのか。データごとに異なる上に、南海トラフ地震より発生年数が大きかったらどうする？**
 
-
-***
-<br>
-
-
 ### シミュレーションデータ読み込み
   - ΔUが8000年以降だと大きすぎるので、2000年以前の累積変位量Uから引き算して求める
-
-
-***
-<br>
-
 
 ### 南海トラフ巨大地震履歴
   - `gtV`はすべり速度の大きさは一定
@@ -75,20 +78,30 @@ eInd = sInd + Year
 
 
 ***
-<br>
+<a id="ID_3"></a>
 
-## 2.EnKF実行 : EnKF.py
+## 3.EnKF: `EnKF.py`
 - 1年単位で出力してるから、すべり速度が0になることはない
 - ~~ΔUを観測行列を使って計算したかったが、行列演算できなかったので、手動で計算~~
 - アンサンブルメンバーの作成方法は、1.1 スピンアップ、1.2 地震がどこかで起きた場合 
 - `logs`ディレクトリに first Ensemble 格納されているか確認
 
+<a id="ID_3-1"></a>
+
+### 3-1. 使い方
+
+以下、コマンド引数の説明
+
+|コマンド引数番号|変数名|役割|
+|:---:|:---|:---|
+|1|cell|セル番号|
+|2|sigma|観測行列Rの分散|
 
 
-***
-***
-<br>
+```python
+```
 
+<a id="ID_3-2"></a>
 
 ### アンサンブルメンバー作成
 - パラメータ
@@ -101,7 +114,6 @@ eInd = sInd + Year
    - `isWindows` : windows user
    - `nCell` : シミュレーションのすべてのcell数
 
-<br>
 
 ``` python: Empty
 ```
@@ -110,9 +122,6 @@ eInd = sInd + Year
 ``` python: Negative
 ```
 - 累積変位量、すべり速度、潜在変数のいずれかがマイナスの値の場合は、logファイルを削除　（あってる？）
-
-***
-<br>
 
 
 ``` python
@@ -124,10 +133,12 @@ yU,yth,yV = myData.convV2YearlyData(U,th,V,nCell,nYear)
 - `U,th,V,B`は発生時データ、`yU,yth,yV`は8セル分の年数時データ(単位year)、8セル分 (必要か？)
 - 2回目以降は同化開始年数が `index=0` に対応、最初は8000年分
 
+```python:makingData.py
+```
+- *1セルの`A,B,L`を読み取るバージョンしか作ってない*
 
-<br>
 
-### 1.1 スピンアップ
+### 3.3 スピンアップ
 - 始まりの年はバラバラ、アンサンブルと真値で初めて地震発生時を合わせる
 - 0年目に地震が起きたことを想定していない
 
@@ -199,10 +210,6 @@ aInd = sjInd
 
 
 ***
-***
-<br>
-
-
 
 ## EnKFのアルゴリズムの計算
 
@@ -277,12 +284,3 @@ for lNum in np.arange(Xal_t.shape[0]):
 
 ``` python : main
 ```
-
-
-
-
-
-
-
-
-(EGU用)
