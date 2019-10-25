@@ -13,8 +13,15 @@ import os
 import sys
 import glob
 
+
+# ---------------------------- Path ------------------------------
+
 visualPath = "visualization"
 scatterPath = "scatter"
+resultsPath = "results"
+savedPklPath = "nankaipickles"
+
+# -----------------------------------------------------------------
 
 # -----------------------------------------------------------------
 def Ttest(pred1,pred2):
@@ -36,61 +43,60 @@ def Ttest(pred1,pred2):
     
         time.sleep(1)
 # -----------------------------------------------------------------
-def AverageVariable(gt,pred):
-    print("Mean",np.mean(np.square(gt-pred),0))
-    print("Var",np.var(np.square(gt-pred),0))
+def BasicStatistics(gt,pred,mode="none"):
+    # mean evary cell
+    loss = np.mean(np.square(gt-pred),1)
+    
+    print("{}".format(mode))
+    print("MSE: {}".format(np.mean(loss)))
+    print("Percentiles 95%, 75%, 50%, 25%, 5%: {}".format(np.percentile(loss,[95,75,50,25,5])))
+
     print("--------------------------------")
 # -----------------------------------------------------------------
-def BottomScatter(gt,pred2,pred1,gtall,all2,all1,color="yellow",mode="none",cellname="none",savefilePath="test.png",titleName="test"):
-     
+def BottomScatter(gt,pred1,pred2,mode="none",cellname="none",savefilePath="test.png"):
+    
+    # 1. pred1 >  pred2 ---> red
+    # 2. pred1 <= pred2 ---> blue
+    # if stand OR, many red is good
+    residual12 = abs(gt-pred1) - abs(gt-pred2)
+    
     fig = plt.figure(figsize=(9,6))    
     # 45° line
     line = np.arange(np.min(gt),np.max(gt)+0.001,0.001)
-    
-    #strPred1 = pred1.astype(str).tolist()
-    #strPred2 = pred2.astype(str).tolist()
-    
-    strgtall = str(gtall)
-    strall1 = str(all1)
-    strall2 = str(all2)
-    
-    residual12_ind = np.argsort(abs(gt-pred1)-abs(gt-pred2))[::-1]
-    residual12 = abs(gt-pred1) - abs(gt-pred2)
-    marks = np.zeros(gt.shape[0])
-    sort_mark = np.arange(10,21,1)
-    colors = []
-    for res in residual12:
-        if res < 0.000000000:
-            colors.append("blue")
-        elif res > 0.0000000000:
-            colors.append("red")
-    
-    #goodcnt
-    for ind,size in  zip(residual12_ind,sort_mark):
-        marks[ind] = size
-    """
-    for num in np.arange(gt.shape[0]):
-        plt.plot(gt[num],pred1[num],color="black",marker="${}$".format(str(num)),linestyle="None",ms=10)
-        # scatter ancor-based or atr-nets
-        plt.plot(gt[num],pred2[num],color=color,marker="${}$".format(str(num)),linestyle="None",ms=10)
-    """
-    
-    #pdb.set_trace() 
-    for num,(color,mark) in enumerate(zip(colors,marks)):
-        # scatter oridinary
+
+    # many plot
+    if  gt.shape[0] > 10:
+        
+        for num in np.arange(gt.shape[0]):
+            plt.plot(gt[num],pred1[num],color="black",marker="${}$".format(str(num)),linestyle="None",ms=10)
+            # scatter ancor-based or atr-nets
+            plt.plot(gt[num],pred2[num],color="red",marker="${}$".format(str(num)),linestyle="None",ms=10)
+        
+    else:
         #pdb.set_trace()
-        plt.plot(gt[num],pred1[num],color="black",marker="${}$".format(str(num)),linestyle="None",ms=10)
-        # scatter ancor-based or atr-nets
-        plt.plot(gt[num],pred2[num],color=color,marker="${}$".format(str(num)),linestyle="None",ms=mark)
+        
+        colors = []
+        for res in residual12:
+            if res < 0.000000000:
+                colors.append("blue")
+            elif res > 0.0000000000:
+                colors.append("red")
+        
+        for num,(color,mark) in enumerate(colors):
+            # scatter oridinary
+            #pdb.set_trace()
+            plt.plot(gt[num],pred1[num],color="black",marker="${}$".format(str(num)),linestyle="None",ms=10)
+            # scatter ancor-based or atr-nets
+            plt.plot(gt[num],pred2[num],color=color,marker="${}$".format(str(num)),linestyle="None",ms=10)
     # line
     plt.plot(line,line,"-",color="gold",linewidth=2)
             
     plt.xlabel('ground truth',fontsize=18)
     plt.ylabel('predict',fontsize=18)
                 
-    #plt.ylim([np.min(gt),np.max(gt)])
-    #plt.xlim([np.min(gt),np.max(gt)])
-    plt.title("{} in {}".format(mode,cellname)) 
+    plt.xlim([np.min(gt),np.max(gt)])
+    
+    plt.title("{} in {} stand {}".format(mode,cellname,standName)) 
     fig.subplots_adjust(left=0.2,bottom=0.2)
     plt.tick_params(labelsize=18)
     plt.legend()
@@ -101,6 +107,10 @@ def BottomScatter(gt,pred2,pred1,gtall,all2,all1,color="yellow",mode="none",cell
     plt.close()
     
     # save txt
+    strgtall = str(gtall)
+    strall1 = str(all1)
+    strall2 = str(all2)
+    
     f = open("{}.txt".format(savefilePath),"a")
     f.write("gt:" + strgtall + "\n")
     f.write("OR:" + strall1 + "\n")
@@ -109,7 +119,7 @@ def BottomScatter(gt,pred2,pred1,gtall,all2,all1,color="yellow",mode="none",cell
 
 
 # ------------------------ loss  -----------------------------------
-def loss(data,fileName="test.png"):
+def PlotLoss(data,fileName="test.png"):
     data = data[10:]
     plt.plot(data,linewidth=5.0)
     plt.ylim([min(data),0.0000005])
@@ -118,159 +128,132 @@ def loss(data,fileName="test.png"):
     plt.close()
 # -----------------------------------------------------------------
 
-# ----------------- Call bottom scatter----------------------------
+# ----------------- Call Bottom Scatter----------------------------
+
+# ----------------------- Path -------------------------------------
+# number of bottom data
 bottomNum = int(sys.argv[1])
+# loading pkl (number of step)
+fileNum = int(sys.argv[2])
+# 0: stand OR, 1: stand ATR, 2: stand ATR class, 3: stand OR, 4: stand OR class
+standMode = int(sys.argv[3])
+# -----------------------------------------------------------------
 
-pklPath = os.path.join("results","nankaipickles")
+# dir path
+pklPath = os.path.join(resultsPath,savedpklPath)
+# file path
+filePath = "test_{}_*"
+# full path
+pklfullPath = glob.glob(os.path.join(pklPath,filePath))
 
-pklnames = ["test_{}_nankai_1_0_5_1000_0_0_1.pkl".format(149999),"test_{}_nankai_2_1_21_5_1000_0_0_2.pkl".format(149999),"test_{}_nankai_3_2_21_5_1000_[20. 20. 20.]_0_0_3.pkl".format(149999)]
-#pklnames = ["test_{}_nankai_1_0_4_1000_0_0_1.pkl".format(10000),"test_{}_nankai_1_1_21_5_1000_0_0_1.pkl".format(10000),"test_{}_nankai_3_2_21_5_1000_[20. 20. 20.]_0_0_3.pkl".format(10000)]
-with open(os.path.join(pklPath,pklnames[0]),"rb") as fp:
-    _ = pickle.load(fp)
-    _ = pickle.load(fp)
-    teY1 = pickle.load(fp)
-    predY1 = pickle.load(fp)
+pdb.set_trace()
+# loading OR pkl data
+with open(os.path.join(pklPath,pklfullPath[0]),"rb") as fp:
+    teY = pickle.load(fp)
+    predY_or = pickle.load(fp)
+    teX_or = pickle.load(fp)
     _ = pickle.load(fp)
     _ = pickle.load(fp)
     trloss_or = pickle.load(fp)
     teloss_or = pickle.load(fp)
 
+# loading Anc pkl data
 with open(os.path.join(pklPath,pklnames[1]),"rb") as fp:
+    teY = pickle.load(fp)
+    predY_anc = pickle.load(fp)
+    teX_anc = pickle.load(fp)
+    predCls_anc = pickle.load(fp)
+    predRes_anc = pickle.load(fp)
     _ = pickle.load(fp)
     _ = pickle.load(fp)
-    teY2 = pickle.load(fp)
-    predY2 = pickle.load(fp)
-    _ = pickle.load(fp)
-    _ = pickle.load(fp)
-    trclsloss_an = pickle.load(fp)
-    teclsloss_an = pickle.load(fp)
-    trresloss_an = pickle.load(fp)
-    teresloss_an = pickle.load(fp)
-    trloss_an = pickle.load(fp)
-    teloss_an = pickle.load(fp)
+    trclsloss_anc = pickle.load(fp)
+    teclsloss_anc = pickle.load(fp)
+    trresloss_anc = pickle.load(fp)
+    teresloss_anc = pickle.load(fp)
+    trloss_anc = pickle.load(fp)
+    teloss_anc = pickle.load(fp)
 
+# loading ATR pkl data
 with open(os.path.join(pklPath,pklnames[2]),"rb") as fp:
+    teY = pickle.load(fp)
+    predY_atr = pickle.load(fp)
+    teX_atr = pickle.load(fp)
+    predCls_atr = pickle.load(fp)
+    predRes_atr = pickle.load(fp)
     _ = pickle.load(fp)
     _ = pickle.load(fp)
-    teY3 = pickle.load(fp)
-    predY3 = pickle.load(fp)
-    _ = pickle.load(fp)
-    _ = pickle.load(fp)
-    trclsloss_at = pickle.load(fp)
-    teclsloss_at = pickle.load(fp)
-    trresloss_at = pickle.load(fp)
-    teresloss_at = pickle.load(fp)
-    trloss_at = pickle.load(fp)
-    teloss_at = pickle.load(fp)
+    trclsloss_atr = pickle.load(fp)
+    teclsloss_atr = pickle.load(fp)
+    trresloss_atr = pickle.load(fp)
+    teresloss_atr = pickle.load(fp)
+    trloss_atr = pickle.load(fp)
+    teloss_atr = pickle.load(fp)
 
+pdb.set_trace()
 
-#print("or msq:\n")
-orloss = np.mean(np.square(teY1-predY1),1)
-#print("atr msq:\n")
-ancloss = np.mean(np.square(teY2-predY2),1)
-atloss = np.mean(np.square(teY3-predY3),1)
+if standMode == 0:
+    # stand atr
+    ind_atr = np.argsort(np.mean(np.square(teY-predY_or),1))[::-1][:bottomNum]
+    standName = "OR"
 
-"""
-print("or msq:{}".format(np.mean(orloss)))
-print("anc msq:{}".format(np.mean(ancloss)))
-print("atr msq:{}".format(np.mean(atloss)))
+elif standMode == 1:
+    # stand atr
+    ind = np.argsort(np.mean(np.square(teY-predY_atr),1))[::-1][:bottomNum]
+    standName = "ATR(cls+reg)"
 
-print("-----")
-print("or hakohige:{}".format(np.percentile(orloss,[95,75,50,25,5])))
-print("anc hakohige:{}".format(np.percentile(ancloss,[95,75,50,25,5])))
-print("at hakohige:{}".format(np.percentile(atloss,[95,75,50,25,5])))
-"""
+elif standMode == 2:
+    # stand atr
+    ind = np.argsort(np.mean(np.square(teY-predCls_atr),1))[::-1][:bottomNum]
+    standName = "ATR(cls)"
 
+elif standMode == 3:
+    # stand atr
+    ind = np.argsort(np.mean(np.square(teY-predY_anc),1))[::-1][:bottomNum]
+    standName = "ANC(cls+reg)"
 
-#pdb.set_trace()
-#np.sort(orloss)
+elif standMode == 4:
+    # stand atr
+    ind = np.argsort(np.mean(np.square(teY_atr-predCls_anc),1))[::-1][:bottomNum]
+    standName = "ANC(cls)"
 
+pdb.set_trace()
+
+cellName = ["nk","tnk","tk"]
+for i,name in enumerate(cellName):
+    BottomScatter(teY[ind,i],predY1[ind,i],predY2[ind,i],mode="OR vs {}".format(standName),cellname=name,savefilePath="ORANC{}_{}_{}".format(name,bottomNum,standName))
+    
+# ------------ Call Mean & Percentiles -------------------
+
+BasicStatistics(teY,predY_or,mode="OR")
+BasicStatistics(teY,predY_anc,mode="Anc(cls+reg)")
+BasicStatistics(teY,predY_atr,mode="Atr(cls+reg)")
+BasicStatistics(teY,predCls_anc,mode="Anc(cls)")
+BasicStatistics(teY,predCls_atr,mode="Atr(cls)")
 
 # ----------------- Call loss ----------------------------
 """
 # Ordinary 
-loss(trloss_or,"trloss_or.png")
-loss(teloss_or,"teloss_or.png")
+PlotLoss(trloss_or,"trloss_or.png")
+PlotLoss(teloss_or,"teloss_or.png")
 # Anchor-based
-loss(trclsloss_an,"trclsloss_an.png")
-loss(teclsloss_an,"teclsloss_an.png")
-loss(trresloss_an,"trresloss_an.png")
-loss(teresloss_an,"teresloss_an.png")
-loss(trloss_an,"trloss_an.png")
-loss(teloss_an,"teloss_an.png")
+PlotLoss(trclsloss_an,"trclsloss_an.png")
+PlotLoss(teclsloss_an,"teclsloss_an.png")
+PlotLoss(trresloss_an,"trresloss_an.png")
+PlotLoss(teresloss_an,"teresloss_an.png")
+PlotLoss(trloss_an,"trloss_an.png")
+PlotLoss(teloss_an,"teloss_an.png")
 # ATR-Nets
-loss(trclsloss_at,"trclsloss_at.png")
-loss(teclsloss_at,"teclsloss_at.png")
-loss(trresloss_at,"trresloss_at.png")
-loss(teresloss_at,"teresloss_at.png")
-loss(trloss_at,"trloss_at.png")
-loss(teloss_at,"teloss_at.png")
-loss(trloss_at,"trloss_at.png")
-loss(teloss_at,"teloss_at.png")
+PlotLoss(trclsloss_at,"trclsloss_at.png")
+PlotLoss(teclsloss_at,"teclsloss_at.png")
+PlotLoss(trresloss_at,"trresloss_at.png")
+PlotLoss(teresloss_at,"teresloss_at.png")
+PlotLoss(trloss_at,"trloss_at.png")
+PlotLoss(teloss_at,"teloss_at.png")
+PlotLoss(trloss_at,"trloss_at.png")
+PlotLoss(teloss_at,"teloss_at.png")
 
 pdb.set_trace()
 """
-"""
-# select data bottom 10 (stand ordinary)
-ind_nk1 = np.argsort(np.abs(teY1[:,0]-predY1[:,0]))[::-1][:bottomNum]
-ind_tnk1 = np.argsort(np.abs(teY1[:,1]-predY1[:,1]))[::-1][:bottomNum]
-ind_tk1 = np.argsort(np.abs(teY1[:,2]-predY1[:,2]))[::-1][:bottomNum]
-index = [ind_nk1,ind_tnk1,ind_tk1]
-standName = "OR"
-"""
-
-# select data bottom 10 (stand atr-nets)
-ind_nk3 = np.argsort(np.abs(teY3[:,0]-predY3[:,0]))[::-1][:bottomNum]
-ind_tnk3 = np.argsort(np.abs(teY3[:,1]-predY3[:,1]))[::-1][:bottomNum]
-ind_tk3 = np.argsort(np.abs(teY3[:,2]-predY3[:,2]))[::-1][:bottomNum]
-index = [ind_nk3,ind_tnk3,ind_tk3]
-standName = "ATR"
-pdb.set_trace()
-#ind_all = np.argsort(np.mean(np.square(teY1-predY1),1))[::-1][:bottomNum]
-ind_all = np.argsort(np.mean(np.square(teY3-predY3),1))[::-1][:bottomNum]
-# select data bottom 10 (stand atr-nets)
-index = [ind_all,ind_all,ind_all]
-standName = "alldata"
-
-#pdb.set_trace()
-
-cellName = ["nk","tnk","tk"]
-for i,(name,ind) in enumerate(zip(cellName,index)):
-    BottomScatter(teY1[ind,i],predY1[ind,i],predY2[ind,i],teY1[ind],predY1[ind],predY2[ind],color="red",mode="OR vs ANC ,stand {}".format(standName),cellname=name,savefilePath="ORANC{}_{}_{}".format(name,bottomNum,standName),titleName="{}".format(name))
-    BottomScatter(teY1[ind,i],predY1[ind,i],predY3[ind,i],teY1[ind],predY1[ind],predY3[ind],color="red",mode="OR vs ATR ,stand {}".format(standName),cellname=name,savefilePath="ORATR{}_{}_{}".format(name,bottomNum,standName),titleName="{}".format(name))
-    #BottomScatter(teY1[ind,i],predY1[ind,i],predY3[ind,i],teY1[ind],predY1[ind],predY3[ind],color="red",mode="OR vs ATR ,stand {}".format(standName),cellname=name,savefilePath="ORATR{}_{}_{}".format(name,bottomNum,standName),titleName="{}".format(name))
-
-
-# ---------- Call average ----------------------------------------
-"""
-results = "results"
-#pickles = "toypickles"
-    BottomScatter(teY1[ind,i],predY1[ind,i],predY2[ind,i],teY1[ind],predY1[ind],predY2[ind],color="red",mode="OR vs ANC ,stand {}".format(standName),cellname=name,savefilePath="ORANC{}_{}_{}".format(name,bottomNum,standName),titleName="{}".format(name))
-    BottomScatter(teY1[ind,i],predY1[ind,i],predY3[ind,i],teY1[ind],predY1[ind],predY3[ind],color="red",mode="OR vs ATR ,stand {}".format(standName),cellname=name,savefilePath="ORATR{}_{}_{}".format(name,bottomNum,standName),titleName="{}".format(name))
-
-
-# ---------- Call average ----------------------------------------
-"""
-results = "results"
-#pickles = "toypickles"
-pickles = "nankaipickles"
-filepath = "*.pkl"
-resultsPath = os.path.join(results,pickles,filepath)
-
-files = glob.glob(resultsPath)
-
-for file in files:
-    print(file)
-
-    with open(file,"rb") as fp:
-        _ = pickle.load(fp)
-        _ = pickle.load(fp)
-        te_gt = pickle.load(fp)
-        te_pred = pickle.load(fp)
-    
-    AverageVariable(te_gt,te_pred)
-"""
-
 # -------- Call scatter -------------------------------------------
 """
 filepath1 = "*_1.pkl"
@@ -315,6 +298,7 @@ for cellInd in range(3):
 
     plt.close()
 """
+"""
 # ------------ Call t-test -------------------------------------
 """
 file1 = file1[0]
@@ -338,7 +322,4 @@ for file2 in files2:
 
     Ttest(te_pred1,te_pred2)
     print("--------------------------------")
-"""
-# ------------ Call tsne ---------------------------------------
-
 """
