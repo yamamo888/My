@@ -251,10 +251,9 @@ def MinErrorNankai(gt,yU,yUex,yth,yV,cell=0,mimMode=0):
             print(f"最大類似度:{np.round(maxSim,6)}\n")
             print(">>>>>>>>\n")
         
-        # 開始インデックスが0の場合は、そのままyUex出力
-        if sInd != 0:
+        if sInd != 0 and any(yU[:sInd,cell]<yU[sInd,cell]):
             yUex = yU[np.where(yU[:sInd,cell]<yU[sInd,cell])[0][-1],:]
-        
+        # 開始インデックスが 0 or sIndの前に滑ってる場合、そのままyUex出力
         return yU[sInd:eInd,:], yUex, yth[sInd:eInd,:], yV[sInd:eInd,:]
                 
 #--------------------------
