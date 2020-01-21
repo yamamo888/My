@@ -130,7 +130,7 @@ def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0):
     """
     # シミュレータのU,th,V 発生時データ - > 年数データ 用
     yU, yth, yV = np.zeros([nYear,simlateCell]),np.zeros([nYear,simlateCell]),np.zeros([nYear,simlateCell])
-    #pdb.set_trace()
+    
     try:
         # 初め手観測した年
         sYear = np.floor(V[0,yrInd])
@@ -156,10 +156,9 @@ def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0):
     
     # シミュレーションが安定した2000年以降を用いる, 地震発生年 (どこかのセルで発生した場合)
     # 0年目の時のために、yUexを出力
-    #pdb.set_trace()
     if cnt == 0:
-        return yU[stateYear:,:], yU[np.where(yU[:stateYear,cell]<yU[stateYear,cell])[0][-1],:], yth[stateYear:,:], yV[stateYear:,:], U[:,yrInd], yU[np.where(yU[:,yrInd]-yU[stateYear,yrInd]<0)[0][-1],:]
-    # 一番始め以外は、2000年以降&yUexが不明(最小年数に合わせる必要あり)のため
+        return yU[stateYear:,:], yU[np.where(yU[:stateYear,cell]<yU[stateYear,cell])[0][-1],:], yth[stateYear:,:], yV[stateYear:,:], U[:,yrInd]
+    # 一番始め以外は、2000年以降 & yUexは更新されるyUtを使い続ける
     elif cnt > 0:    
         return yU, yth, yV, U[:,yrInd]
 
@@ -200,7 +199,7 @@ def MinErrorNankai(gt,yU,yUex,yth,yV,cell=0,mimMode=0):
         yU,yth,yV: pred UV/theta/V, shape=[8000,8]
         minMode: 0. after 2000 year, 1. degree of similatery
     """
-    #pdb.set_trace()
+    
     # ---- 1 ---- #
     if mimMode == 0:
         return yU[:1400,:], yUex, yth[:1400,:], yV[:1400,:]
@@ -210,7 +209,7 @@ def MinErrorNankai(gt,yU,yUex,yth,yV,cell=0,mimMode=0):
     elif mimMode == 1:        
         if cell == 2 or cell == 4 or cell == 5:
             pred = yV[:,cell]
-            #pdb.set_trace()
+            
             # ----
             # 真値の地震年数
             gYear = np.where(gt[:,0] > slip)[0]
@@ -248,10 +247,12 @@ def MinErrorNankai(gt,yU,yUex,yth,yV,cell=0,mimMode=0):
             print(f"最大類似度:{np.round(maxSim,6)}\n")
             print(">>>>>>>>\n")
         
+        # 開始インデックスが0の場合は、そのままyUex出力
+        if sInd != 0:
+            yUex = yU[np.where(yU[:sInd,cell]<yU[sInd,cell])[0][-1],:]
+        
         return yU[sInd:eInd,:], yUex, yth[sInd:eInd,:], yV[sInd:eInd,:]
-                #--------------------------
-
-
+                
 #--------------------------
 def gauss(gtY,predY,sigma=100):
 
@@ -264,10 +265,3 @@ def gauss(gtY,predY,sigma=100):
 
     return gauss
 #--------------------------
-
-    
-    
-    
-    
-    
-    
