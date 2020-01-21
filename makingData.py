@@ -157,7 +157,11 @@ def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0):
     # シミュレーションが安定した2000年以降を用いる, 地震発生年 (どこかのセルで発生した場合)
     # 0年目の時のために、yUexを出力
     if cnt == 0:
-        return yU[stateYear:,:], yU[np.where(yU[:stateYear,cell]<yU[stateYear,cell])[0][-1],:], yth[stateYear:,:], yV[stateYear:,:], U[:,yrInd]
+         # 2000年より前に地震が起きていなければ
+        if all(yU[:stateYear,cell]<yU[stateYear,cell]) == False:
+            return yU[stateYear:,:], yU[stateYear-1], yth[stateYear:,:], yV[stateYear:,:], U[:,yrInd]
+        else:
+            return yU[stateYear:,:], yU[np.where(yU[:stateYear,cell]<yU[stateYear,cell])[0][-1],:], yth[stateYear:,:], yV[stateYear:,:], U[:,yrInd]
     # 一番始め以外は、2000年以降 & yUexは更新されるyUtを使い続ける
     elif cnt > 0:    
         return yU, yth, yV, U[:,yrInd]
