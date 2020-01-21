@@ -79,6 +79,15 @@ if cell == 2 or cell == 4 or cell == 5:
     nCell = 1
     # gt number of cell
     gt_nCell = 1
+
+# gt cell index
+if cell == 2:
+    gtcell = 0
+elif cell == 4:
+    gtcell = 1
+elif cell == 5:
+    gtcell = 2
+    
             
 # 3 cell ----------------------------------
 elif cell == 123:
@@ -399,12 +408,12 @@ if __name__ == "__main__":
                         # --------------------------------------------------- #
                         
                         # ------------- gt & predict select cell ------------ #
-                        if cell == 2 or cell == 3 or cell == 4:
+                        if cell == 2 or cell == 4 or cell == 5:
                             
                             # ※　本当に地震が起きた時?
                             # first eq. year (During 0-1400 year) 
                             #　jInd = np.where(yV[:,cell]>slip)[0][0]
-                            jInd = np.where(deltaU[:,cell]>deltau)[0][0]
+                            jInd = np.where(deltaU[:,gtcell]>deltau)[0][0]
                             
                             # ----------------- predict --------------------- #
                             # ※
@@ -423,7 +432,7 @@ if __name__ == "__main__":
                             
                             # -------------------- gt ----------------------- #
                             # [1,]
-                            TrueU = gtdeltaU[np.where(gtdeltaU[:,cell-2]>deltau)[0][0],cell-2]
+                            TrueU = gtdeltaU[np.where(gtdeltaU[:,gtcell]>deltau)[0][0],gtcell]
                             # ----------------------------------------------- #
                             
                         # one Ensamble -> Ensambles
@@ -474,7 +483,7 @@ if __name__ == "__main__":
                             # all same assimulation year (次のシミュレーションのために必要)
                             aInds = np.repeat(jInd,len(files))[:,np.newaxis]
                             
-                            if cell == 2 or cell == 3 or cell == 4:
+                            if cell == 2 or cell == 4 or cell == 5:
                                 # [ensamble,params(U/Uex/Th/V/b=5)] nextUexは下で実装
                                 Xt = np.concatenate([uthvs_all[:,jInd,cell,uInd,np.newaxis],nextUex[:,cell,np.newaxis],uthvs_all[:,jInd,cell,thInd:],bs[:,cell,np.newaxis]],1)
                                 # ※
