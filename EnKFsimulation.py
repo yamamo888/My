@@ -225,13 +225,13 @@ def KalmanFilter(Pf_t):
     H = np.zeros([M,N]) # [3,40]
     
     if nCell == 1:
-        if vMode == 5 or vMode == 4 and featureMode == 0:    
+        if vMode == 5 or (vMode == 4 and featureMode == 0): # deltaU なし　U vあり
             H[0][0] = np.float(1)
             H[0][1] = np.float(-1)
-        elif vMode == 4 and featureMode == 0: # deltaU vなし
-    
-    
-    
+        elif (vMode == 4 and featureMode == 1) or vMode == 3 : # deltaU vなし & U v なし
+            H[0][0] = np.float(1)
+            pdb.set_trace()
+        
     if nCell == 3:
         # Ut=1,Ut-1=-1,それ以外0,deltaU作成
         H[0,nI] = np.float(1)
@@ -255,7 +255,7 @@ def UpData(y,paramb,Yo_t,H,Xf_t,K_t):
     # アンサンブルの数(データ数)
     lNum = paramb.shape[0]
     dNum = y.shape[0]
-    #pdb.set_trace()
+    
     # アンサンブル分
     flag = False
     for lInd in np.arange(lNum):
@@ -263,7 +263,7 @@ def UpData(y,paramb,Yo_t,H,Xf_t,K_t):
         r_t = np.random.normal(mu,small_sigma,dNum)
         # 観測値
         Yo_t = (y + r_t).T #(2.2) [Cell(3)]
-        #print("GT: {}".format(y))        
+        
         #  第2項：[アンサンブル数,]
         residual = Yo_t + r_t - np.matmul(H,Xf_t[lInd,:])
         tmp = Xf_t[lInd,:] + np.matmul(K_t,residual) #(2.12)
@@ -301,35 +301,28 @@ if __name__ == "__main__":
         # only file name
         gtfile = os.path.basename(gtfiles)
         # ------------------------------------------------------------------- #
-        
-        # ------------------------------------------------------------------- #
-        """
-        # 次のディレクトリに初期アンサンブルを移動
-        if tfID > 0 and os.path.exists(os.path.dirname(filePath)):
-            firstEnFiles = glob.glob(os.path.join(dirPath,exlogsPath,firstEnName))
-            newPath = os.path.join(os.path.dirname(filePath))
-            
-            [shutil.copy2(firstEnFiles[i],newPath) for i in np.arange(len(firstEnFiles))]
-        """
-        # ------------------------------------------------------------------- #
-        
+
         # ------------- 真の南海トラフ巨大地震履歴 特徴量 (simulated) ------------ #
         
         # loading U,theta,V,B [number of data,10]
         gU,gth,gV,gB = myData.loadABLV("gtlogs",logsPath,gtfile)
         # [80000,8]
         gtyU,gtyUex,gtth,gtyV,gtyYear = myData.convV2YearlyData(gU,gth,gV,nYear,cell=cell,cnt=0)
-        # 2000年以前のUを引く(累積変位が2000年以降から始まるように)
-        gtU = gtyU - gtyUex
         
-        # ※ 特徴量
+        # ※ 特徴量 ------------------------------------------------------------
+        # 地震が起きた年数を特徴量がUの時も使いたいから置いておいてください。
         # deltaU = Ut - Ut-1
         gtdeltaU = np.vstack([gtyU[1:] - gtyU[:-1],np.zeros(8)])
         # [8000,3]
         gtdeltaU = np.hstack([gtdeltaU[:,2,np.newaxis],gtdeltaU[:,4,np.newaxis],gtdeltaU[:,5,np.newaxis]])
-        
         # [1400,3]
         gtdeltaU = gtdeltaU[:1400,:]
+        
+        gtU = gtyU - gtyUex
+        # [1400,3]
+        gtU = gtU[:1400,:]
+        # ------------------------------------------------------------------- #
+            
         gtth = gtth[:1400,:]
         gtyV = gtyV[:1400,:]
         gtyU = gtyU[:1400,:]
@@ -392,7 +385,7 @@ if __name__ == "__main__":
                     U,th,V,B = myData.loadABLV(dirPath,logsPath,file)
                     
                     # --------------------- Error --------------------------- #
-                    myData.Negative(V,logFullPath,fID,isWindows) #すべり速度マイナス判定
+                    myData.Negative(V,logFullPath,fID) #すべり速度マイナス判定
                     # ------------------------------------------------------- #
                     
                     # - 1.1 SpinUP(match first time gt eq & simulation eq.) - #
@@ -401,18 +394,19 @@ if __name__ == "__main__":
                         
                         # Ut,tht,Vt, [10000,8] yYear: eq. of years
                         yU,yUex,yth,yV,yYear = myData.convV2YearlyData(U,th,V,nYear,cell=cell,cnt=iS)
-                        
-                        # --------------------------------------------------- #
                         # U,th,V [1400,8], yUex [8,]
                         yU,yUex,yth,yV = myData.MinErrorNankai(gtdeltaU,yU,yUex,yth,yV,cell=cell,mimMode=mimMode)
                         
-                        # ※ 特徴量
-                        # deltaU = Ut - Ut-1 [1400,8]
-                        deltaU = np.vstack([yU[1:] - yU[:-1],np.zeros(8)])
+                        # ※ 特徴量 -------------------------------------------
+                        if featureMode == 0:
+                            # deltaU = Ut - Ut-1 [1400,8]
+                            deltaU = np.vstack([yU[1:] - yU[:-1],np.zeros(8)])
                         
-                        # [1400,3] for plot
-                        predyU = np.hstack([yU[:,2,np.newaxis],yU[:,4,np.newaxis],yU[:,5,np.newaxis]])
-                       
+                        elif featureMode == 1:
+                            # [1400,3] for plot
+                            predyU = np.hstack([yU[:,2,np.newaxis],yU[:,4,np.newaxis],yU[:,5,np.newaxis]])
+                        # --------------------------------------------------- #
+                        
                         # --------------------------------------------------- #
                         """
                         # ------------- plot gt & pred ---------------------- #
@@ -446,17 +440,27 @@ if __name__ == "__main__":
                         # ------------- gt & predict select cell ------------ #
                         if cell == 2 or cell == 4 or cell == 5:
                             
-                            # ※　本当に地震が起きた時?
+                            # ※　本当に地震が起きた時? Uの時もこの指標使う?
                             # first eq. year (During 0-1400 year) 
                             #　jInd = np.where(yV[:,cell]>slip)[0][0]
                             jInd = np.where(deltaU[:,gtcell]>deltau)[0][0]
                             
-                            # ----------------- predict --------------------- #
-                            # ※
-                            # Vt one kalman, shape=[nParam,]
-                            Vt = np.hstack([yU[jInd,cell],yUex[cell],yth[jInd,cell],yV[jInd,cell],B[cell]])
-                            # Vt all cell, shape=[8,5]
-                            Vt_all = np.hstack([yU[jInd][:,np.newaxis],yUex[:,np.newaxis],yth[jInd][:,np.newaxis],yV[jInd][:,np.newaxis],B[:,np.newaxis]])
+                            # ------------- predict feature ----------------- #
+                            if vMode == 0: # deltaU Vあり
+                                # ※
+                                # Vt one kalman, shape=[nParam,]
+                                Vt = np.hstack([yU[jInd,cell],yUex[cell],yth[jInd,cell],yV[jInd,cell],B[cell]])
+                                # Vt all cell, shape=[8,5]
+                                Vt_all = np.hstack([yU[jInd][:,np.newaxis],yUex[:,np.newaxis],yth[jInd][:,np.newaxis],yV[jInd][:,np.newaxis],B[:,np.newaxis]])
+                            elif vMode == 4 and featureMode == 0: # deltaU vなし
+                                Vt = np.hstack([yU[jInd,cell],yUex[cell],yth[jInd,cell],B[cell]])
+                                Vt_all = np.hstack([yU[jInd][:,np.newaxis],yUex[:,np.newaxis],yth[jInd][:,np.newaxis],B[:,np.newaxis]])
+                            elif vMode == 4 and featureMode == 1: # U vあり                        
+                                Vt = np.hstack([yU[jInd,cell],yth[jInd,cell],yV[jInd,cell],B[cell]])
+                                Vt_all = np.hstack([yU[jInd][:,np.newaxis],yth[jInd][:,np.newaxis],yV[jInd][:,np.newaxis],B[:,np.newaxis]])
+                            elif vMode == 3: # U vなし
+                                Vt = np.hstack([yU[jInd,cell],yth[jInd,cell],B[cell]])
+                                Vt_all = np.hstack([yU[jInd][:,np.newaxis],yth[jInd][:,np.newaxis],B[:,np.newaxis]])
                             # ----------------------------------------------- #
                             
                             # ------------- predict label ------------------- #
@@ -467,8 +471,12 @@ if __name__ == "__main__":
                             # ----------------------------------------------- #
                             
                             # -------------------- gt ----------------------- #
-                            # [1,]
-                            TrueU = gtdeltaU[np.where(gtdeltaU[:,gtcell]>deltau)[0][0],gtcell]
+                            if featureMode == 0:
+                                # [1,]
+                                TrueU = gtdeltaU[np.where(gtdeltaU[:,gtcell]>deltau)[0][0],gtcell]
+                            elif featureMode == 1:
+                                # ※ この指標は正しいのか
+                                TrueU = gtU[np.where(gtdeltaU[:,gtcell]>deltau)[0][0],gtcell]
                             # ----------------------------------------------- #
                             
                         # one Ensamble -> Ensambles
@@ -493,9 +501,12 @@ if __name__ == "__main__":
                         # shape=[10000,8]
                         yU, yth, yV, yYear = myData.convV2YearlyData(U,th,V,nYear,cell=cell,cnt=iS)
                         
-                        # Vt one kalman all year [u,th,v,10000,8]
-                        uthv_all = np.concatenate([yU[:,:,np.newaxis],yth[:,:,np.newaxis],yV[:,:,np.newaxis]],2)
-                        
+                        if vMode == 5 or (vMode == 4 and featureMode == 1):
+                            # Vt one kalman all year [u,th,v,10000,8]
+                            uthv_all = np.concatenate([yU[:,:,np.newaxis],yth[:,:,np.newaxis],yV[:,:,np.newaxis]],2)
+                        elif (vMode == 4 and featureMode == 0) or vMode == 3: # deltaU vなし
+                            uthv_all = np.concatenate([yU[:,:,np.newaxis],yth[:,:,np.newaxis]],2)
+                            
                         # eq. simulaion time step t
                         if not flag2:
                             uthvs_all = uthv_all[np.newaxis]
@@ -520,15 +531,19 @@ if __name__ == "__main__":
                             aInds = np.repeat(jInd,len(files))[:,np.newaxis]
                             
                             if cell == 2 or cell == 4 or cell == 5:
-                                # [ensamble,params(U/Uex/Th/V/b=5)] nextUexは下で実装
-                                Xt = np.concatenate([uthvs_all[:,jInd,cell,uInd,np.newaxis],nextUex[:,cell,np.newaxis],uthvs_all[:,jInd,cell,thInd:],bs[:,cell,np.newaxis]],1)
                                 # ※
-                                # gt UV, shape=()
-                                #TrueU = gtU[jInd-state_Year,gtcell]
-                                TrueU = gtdeltaU[jInd-state_Year,gtcell]
-                                
-                            # shape=[ensamble,cell(=8),params(U/Uex/Th/V/b=5)]
-                            Xt_all = np.concatenate([uthvs_all[:,jInd,:,uInd,np.newaxis],nextUex[:,:,np.newaxis],uthvs_all[:,jInd,:,thInd:],bs[:,:,np.newaxis]],2)
+                                # gt deltaU or U, shape=()   
+                                if vMode == 5 or (vMode == 4 and featureMode == 0):
+                                    # [ensamble,params(U/Uex/Th/V/b=5)] nextUexは下で実装
+                                    Xt = np.concatenate([uthvs_all[:,jInd,cell,uInd,np.newaxis],nextUex[:,cell,np.newaxis],uthvs_all[:,jInd,cell,thInd:],bs[:,cell,np.newaxis]],1)
+                                    TrueU = gtdeltaU[jInd-state_Year,gtcell]
+                                    # shape=[ensamble,cell(=8),params(U/Uex/Th/V/b=5)]
+                                    Xt_all = np.concatenate([uthvs_all[:,jInd,:,uInd,np.newaxis],nextUex[:,:,np.newaxis],uthvs_all[:,jInd,:,thInd:],bs[:,:,np.newaxis]],2)
+                                        
+                                elif (vMode == 4 and featureMode == 1) or vMode == 3: # deltaU vなし
+                                    Xt = np.concatenate([uthvs_all[:,jInd,cell,uInd,np.newaxis],uthvs_all[:,jInd,cell,thInd:],bs[:,cell,np.newaxis]],1)
+                                    Xt_all = np.concatenate([uthvs_all[:,jInd,:,uInd,np.newaxis],uthvs_all[:,jInd,:,thInd:],bs[:,:,np.newaxis]],2)
+                                    TrueU = gtU[jInd-state_Year,gtcell]
                             
                             for eID in np.arange(Xt_all.shape[0]):
                                 yV = Xt_all[eID,:,-2]
@@ -556,7 +571,15 @@ if __name__ == "__main__":
             # 2.次ステップまでの時間積分・システムノイズ付加
             # 3.標本誤差共分散行列(タイムステップt)
             # IN:Ensambles,[number of Ensambles,parameters(nCell*5(Ut,Ut-1,th,V,B))]
-            Xf_t, Pf_t, yU, yexU, yth, yV, noizeb = Odemetry(Xt)
+            if vMode == 5:
+                Xf_t, Pf_t, yU, yexU, yth, yV, noizeb = Odemetry(Xt)
+            elif vMode == 4 and featureMode == 0: # deltaU vなし
+                Xf_t, Pf_t, yU, yexU, yth, noizeb = Odemetry(Xt)
+            elif vMode == 4 and featureMode == 1: # U vあり
+                Xf_t, Pf_t, yU, yexU, yth, noizeb = Odemetry(Xt)
+            elif vMode == 3: # U vなし
+                Xf_t, Pf_t, yU, yth, noizeb = Odemetry(Xt)
+
             # 4.カルマンゲイン
             K_t, H = KalmanFilter(Pf_t)
             # 5.予報アンサンブル更新
@@ -591,19 +614,29 @@ if __name__ == "__main__":
                 # Ut-1を取り除く, all cell ver., [8,4]
                 Xa_t_all = np.concatenate([Xt_all[:,:,:nCell],Xt_all[:,:,nCell+nCell:]],2)[lNum,:]
                 
-                # ※ 以下必要？
-                # 2000年以前のUを足し、元のスケールに戻してシミュレーション
-                #rescaleU = Xa_t_all[:,uInd] + startyU[:,lNum]
-                #Xa_t_all[:,uInd] = rescaleU
-                
+                # ※ deltaUのときは2000年以前のUを足し、元のスケールに戻してシミュレーション
+                if featureMode == 1:
+                    rescaleU = Xa_t_all[:,uInd] + startyU[:,lNum]
+                    Xa_t_all[:,uInd] = rescaleU
+                    
                 # Get paramb, 小数第7位四捨五入
                 updateB = np.round(Xa_t[bInd:],limitNum) # [b1,..,bN].T
                 # Get U
                 updateU = np.round(UThV[uInd],limitNum)
                 # Get theta, [cell,]
                 updateTh = np.round(UThV[thInd],limitNum)
-                # Get V, [cell,], 小さすぎるから四捨五入なし
-                updateV = UThV[VInd]
+                
+                print("----")
+                print(f"TrueU:{np.round(TrueU,6)}\n")
+                print("before,update:\n")
+                print(f"Kalman:{K_t}\n")
+
+                if featureMode == 0:
+                    # Get V, [cell,], 小さすぎるから四捨五入なし
+                    updateV = UThV[VInd]
+                    print(f"B:{np.round(Xt[lNum][-1],limitNum)},{updateB}\nU:{np.round(Xt[lNum][0],limitNum)},{updateU}\nUex:{np.round(Xt[lNum][1],limitNum)}\ntheta:{np.round(Xt[lNum][2],limitNum)},{updateTh}\nV:{Xt[lNum][-2]},{updateV}\n")
+                elif featureMode == 1: 
+                    print(f"B:{np.round(Xt[lNum][-1],limitNum)},{updateB}\nU:{np.round(Xt[lNum][0],limitNum)},{updateU}\nUex:{np.round(Xt[lNum][1],limitNum)}\ntheta:{np.round(Xt[lNum][2],limitNum)},{updateTh}\n")
                 
                 if cell == 2 or cell == 4 or cell == 5:
                     # 更新したセルのパラメータとそのほかをconcat
@@ -612,12 +645,6 @@ if __name__ == "__main__":
                     if np.any(Xa_t_all<0):
                         rmInds.append(lNum)
                 
-                print("----")
-                print(f"TrueU:{np.round(TrueU,6)}\n")
-                print("before,update:\n")
-                print(f"B:{np.round(Xt[lNum][-1],limitNum)},{updateB}\nU:{np.round(Xt[lNum][0],limitNum)},{updateU}\nUex:{np.round(Xt[lNum][1],limitNum)}\ntheta:{np.round(Xt[lNum][2],limitNum)},{updateTh}\nV:{Xt[lNum][-2]},{updateV}\n")
-                print(f"Kalman:{K_t}\n")
-
                 # ----------------------- Xt-1 作成手順 ---------------------- #
                 # 1 parfileをアンサンブル分作成
                 # 2 batchファイルでファイル番号(Label etc...)受け渡し
@@ -641,8 +668,14 @@ if __name__ == "__main__":
                 for nl in np.arange(len(lines)): # 8 cell times
                     # b, U, theta, V
                     inlines = lines[nl]
+                    pdb.set_trace()
                     outlines = Xa_t_all[nl]
-                    inlines[1],inlines[-3],inlines[-2],inlines[-1] = str(np.round(outlines[3],limitNum)),str(np.round(outlines[0],limitNum)),str(np.round(outlines[1],limitNum)),str(outlines[2])
+                    # v あり        
+                    if featureMode == 0:    
+                        inlines[1],inlines[-3],inlines[-2],inlines[-1] = str(np.round(outlines[-1],limitNum)),str(np.round(outlines[0],limitNum)),str(np.round(outlines[1],limitNum)),str(outlines[2])
+                    # v なし
+                    elif featureMode == 1: 
+                        inlines[1],inlines[-3],inlines[-2] = str(np.round(outlines[-1],limitNum)),str(np.round(outlines[0],limitNum)),str(np.round(outlines[1],limitNum))
 
                 # Save parfileHM031 -> parfileHM0*
                 parFilePath = os.path.join(paramPath,f"{tfID}",f"parfileHM{iS}_{lNum}.txt")
@@ -718,9 +751,4 @@ if __name__ == "__main__":
             
             # 通し番号を１つ増やす 0回目, １回目 ...
             iS += 1
-            # -------------------------------------------------------- #
-     # --------------------------- plot move params ------------------------- #
-     # ※ いまいち       
-     #pdb.set_trace()
-     #myResult.MoveParamPlot([K_t,Xal_t])
-     # ---------------------------------------------------------------------- #   
+            # --------------------------------------------------------------- # 
