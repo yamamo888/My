@@ -118,15 +118,16 @@ small_sigma = 0.1
 Sfl = 4
 Efl = 12
 
+# b index after updating
+bInd = -1
+# U index after updating (same all nCell)
+uInd = 0
+# theta index after updating (same all nCell)
+thInd = 1
+
 if vMode == 5:
-    # b index after updating
-    bInd = nCell * (nParam-2)
-    # U index after updating (same all nCell)
-    uInd = 0
     # Ut-1 index
     uxInd = 1
-    # theta index after updating (same all nCell)
-    thInd = 1
     # V index after updating (same al nCell)
     VInd = 2
 
@@ -400,8 +401,7 @@ if __name__ == "__main__":
                         # ※ 特徴量 -------------------------------------------
                         if featureMode == 0:
                             # deltaU = Ut - Ut-1 [1400,8]
-                            deltaU = np.vstack([yU[1:] - yU[:-1],np.zeros(8)])
-                        
+                            deltaU = np.vstack([yU[1:] - yU[:-1],np.zeros(8)])                        
                         elif featureMode == 1:
                             # [1400,3] for plot
                             predyU = np.hstack([yU[:,2,np.newaxis],yU[:,4,np.newaxis],yU[:,5,np.newaxis]])
@@ -444,23 +444,22 @@ if __name__ == "__main__":
                             # first eq. year (During 0-1400 year) 
                             #　jInd = np.where(yV[:,cell]>slip)[0][0]
                             jInd = np.where(deltaU[:,gtcell]>deltau)[0][0]
+                            #pdb.set_trace()
                             
-                            # ------------- predict feature ----------------- #
-                            if vMode == 0: # deltaU Vあり
-                                # ※
+                            # ----------- ※ predict feature ---------------- #
+                            if vMode == 5: # deltaU Vあり
                                 # Vt one kalman, shape=[nParam,]
                                 Vt = np.hstack([yU[jInd,cell],yUex[cell],yth[jInd,cell],yV[jInd,cell],B[cell]])
-                                # Vt all cell, shape=[8,5]
-                                Vt_all = np.hstack([yU[jInd][:,np.newaxis],yUex[:,np.newaxis],yth[jInd][:,np.newaxis],yV[jInd][:,np.newaxis],B[:,np.newaxis]])
                             elif vMode == 4 and featureMode == 0: # deltaU vなし
                                 Vt = np.hstack([yU[jInd,cell],yUex[cell],yth[jInd,cell],B[cell]])
-                                Vt_all = np.hstack([yU[jInd][:,np.newaxis],yUex[:,np.newaxis],yth[jInd][:,np.newaxis],B[:,np.newaxis]])
                             elif vMode == 4 and featureMode == 1: # U vあり                        
                                 Vt = np.hstack([yU[jInd,cell],yth[jInd,cell],yV[jInd,cell],B[cell]])
-                                Vt_all = np.hstack([yU[jInd][:,np.newaxis],yth[jInd][:,np.newaxis],yV[jInd][:,np.newaxis],B[:,np.newaxis]])
                             elif vMode == 3: # U vなし
                                 Vt = np.hstack([yU[jInd,cell],yth[jInd,cell],B[cell]])
-                                Vt_all = np.hstack([yU[jInd][:,np.newaxis],yth[jInd][:,np.newaxis],B[:,np.newaxis]])
+                            
+                            # Vt all cell, shape=[8,5] 共通 Ut Ut-1 theta V B
+                            Vt_all = np.hstack([yU[jInd][:,np.newaxis],yUex[:,np.newaxis],yth[jInd][:,np.newaxis],yV[jInd][:,np.newaxis],B[:,np.newaxis]])
+                        
                             # ----------------------------------------------- #
                             
                             # ------------- predict label ------------------- #
@@ -502,18 +501,23 @@ if __name__ == "__main__":
                         yU, yth, yV, yYear = myData.convV2YearlyData(U,th,V,nYear,cell=cell,cnt=iS)
                         
                         if vMode == 5 or (vMode == 4 and featureMode == 1):
-                            # Vt one kalman all year [u,th,v,10000,8]
-                            uthv_all = np.concatenate([yU[:,:,np.newaxis],yth[:,:,np.newaxis],yV[:,:,np.newaxis]],2)
+                            # Vt one kalman all year [u/th/v,10000,8] 
+                            uthv = np.concatenate([yU[:,:,np.newaxis],yth[:,:,np.newaxis],yV[:,:,np.newaxis]],2)
                         elif (vMode == 4 and featureMode == 0) or vMode == 3: # deltaU vなし
-                            uthv_all = np.concatenate([yU[:,:,np.newaxis],yth[:,:,np.newaxis]],2)
-                            
+                            # [u/th,10000,8]
+                            uthv = np.concatenate([yU[:,:,np.newaxis],yth[:,:,np.newaxis]],2)
+                        # [u/th/v,10000,8]
+                        uthv_all = np.concatenate([yU[:,:,np.newaxis],yth[:,:,np.newaxis],yV[:,:,np.newaxis]],2)
+                        
                         # eq. simulaion time step t
                         if not flag2:
+                            uthvs = uthv[np.newaxis]
                             uthvs_all = uthv_all[np.newaxis]
                             bs = B
                             pJ = yYear[0]
                             flag2 = True
                         else:
+                            uthvs = np.vstack([uthvs, uthv[np.newaxis]])
                             # uthvs.shape=[ensenbles,u/th/v,10000(year),cells]
                             uthvs_all = np.vstack([uthvs_all,uthv_all[np.newaxis]])
                             bs = np.vstack([bs,B])
@@ -533,17 +537,20 @@ if __name__ == "__main__":
                             if cell == 2 or cell == 4 or cell == 5:
                                 # ※
                                 # gt deltaU or U, shape=()   
-                                if vMode == 5 or (vMode == 4 and featureMode == 0):
-                                    # [ensamble,params(U/Uex/Th/V/b=5)] nextUexは下で実装
-                                    Xt = np.concatenate([uthvs_all[:,jInd,cell,uInd,np.newaxis],nextUex[:,cell,np.newaxis],uthvs_all[:,jInd,cell,thInd:],bs[:,cell,np.newaxis]],1)
+                                if vMode == 5 or (vMode == 4 and featureMode == 0): # deltaU
+                                    # [ensamble,U/Uex/Th/V or notV/B] nextUexは下で実装
+                                    Xt = np.concatenate([uthvs_all[:,jInd,cell,uInd,np.newaxis],nextUex[:,cell,np.newaxis],uthvs[:,jInd,cell,thInd:],bs[:,cell,np.newaxis]],1)
                                     TrueU = gtdeltaU[jInd-state_Year,gtcell]
-                                    # shape=[ensamble,cell(=8),params(U/Uex/Th/V/b=5)]
-                                    Xt_all = np.concatenate([uthvs_all[:,jInd,:,uInd,np.newaxis],nextUex[:,:,np.newaxis],uthvs_all[:,jInd,:,thInd:],bs[:,:,np.newaxis]],2)
                                         
-                                elif (vMode == 4 and featureMode == 1) or vMode == 3: # deltaU vなし
-                                    Xt = np.concatenate([uthvs_all[:,jInd,cell,uInd,np.newaxis],uthvs_all[:,jInd,cell,thInd:],bs[:,cell,np.newaxis]],1)
-                                    Xt_all = np.concatenate([uthvs_all[:,jInd,:,uInd,np.newaxis],uthvs_all[:,jInd,:,thInd:],bs[:,:,np.newaxis]],2)
+                                elif (vMode == 4 and featureMode == 1) or vMode == 3: # U
+                                    # [ensambles,U/Th/V or notV/B]
+                                    Xt = np.concatenate([uthvs_all[:,jInd,cell,uInd,np.newaxis],uthvs[:,jInd,cell,thInd:],bs[:,cell,np.newaxis]],1)
                                     TrueU = gtU[jInd-state_Year,gtcell]
+                                
+                            # [ensambles,U/Uex/Th/V/B]
+                            Xt_all = np.concatenate([uthvs_all[:,jInd,cell,uInd,np.newaxis],nextUex[:,cell,np.newaxis],uthvs_all[:,jInd,cell,thInd:],bs[:,cell,np.newaxis]],1)
+                       
+                            pdb.set_trace()
                             
                             for eID in np.arange(Xt_all.shape[0]):
                                 yV = Xt_all[eID,:,-2]
@@ -607,7 +614,12 @@ if __name__ == "__main__":
                 
                 # Ut-1を取り除く, parfileHM*に必要がないから, [4(parameter)*8(cell),]
                 Xa_t = np.hstack([Xal_t[:,:nCell],Xal_t[:,nCell+nCell:]])[lNum,:]
-                UThV = np.reshape(Xa_t[:bInd],[-1,nCell]) 
+                
+                if vMode == 5 or (vMode == 4 and featureMode == 1): # vあり
+                    UThV = np.reshape(Xa_t[:bInd],[-1,nCell]) 
+                elif vMode == 3 or (vMode == 4 and featureMode == 0): # vなし
+                    UThV = np.reshape(Xa_t,[-1,nCell])
+                
                 # yUexは2000年以前のyU
                 startyU = Xal_t[:,nCell:nCell+nCell]
                 
@@ -620,7 +632,7 @@ if __name__ == "__main__":
                     Xa_t_all[:,uInd] = rescaleU
                     
                 # Get paramb, 小数第7位四捨五入
-                updateB = np.round(Xa_t[bInd:],limitNum) # [b1,..,bN].T
+                updateB = np.round(Xa_t[-1:],limitNum) # [b1,..,bN].T
                 # Get U
                 updateU = np.round(UThV[uInd],limitNum)
                 # Get theta, [cell,]
@@ -630,21 +642,29 @@ if __name__ == "__main__":
                 print(f"TrueU:{np.round(TrueU,6)}\n")
                 print("before,update:\n")
                 print(f"Kalman:{K_t}\n")
-
-                if featureMode == 0:
-                    # Get V, [cell,], 小さすぎるから四捨五入なし
-                    updateV = UThV[VInd]
-                    print(f"B:{np.round(Xt[lNum][-1],limitNum)},{updateB}\nU:{np.round(Xt[lNum][0],limitNum)},{updateU}\nUex:{np.round(Xt[lNum][1],limitNum)}\ntheta:{np.round(Xt[lNum][2],limitNum)},{updateTh}\nV:{Xt[lNum][-2]},{updateV}\n")
-                elif featureMode == 1: 
-                    print(f"B:{np.round(Xt[lNum][-1],limitNum)},{updateB}\nU:{np.round(Xt[lNum][0],limitNum)},{updateU}\nUex:{np.round(Xt[lNum][1],limitNum)}\ntheta:{np.round(Xt[lNum][2],limitNum)},{updateTh}\n")
                 
+                # logsファイルに上書きする値
                 if cell == 2 or cell == 4 or cell == 5:
-                    # 更新したセルのパラメータとそのほかをconcat
-                    Xa_t_all[cell] = Xa_t
-                    # save index of minus parameters
-                    if np.any(Xa_t_all<0):
-                        rmInds.append(lNum)
+                    if vMode == 5 or (vMode == 4 and featureMode == 1): # vあり
+                        # Get V, [cell,], 小さすぎるから四捨五入なし
+                        updateV = UThV[VInd]
+                        print(f"B:{np.round(Xt[lNum][-1],limitNum)},{updateB}\nU:{np.round(Xt[lNum][0],limitNum)},{updateU}\nUex:{np.round(Xt[lNum][1],limitNum)}\ntheta:{np.round(Xt[lNum][2],limitNum)},{updateTh}\nV:{Xt[lNum][-2]},{updateV}\n")
                 
+                        # 更新したセルのパラメータとそのほかをconcat
+                        Xa_t_all[cell] = Xa_t
+                                
+                    elif vMode == 3 or (vMode == 4 and featureMode == 0): # vなし
+                        print(f"B:{np.round(Xt[lNum][-1],limitNum)},{updateB}\nU:{np.round(Xt[lNum][0],limitNum)},{updateU}\nUex:{np.round(Xt[lNum][1],limitNum)}\ntheta:{np.round(Xt[lNum][2],limitNum)},{updateTh}\n")
+                        #pdb.set_trace()
+                        Xa_t_all[cell,uInd] = np.array([Xa_t[uInd]])
+                        Xa_t_all[cell,thInd] = np.array([Xa_t[thInd]])
+                        Xa_t_all[cell,bInd] = np.array([Xa_t[bInd]])
+                
+                    # ------------------- Error ------------------------- # 
+                    if np.any(Xa_t_all<0): # save index of minus parameters
+                        rmInds.append(lNum)
+                    # --------------------------------------------------- #
+                    
                 # ----------------------- Xt-1 作成手順 ---------------------- #
                 # 1 parfileをアンサンブル分作成
                 # 2 batchファイルでファイル番号(Label etc...)受け渡し
@@ -664,19 +684,15 @@ if __name__ == "__main__":
                 
                 # パラメータ設定行抽出
                 lines = alllines[Sfl:Efl]
-                # Input b,U,th,V in all cell
+                # Input b,U,th,V in all cell vなしのときのvは更新前の値を次の初期値に用いる                   
                 for nl in np.arange(len(lines)): # 8 cell times
                     # b, U, theta, V
                     inlines = lines[nl]
-                    pdb.set_trace()
+                    # U th V B
                     outlines = Xa_t_all[nl]
-                    # v あり        
-                    if featureMode == 0:    
-                        inlines[1],inlines[-3],inlines[-2],inlines[-1] = str(np.round(outlines[-1],limitNum)),str(np.round(outlines[0],limitNum)),str(np.round(outlines[1],limitNum)),str(outlines[2])
-                    # v なし
-                    elif featureMode == 1: 
-                        inlines[1],inlines[-3],inlines[-2] = str(np.round(outlines[-1],limitNum)),str(np.round(outlines[0],limitNum)),str(np.round(outlines[1],limitNum))
-
+                    # In
+                    inlines[1],inlines[-3],inlines[-2],inlines[-1] = str(np.round(outlines[-1],limitNum)),str(np.round(outlines[0],limitNum)),str(np.round(outlines[1],limitNum)),str(outlines[2])
+                
                 # Save parfileHM031 -> parfileHM0*
                 parFilePath = os.path.join(paramPath,f"{tfID}",f"parfileHM{iS}_{lNum}.txt")
                 # 書式を元に戻す
