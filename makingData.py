@@ -55,7 +55,7 @@ def Empty(logFullPath):
      pass
 #---------------------------------------------------------------------
 
-def Negative(V,logFullPath,cnt,isWindows=False):
+def Negative(V,logFullPath,cnt):
     """
     マイナスのすべり速度が出た場合は計算できない
     つぎのディレクトリに送る

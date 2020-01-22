@@ -29,6 +29,10 @@ mimMode = int(sys.argv[1])
 cell = int(sys.argv[2])
 # noize of obs prefer to big
 sigma = float(sys.argv[3])
+# 5:deltaU vあり, 4:deltaU vなし or U vあり, 3: U vなし  ※ 3cellには対応していない
+vMode = int(sys.argv[4])
+# 0:deltaU, 1: U
+featureMode = int(sys.argv[5])
 # ----------------------------------------------------------------------- #
 
 # ----------------------------- Path ------------------------------------ #
@@ -58,8 +62,6 @@ elif cell == 245:
         
 # --------------------------- parameter --------------------------------- #
 
-isWindows = True
-
 # 南海トラフ巨大地震履歴期間
 gt_Year = 1400
 # シミュレーションの安定した年
@@ -67,14 +69,16 @@ state_Year = 2000
 # シミュレータの年数
 nYear = 10000
 
-#初めに地震発生した年(真値)
-#sYear = np.where(gtU>0)[0][0]
-
 # only one cell ---------------------------  
 # select gt & obs cell, nankai(2), tonankai(4), tokai(5)
 if cell == 2 or cell == 4 or cell == 5:
     # number of all param U,Uex,Th,V,b
-    nParam = 5
+    if vMode == 5:
+        nParam = 5
+    elif vMode == 4:
+        nParam = 4
+    elif vMode == 3:
+        nParam = 3
     # number of cell
     nCell = 1
     # gt number of cell
@@ -114,16 +118,17 @@ small_sigma = 0.1
 Sfl = 4
 Efl = 12
 
-# b index after updating
-bInd = nCell * (nParam-2)
-# U index after updating (same all nCell)
-uInd = 0
-# Ut-1 index
-uxInd = 1
-# theta index after updating (same all nCell)
-thInd = 1
-# V index after updating (same al nCell)
-VInd = 2
+if vMode == 5:
+    # b index after updating
+    bInd = nCell * (nParam-2)
+    # U index after updating (same all nCell)
+    uInd = 0
+    # Ut-1 index
+    uxInd = 1
+    # theta index after updating (same all nCell)
+    thInd = 1
+    # V index after updating (same al nCell)
+    VInd = 2
 
 # limit decimal
 limitNum = 6
@@ -134,20 +139,39 @@ limitNum = 6
 # =============================================================================
 # 現在の状態の推定値
 def Odemetry(Xt):
-    #pdb.set_trace()        
-    # one-cell
+     
+    # one-cell ----------------------------------------------------------------
     if nCell == 1:
-        yU,yUex,yth,yV,paramb = Xt[:,0],Xt[:,1],Xt[:,2],Xt[:,3],Xt[:,4]
-    
+        
+        # select parameters
+        if vMode == 5:
+            yU,yUex,yth,yV,paramb = Xt[:,0],Xt[:,1],Xt[:,2],Xt[:,3],Xt[:,4]
+        elif vMode == 4 and featureMode == 0: # deltaU vなし
+            yU,yUex,yth,paramb = Xt[:,0],Xt[:,1],Xt[:,2],Xt[:,3]
+        elif vMode == 4 and featureMode == 1: # U vあり
+            yU,yth,yV,paramb = Xt[:,0],Xt[:,1],Xt[:,2],Xt[:,3]
+        elif vMode == 3: # U vなし
+            yU,yth,paramb = Xt[:,0],Xt[:,1],Xt[:,2]
+        
         # システムノイズ(時間変化しないパラメータに与える？),W:[データ数(N)]:アンサンブル平均の0.1%(正規乱数)
         # アンサンブル平均はセルごと[Cell(1),]
         West_t = np.random.normal(0,0.01*np.mean(paramb,axis=0),nCell)
         
         # parambにシステムノイズ付加(West_tをアンサンブルメンバー数に増やした)
         paramb = paramb + np.repeat(West_t,paramb.shape[0])
-    
-        # タイムステップtの予報値:(2.8)[アンサンブルメンバー数(l),Cell数分のU,V,th,paramb(8*5)]
-        Xf_t = np.vstack([yU,yUex,yth,yV,paramb]).T
+        
+        if vMode == 5:
+            # タイムステップtの予報値:(2.8)[アンサンブルメンバー数(l),Cell数分のU,V,th,paramb(8*5)]
+            Xf_t = np.vstack([yU,yUex,yth,yV,paramb]).T
+        elif vMode == 4 and featureMode == 0: # deltaU vなし
+            # [l,8*4]
+            Xf_t = np.vstack([yU,yUex,yth,paramb]).T    
+        elif vMode == 4 and featureMode == 1: # U vあり
+            # [l,8*4]
+            Xf_t = np.vstack([yU,yth,yV,paramb]).T
+        elif vMode == 3: # U vなし
+            # [l,8*3]
+            Xf_t = np.vstack([yU,yth,paramb]).T
     
         # タイムステップtの予報アンサンブルで標本誤差共分散行列で誤差共分散行列を近似
         Xfhat_t = np.mean(Xf_t,axis=0) #(2.9)[Cell*(U+V+th+b)]
@@ -155,7 +179,7 @@ def Odemetry(Xt):
         
         # 予測誤差共分散行列(カルマンゲインに使用)
         Pf_t = np.cov(EPSf_t.T) #[要素数,要素数]
-        #pdb.set_trace()
+    # -------------------------------------------------------------------------
         
     elif nCell == 3:
         yU,yUex,yth,yV,paramb = Xt[:,:nCell],Xt[:,nCell:nCell+nCell],Xt[:,nCell+nCell:nCell+nCell+nCell],Xt[:,nCell+nCell+nCell:nCell+nCell+nCell+nCell],Xt[:,:-nCell]
@@ -175,7 +199,14 @@ def Odemetry(Xt):
         # 予測誤差共分散行列(カルマンゲインに使用)
         Pf_t = np.cov(EPSf_t.T) #[要素数,要素数]        
 
-    return Xf_t, Pf_t, yU, yUex, yth, yV, paramb
+    if vMode == 5:
+        return Xf_t, Pf_t, yU, yUex, yth, yV, paramb
+    elif vMode == 4 and featureMode == 0: # deltaU vなし
+        return Xf_t, Pf_t, yU, yUex, yth, paramb
+    elif vMode == 4 and featureMode == 1: # U vあり
+        return Xf_t, Pf_t, yU, yth, yV, paramb
+    elif vMode == 3: # U vなし
+        return Xf_t, Pf_t, yU, yth, paramb
     
 # =============================================================================
 #            # 予報値更新 #
@@ -184,6 +215,7 @@ def Odemetry(Xt):
 #------------------------------------------------------------------------------        
 # カルマンフィルタ計算
 def KalmanFilter(Pf_t):
+    
     # M:真のU[nCell,], N:全変数数
     M,N = gt_nCell, nCell*nParam
     # 観測誤差共分散行列 R:[M,M]
@@ -191,11 +223,15 @@ def KalmanFilter(Pf_t):
     # 観測行列[M,N],
     # y:[deltaU1,deltaU2,deltaU3],x:[U1,..,UN,Uex1,..,UexN,..,B1,B2,...,BN]
     H = np.zeros([M,N]) # [3,40]
-    #pdb.set_trace()    
     
     if nCell == 1:
-        H[0][0] = np.float(1)
-        H[0][1] = np.float(-1)
+        if vMode == 5 or vMode == 4 and featureMode == 0:    
+            H[0][0] = np.float(1)
+            H[0][1] = np.float(-1)
+        elif vMode == 4 and featureMode == 0: # deltaU vなし
+    
+    
+    
     if nCell == 3:
         # Ut=1,Ut-1=-1,それ以外0,deltaU作成
         H[0,nI] = np.float(1)
@@ -378,7 +414,7 @@ if __name__ == "__main__":
                         predyU = np.hstack([yU[:,2,np.newaxis],yU[:,4,np.newaxis],yU[:,5,np.newaxis]])
                        
                         # --------------------------------------------------- #
-                        
+                        """
                         # ------------- plot gt & pred ---------------------- #
                         print("---- start plot! ----")
                         fig, figInds = plt.subplots(nrows=3, sharex=True)
@@ -406,7 +442,7 @@ if __name__ == "__main__":
                         plt.savefig(os.path.join("images",f"V_{fID}.png"))
                         plt.close()
                         # --------------------------------------------------- #
-                        
+                        """
                         # ------------- gt & predict select cell ------------ #
                         if cell == 2 or cell == 4 or cell == 5:
                             
@@ -488,8 +524,8 @@ if __name__ == "__main__":
                                 Xt = np.concatenate([uthvs_all[:,jInd,cell,uInd,np.newaxis],nextUex[:,cell,np.newaxis],uthvs_all[:,jInd,cell,thInd:],bs[:,cell,np.newaxis]],1)
                                 # ※
                                 # gt UV, shape=()
-                                #TrueU = gtU[jInd-state_Year,cell-2]
-                                TrueU = gtdeltaU[jInd-state_Year,cell-2]
+                                #TrueU = gtU[jInd-state_Year,gtcell]
+                                TrueU = gtdeltaU[jInd-state_Year,gtcell]
                                 
                             # shape=[ensamble,cell(=8),params(U/Uex/Th/V/b=5)]
                             Xt_all = np.concatenate([uthvs_all[:,jInd,:,uInd,np.newaxis],nextUex[:,:,np.newaxis],uthvs_all[:,jInd,:,thInd:],bs[:,:,np.newaxis]],2)
@@ -536,9 +572,9 @@ if __name__ == "__main__":
             # --------------------------------------------------------------- #
             
             # --------------- save txt Kalman & parameters ------------------ #
-            np.savetxt(os.path.join(savePath,f"EnKFparams_{iS}.txt"),plotparams[iS],"%.5f")
-            np.savetxt(os.path.join(savePath,f"EnKFyears_{iS}.txt"),np.array([plotyears[iS]]),"%.0f")
-            np.savetxt(os.path.join(savePath,f"EnKFTrueU_{iS}.txt"),np.array([plotgt[iS]]),"%.5f")
+            np.savetxt(os.path.join(savePath,"0",f"EnKFparams_{iS}.txt"),plotparams[iS],"%.5f")
+            np.savetxt(os.path.join(savePath,"0",f"EnKFyears_{iS}.txt"),np.array([plotyears[iS]]),"%.0f")
+            np.savetxt(os.path.join(savePath,"0",f"EnKFTrueU_{iS}.txt"),np.array([plotgt[iS]]),"%.5f")
             # --------------------------------------------------------------- #
             
             FLAG = False
