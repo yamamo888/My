@@ -332,7 +332,7 @@ if __name__ == "__main__":
                 # -------------------------------------------------------------
                 #pdb.set_trace()
                 # 状態ベクトル ---------------------------------------------------
-                if cell == 2 or cell == 3 or cell == 4:
+                if cell == 2 or cell == 4 or cell == 5:
                     if not flag1:
                         # [1400,8,粒子] or [8,particle]
                         yth_all = yth[:,:,np.newaxis]

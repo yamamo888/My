@@ -67,7 +67,7 @@ def NumberLine(x,pred,label="auto"):
         xMin, xMax = np.min(np.append(x,xhat)), np.max(np.append(x,xhat))  
         plt2.tight_layout() #グラフの自動調整    
         plt2.hlines(y=0,xmin=xMin,xmax=xMax) #横軸
-        plt2.xticks(np.arange(xMin,xMax,2)) #目盛り数値
+        #plt2.xticks(np.arange(xMin,xMax,2)) #目盛り数値
         pylab.box(False) #枠を消す
         # -------------------------------------------------------------------------
         
