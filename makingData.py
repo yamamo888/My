@@ -252,7 +252,7 @@ def convV2YearlyData(th,V,nYear,cnt=0):
     """
 #---------------------------------------------------------------------
 #def MinErrorNankai(gt,yU,yUex,yth,yV,cell=0,mimMode=0):    
-def MinErrorNankai(gt,yth,yV,pY,cell=0):
+def MinErrorNankai(gt,yth,yV,pY,cell=0,gtcell=0):
     """
     シミュレーションされたデータの真値との誤差が最小の1400年間を抽出
     Args:
@@ -269,7 +269,7 @@ def MinErrorNankai(gt,yth,yV,pY,cell=0):
         
         # ----
         # 真値の地震年数
-        gYear = np.where(gt[:,0] > slip)[0]
+        gYear = np.where(gt[:,gtcell] > slip)[0]
         # ----
         
         # ----

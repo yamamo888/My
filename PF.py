@@ -317,12 +317,12 @@ if __name__ == "__main__":
                 # pJ: 地震が起きた年
                 yth,yV,pJ_all = myData.convV2YearlyData(th,V,nYear,cnt=iS) 
                 # -------------------------------------------------------------
-                #pdb.set_trace()
+                pdb.set_trace()
                 # 1回目 -------------------------------------------------------
                 if iS == 0:
                     # 類似度比較 最小誤差年取得 --------------------------------- 
                     # th,V [1400,8] これは1番初めだけ, pJ: 発生年数, sepJ: 取得年数開始・終了index
-                    yth, yV, pJ_all, spJ, maxSim = myData.MinErrorNankai(gtV,yth,yV,pJ_all-state_Year,cell=cell)
+                    yth, yV, pJ_all, spJ, maxSim = myData.MinErrorNankai(gtV,yth,yV,pJ_all-state_Year,cell=cell,gtcell=gtcell)
                 
                     # 類似度保存
                     sims[fID] = maxSim
