@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import os
+import sys
 import glob
 import pickle
 import pdb
 import time
-import shutil
 
 import matplotlib as mpl
 #mpl.use('Agg')
@@ -14,12 +14,34 @@ import matplotlib.pylab as plt
 import numpy as np
 from scipy import stats
 
-import pdb
+import csv
+
+# ---- command ---- #
+cell = int(sys.argv[1])
+# ----------------- #
+
+# ---- path ---- #
+# dataPath
+logsPath = 'logs'
+# simulated path
+dataPath = 'b2b3b4b5b6400-450'
+#dataPath = "190"
+featurePath = "nankairirekifeature"
+fname = '*.txt' 
+# -------------- #
 
 # ---- params ---- #
 
 nCell = 8
 
+# gt cell index
+if cell == 2:
+    gtcell = 0
+elif cell == 4:
+    gtcell = 1
+elif cell == 5:
+    gtcell = 2
+    
 # eq. year in logs     
 yrInd = 1
 yInd = 1
@@ -34,8 +56,6 @@ stateYear = 2000
 aYear = 1400
 
 nYear = 10000
-
-
 # ---------------- #
 
 # -----------------------------------------------------------------------------
@@ -97,17 +117,19 @@ def MinErrorNankai(gt,pred):
     
     # ----
     # 真値の地震年数
-    gYear = np.where(gt[:,0] > slip)[0]
+    gYear = np.where(gt[:,gtcell] > slip)[0]
     # ----
-
+    
     flag = False
     # Slide each one year 
     for sYear in np.arange(8000-aYear): 
         # 予測した地震の年数 + 1400
         eYear = sYear + aYear
+        
+        pdb.set_trace()
 
         # 予測した地震年数 
-        pYear = np.where(pred[sYear:eYear] > slip)[0]
+        pYear = np.where(pred[sYear:eYear,cell] > slip)[0]
 
         # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
         ndist = gauss(gYear,pYear.T)
@@ -141,22 +163,65 @@ def gauss(gtY,predY,sigma=100):
     gauss = np.exp(-(gtYs - predYs.T)**2/(2*sigma**2))
 
     return gauss    
+
 # -----------------------------------------------------------------------------
+def loadFile(filespath):    
+
+    batFile = "featureV.bat"
+    
+    flag = False
+    for filepath in filespath:
+        V,B = loadABLV(filepath)
+    
+        if not flag:
+            param = B[np.newaxis] * 1000000
+            flag = True
+        else:
+            param = np.vstack([param,B[np.newaxis]*1000000])
+    
+    param = np.concatenate((param[:,2,np.newaxis],param[:,4,np.newaxis],param[:,5,np.newaxis]),1)
+    param = np.round(param,1).astype(int)
+    
+    # save csv ----------------------------------------------------------------
+    with open("allneighver_190.csv","w") as f:
+        line = csv.writer(f,lineterminator="\n")
+        line.writerows(param)
+    # -------------------------------------------------------------------------
+    pdb.set_trace()
+    # bat ---------------------------------------------------------------------
+    lockPath = "Lock.txt"
+    lock = str(1)
+    with open(lockPath,"w") as fp:
+        fp.write(lock)
+    
+    os.system(batFile)
+        
+    sleepTime = 3
+    # lockファイル作成時は停止
+    while True:
+        time.sleep(sleepTime)
+        if os.path.exists(lockPath)==False:
+            break
+    # -------------------------------------------------------------------------
+
+    
+# -----------------------------------------------------------------------------
+
 
 if __name__ == "__main__":
     
-    # ---- path ---- #
-    # dataPath
-    logsPath = 'logs'
-    # simulated path
-    dataPath = 'b2b3b4b5b6400-450'
-    fname = '*.txt' 
-    # -------------- #
-    
+   
+    """
+    # --------------------------------------------------------------
+    logfiles = glob.glob(os.path.join(logsPath,dataPath,fname))
+    # loading logs & output first pf files
+    loadFile(logfiles)
+    # --------------------------------------------------------------
+    """
     # --------------------------------------------------------------
     # simulated rireki
     filePath = os.path.join(logsPath,dataPath,fname)
-    files = glob.glob(filePath)[20000:30000]
+    files = glob.glob(filePath)
     # --------------------------------------------------------------
     
     # --------------------------------------------------------------
@@ -165,7 +230,7 @@ if __name__ == "__main__":
         gtyV = pickle.load(fp)
     # --------------------------------------------------------------
     
-    for tfID in [1,190]:
+    for tfID in [190]:
         
         # ---- reading gt ---- # 
         # 全領域と確実領域の南海トラフ巨大地震履歴
@@ -199,7 +264,7 @@ if __name__ == "__main__":
                 maxSims = np.hstack([maxSims,maxSim])
                 paths = np.hstack([paths,logFullPath])
         
-        maxSimInds = np.argsort(maxSims)[::-1]
+        maxSimInds = np.argsort(maxSims)[::-1][:100]
         # path for reading
         maxpaths = paths[maxSimInds]
         # sort degree of similatery 
@@ -208,11 +273,11 @@ if __name__ == "__main__":
         # ----------------------------------------------------------
         for line in maxpaths:
             # output csv for path
-            with open(f"path_{tfID}_{dataPath}_3.txt","a") as f:
+            with open(f"path_{tfID}_{dataPath}_{cell}.txt","a") as f:
                 f.write(line + "\n")
         for ms in maxSim:
             # output csv for path
-            with open(f"DS_{tfID}_{dataPath}_3.txt","a") as f:
+            with open(f"DS_{tfID}_{dataPath}_{cell}.txt","a") as f:
                 f.write(str(ms) + "\n")
         # ----------------------------------------------------------
         
