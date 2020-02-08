@@ -24,7 +24,8 @@ cell = int(sys.argv[1])
 # dataPath
 logsPath = 'logs'
 # simulated path
-dataPath = 'b2b3b4b5b6400-450'
+dataPath = 'b2b3b4b5b60-100'
+#dataPath = "tmp"
 #dataPath = "190"
 featurePath = "nankairirekifeature"
 fname = '*.txt' 
@@ -114,7 +115,10 @@ def convV2YearlyData(V):
     
 # -----------------------------------------------------------------------------
 def MinErrorNankai(gt,pred):
-    
+    """
+    pred: [8000,3]
+    """
+
     # ----
     # 真値の地震年数
     gYear = np.where(gt[:,gtcell] > slip)[0]
@@ -125,11 +129,9 @@ def MinErrorNankai(gt,pred):
     for sYear in np.arange(8000-aYear): 
         # 予測した地震の年数 + 1400
         eYear = sYear + aYear
-        
-        pdb.set_trace()
 
-        # 予測した地震年数 
-        pYear = np.where(pred[sYear:eYear,cell] > slip)[0]
+        # 予測した地震年数 only one-cell
+        pYear = np.where(pred[sYear:eYear,gtcell] > slip)[0]
 
         # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
         ndist = gauss(gYear,pYear.T)
