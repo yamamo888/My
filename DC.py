@@ -24,8 +24,8 @@ cell = int(sys.argv[1])
 # dataPath
 logsPath = 'logs'
 # simulated path
-dataPath = 'b2b3b4b5b60-100'
-#dataPath = "tmp"
+#dataPath = 'b2b3b4b5b60-100'
+dataPath = "tmp"
 #dataPath = "190"
 featurePath = "nankairirekifeature"
 fname = '*.txt' 
@@ -118,33 +118,75 @@ def MinErrorNankai(gt,pred):
     """
     pred: [8000,3]
     """
-
-    # ----
-    # 真値の地震年数
-    gYear = np.where(gt[:,gtcell] > slip)[0]
-    # ----
     
-    flag = False
-    # Slide each one year 
-    for sYear in np.arange(8000-aYear): 
-        # 予測した地震の年数 + 1400
-        eYear = sYear + aYear
+    if cell == 2 or cell == 4 or cell ==5:
+        # ----
+        # 真値の地震年数
+        gYear = np.where(gt[:,gtcell] > slip)[0]
+        # ----
 
-        # 予測した地震年数 only one-cell
-        pYear = np.where(pred[sYear:eYear,gtcell] > slip)[0]
+        flag = False
+        # Slide each one year 
+        for sYear in np.arange(8000-aYear): 
+            # 予測した地震の年数 + 1400
+            eYear = sYear + aYear
 
-        # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
-        ndist = gauss(gYear,pYear.T)
+            # 予測した地震年数 only one-cell
+            pYear = np.where(pred[sYear:eYear,gtcell] > slip)[0]
 
-        # 予測誤差の合計, 回数で割ると当てずっぽうが小さくなる
-        yearError = sum(ndist.max(1)/pYear.shape[0])
+            # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
+            ndist = gauss(gYear,pYear.T)
 
-        if not flag:
-            yearErrors = yearError
-            flag = True
-        else:
-            yearErrors = np.hstack([yearErrors,yearError])
-    
+            # 予測誤差の合計, 回数で割ると当てずっぽうが小さくなる
+            yearError = sum(ndist.max(1)/pYear.shape[0])
+
+            if not flag:
+                yearErrors = yearError
+                flag = True
+            else:
+                yearErrors = np.hstack([yearErrors,yearError])
+         
+    # for 3 cell
+    elif cell == 245:
+        # ----
+        # 真値の地震年数
+        gYear_nk = np.where(gt[:,0] > slip)[0]
+        gYear_tnk = np.where(gt[:,1] > slip)[0]
+        gYear_tk = np.where(gt[:,2] > slip)[0]
+        # ----
+
+        flag = False
+        # Slide each one year 
+        for sYear in np.arange(8000-aYear): 
+            # 予測した地震の年数 + 1400
+            eYear = sYear + aYear
+
+            # 予測した地震年数 only one-cell
+            pYear_nk = np.where(pred[sYear:eYear,0] > slip)[0]
+            pYear_tnk = np.where(pred[sYear:eYear,1] > slip)[0]
+            pYear_tk = np.where(pred[sYear:eYear,2] > slip)[0]
+
+
+            # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
+            # for each cell
+            ndist_nk = gauss(gYear_nk,pYear_nk.T)
+            ndist_tnk = gauss(gYear_tnk,pYear_tnk.T)
+            ndist_tk = gauss(gYear_tk,pYear_tk.T)
+
+            # 予測誤差の合計, 回数で割ると当てずっぽうが小さくなる
+            # for each cell
+            yearError_nk = sum(ndist_nk.max(1)/pYear_nk.shape[0])
+            yearError_tnk = sum(ndist_tnk.max(1)/pYear_tnk.shape[0])
+            yearError_tk = sum(ndist_tk.max(1)/pYear_tk.shape[0])
+            
+            # for all cell
+            yearError = yearError_nk + yearError_tnk + yearError_tk
+
+            if not flag:
+                yearErrors = yearError
+                flag = True
+            else:
+                yearErrors = np.hstack([yearErrors,yearError])
     # 最小誤差開始修了年数(1400年)取得
     sInd = np.argmax(yearErrors)
     eInd = sInd + aYear
