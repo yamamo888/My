@@ -1,19 +1,21 @@
 # -*- coding: utf-8 -*-
 
 import os
-import shutil
+import sys
 
 import numpy as np
 import pdb
 
+cell = sys.argv[1]
+
 # Path ------------------------------------------------------------------------
 logsPath = "logs"
-dirPath = "b2b3b4b5b6205-300"
-mvPath = "tmp"
+dirPath = "b2b3b4b5b6400-495"
+mvPath = f"tmp400_{cell}"
 # -----------------------------------------------------------------------------
 
 # Reading ---------------------------------------------------------------------
-with open("Top_190_path.txt") as f:
+with open(f"path_190_b2b3b4b5b6400-450_{cell}.txt") as f:
     pathFile = [line.strip().split("/")[-1] for line in f.readlines()]
 # -----------------------------------------------------------------------------
 
