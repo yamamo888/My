@@ -115,181 +115,188 @@ def convV2YearlyData(V):
     
     return yV
     
-# -----------------------------------------------------------------------------
-#def MinErrorNankai(gt,pred):
-def MinErrorNankai(pred):
+# 全間隔 ----------------------------------------------------------------------
+def MinErrorNankai(gt,pred):
     """
     pred: [8000,3]
     """
     
-    # 全間隔 ------------------------------------------------------------------
-    if mode == 0:
-        if cell == 2 or cell == 4 or cell == 5:
-            # ----
-            # 真値の地震年数
-            gYear = np.where(gt[:,gtcell] > slip)[0]
-            # ----
-    
-            flag = False
-            # Slide each one year 
-            for sYear in np.arange(8000-aYear): 
-                # 予測した地震の年数 + 1400
-                eYear = sYear + aYear
-    
-                # 予測した地震年数 only one-cell
-                pYear = np.where(pred[sYear:eYear,gtcell] > slip)[0]
-    
-                # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
-                ndist = gauss(gYear,pYear.T)
-    
-                # 予測誤差の合計, 回数で割ると当てずっぽうが小さくなる
-                yearError = sum(ndist.max(1)/pYear.shape[0])
-    
-                if not flag:
-                    yearErrors = yearError
-                    flag = True
-                else:
-                    yearErrors = np.hstack([yearErrors,yearError])
-             
-    # 部分間隔 -----------------------------------------------------------------
-    elif mode == 1:
-        
+    if cell == 2 or cell == 4 or cell == 5:
+        # ----
+        # 真値の地震年数
+        gYear = np.where(gt[:,gtcell] > slip)[0]
+        # ----
+
         flag = False
-        # eq. year for pred
-        gpYear = np.unique(np.where(pred>0)[0])[:-2]
-        modes = np.zeros([2,gpYear.shape[0],6])
-        cnt = 0
+        # Slide each one year 
+        for sYear in np.arange(8000-aYear): 
+            # 予測した地震の年数 + 1400
+            eYear = sYear + aYear
+
+            # 予測した地震年数 only one-cell
+            pYear = np.where(pred[sYear:eYear,gtcell] > slip)[0]
+
+            # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
+            ndist = gauss(gYear,pYear.T)
+
+            # 予測誤差の合計, 回数で割ると当てずっぽうが小さくなる
+            yearError = sum(ndist.max(1)/pYear.shape[0])
+
+            if not flag:
+                yearErrors = yearError
+                flag = True
+            else:
+                yearErrors = np.hstack([yearErrors,yearError])
+         
+        return pred[sInd:eInd,:], maxSim
+
+# 部分間隔 --------------------------------------------------------------------
+def PartMinErrorNankai(pred):
+    
+    # eq. year for each cell
+    nkYear = np.max(np.where(pred[:,0]>0)[0][:-2])
+    tnkYear = np.max(np.where(pred[:,1]>0)[0][:-2])
+    tkYear = np.max(np.where(pred[:,2]>0)[0][:-2])
+    # last eq. year for all cell
+    lastYear = np.min([nkYear,tnkYear,tkYear])
+    # eq. year for all cell
+    allYear = np.unique(np.where(pred>0)[0])
+    # nextindがあるように(次の地震があるように)
+    gpYear = allYear[:np.where(allYear==lastYear)[0][0]+1]
+    
+    modes = np.zeros([gpYear.shape[0],6])
+    cnt = 0
+    # Slide each eq. year
+    for sYear in gpYear:
         
-        # Slide each eq. year
-        for sYear in gpYear:
+        # [eq(t),eq(t+1)]
+        pYears_nk = np.where(pred[sYear:,0] > slip)[0][:2] + sYear
+        pYears_tnk = np.where(pred[sYear:,1] > slip)[0][:2] + sYear
+        pYears_tk = np.where(pred[sYear:,2] > slip)[0][:2] + sYear
+        
+        # eq(t+1)
+        nextind = np.unique(np.hstack([pYears_nk,pYears_tnk,pYears_tk]))[1]
+        
+        # [eq(t+1),eq(t+2)]
+        next_nk = np.where(pred[nextind:,0] > slip)[0][:1] + nextind
+        next_tnk = np.where(pred[nextind:,1] > slip)[0][:1] + nextind
+        next_tk = np.where(pred[nextind:,2] > slip)[0][:1] + nextind
+        
+        # interval eq.
+        interval_nk = next_nk - sYear
+        interval_tnk = next_tnk - sYear
+        interval_tk = next_tk - sYear
+        
+        # onehot
+        onehot_nk = (next_nk==nextind).astype(int)
+        onehot_tnk = (next_tnk==nextind).astype(int)
+        onehot_tk = (next_tk==nextind).astype(int)
+        
+        # eq(t+1)
+        pYear_nk = (interval_nk * onehot_nk)
+        pYear_tnk = (interval_tnk * onehot_tnk)
+        pYear_tk = (interval_tk * onehot_tk)
+        
+        # 1
+        if pred[sYear,0] == 0 and pred[sYear,1] > 0 and pred[sYear,2] == 0:
             
-            # [eq(t),eq(t+1)]
-            pYears_nk = np.where(pred[sYear:,0] > slip)[0][:2] + sYear
-            pYears_tnk = np.where(pred[sYear:,1] > slip)[0][:2] + sYear
-            pYears_tk = np.where(pred[sYear:,2] > slip)[0][:2] + sYear
-            # eq(t+1)
-            nextind = np.unique(np.hstack([pYears_nk,pYears_tnk,pYears_tk]))[1]
+            gYear_nk = np.array([260])
+            gYear_tnk = np.array([260])
+            gYear_tk = np.array([0])
+        
+            # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
+            # for each cell
+            ndist_nk = gauss(gYear_nk,pYear_nk)
+            ndist_tnk = gauss(gYear_tnk,pYear_tnk)
+            ndist_tk = gauss(gYear_tk,pYear_tk)
             
-            # [eq(t+1),eq(t+2)]
-            next_nk = np.where(pred[nextind:,0] > slip)[0][:1] + nextind - sYear
-            next_tnk = np.where(pred[nextind:,1] > slip)[0][:1] + nextind - sYear
-            next_tk = np.where(pred[nextind:,2] > slip)[0][:1] + nextind - sYear
+            max_ndist = ndist_nk + ndist_tnk + ndist_tk
             
-            # onehot
-            onehot_nk = (next_nk==nextind).astype(int)
-            onehot_tnk = (next_tnk==nextind).astype(int)
-            onehot_tk = (next_tk==nextind).astype(int)
+            # degree of similatery
+            modes[cnt,0] = max_ndist
             
-            # eq(t+1)
-            pYear_nk = (next_nk * onehot_nk)
-            pYear_tnk = (next_tnk * onehot_tnk)
-            pYear_tk = (next_tk * onehot_tk)
+            cnt += 1
+        # 2, 4
+        elif pred[sYear,0] > 0 and pred[sYear,1] > 0 and pred[sYear,2] == 0:
             
-            # 1
-            if pred[sYear,0] == 0 and pred[sYear,1] > 0 and pred[sYear,2] == 0:
+            gYear1 = [0,210,0]
+            gYear2 = [210,210,210]
+            
+            flag2 = False
+            for gYear in [gYear1,gYear2]:
+                gYear_nk = np.array([gYear[0]])
+                gYear_tnk = np.array([gYear[1]])
+                gYear_tk = np.array([gYear[2]])
+            
+                ndist_nk = gauss(gYear_nk,pYear_nk)
+                ndist_tnk = gauss(gYear_tnk,pYear_tnk)
+                ndist_tk = gauss(gYear_tk,pYear_tk)
+                    
+                ndist = ndist_nk + ndist_tnk + ndist_tk 
                 
-                gYear_nk = np.array([260])
-                gYear_tnk = np.array([260])
-                gYear_tk = np.array([0])
-            
-                pdb.set_trace()
+                if not flag2:
+                    ndists = ndist
+                    flag2 = True
+                else:
+                    ndists = np.hstack([ndists,ndist])
                 
-                # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
-                # for each cell
+            maxind = np.argmax(ndists)
+            max_ndist = ndists[maxind]
+    
+            if maxind == 0:
+                modes[cnt,1] = max_ndist
+            elif maxind == 1:
+                modes[cnt,3] = max_ndist
+            
+            cnt += 1
+        
+        # 3, 5, 6
+        elif pred[sYear,0] > 0 and pred[sYear,1] > 0 and pred[sYear,2] > 0:
+            
+            gYear1 = [260,260,0]
+            gYear2 = [150,150,150]
+            gYear3 = [90,90,0]
+             
+            flag3 = False
+            for gYear in [gYear1,gYear2,gYear3]:
+                gYear_nk = np.array([gYear[0]])
+                gYear_tnk = np.array([gYear[1]])
+                gYear_tk = np.array([gYear[2]])
+                
                 ndist_nk = gauss(gYear_nk,pYear_nk)
                 ndist_tnk = gauss(gYear_tnk,pYear_tnk)
                 ndist_tk = gauss(gYear_tk,pYear_tk)
                 
-                max_ndist = ndist_nk + ndist_tnk + ndist_tk
+                ndist = ndist_nk + ndist_tnk + ndist_tk 
                 
-                modes[0,cnt,0] = sYear
-                modes[1,cnt,0] = max_ndist
-                
-            # 2, 4
-            elif pred[sYear,0] > 0 and pred[sYear,1] > 0 and pred[sYear,2] == 0:
-                
-                gYear1 = [0,210,0]
-                gYear2 = [210,210,210]
-                
-                pdb.set_trace()
-                flag2 = False
-                for gYear in [gYear1,gYear2]:
-                    gYear_nk = np.array([gYear[0]])
-                    gYear_tnk = np.array([gYear[1]])
-                
-                    ndist_nk = gauss(gYear_nk,pYear_nk)
-                    ndist_tnk = gauss(gYear_tnk,pYear_tnk)
-                    ndist_tk = gauss(gYear_tk,pYear_tk)
-                        
-                    ndist = ndist_nk + ndist_tnk + ndist_tk 
-                    
-                    if not flag2:
-                        ndists = ndist
-                        flag2 = True
-                    else:
-                        ndists = np.hstack([ndists,ndist])
-                    
-                    maxind = np.argmax(ndists)
-                    max_ndist = ndists[maxind]
-                    
-                    if maxind == 0:
-                        modes[0,cnt,1] = sYear
-                        modes[1,cnt,1] = max_ndist
-                    elif maxind == 1:
-                        modes[0,cnt,3] = sYear
-                        modes[1,cnt,3] = max_ndist
-                
-            # 3, 5, 6
-            elif pred[sYear,0] > 0 and pred[sYear,1] > 0 and pred[sYear,2] > 0:
-                
-                gYear1 = [260,260,0]
-                gYear2 = [150,150,150]
-                gYear3 = [90,90,0]
-                 
-                pdb.set_trace()
-                flag3 = False
-                for gYear in [gYear1,gYear2,gYear3]:
-                    gYear_nk = np.array([gYear[0]])
-                    gYear_tnk = np.array([gYear[1]])
-                    gYear_tk = np.array([gYear[2]])
-                    
-                    ndist_nk = gauss(gYear_nk,pYear_nk)
-                    ndist_tnk = gauss(gYear_tnk,pYear_tnk)
-                    ndist_tk = gauss(gYear_tk,pYear_tk)
-                    
-                    ndist = ndist_nk + ndist_tnk + ndist_tk 
-                    
-                    if not flag3:
-                        ndists = ndist
-                        flag3= True
-                    else:
-                        ndists = np.hstack([ndists,ndist])
-        
-                    maxind = np.argmax(ndists)
-                    max_ndist = ndists[maxind]
-                    
-                    if maxind == 0:
-                        modes[0,cnt,2] = sYear
-                        modes[1,cnt,2] = max_ndist
-                    elif maxind == 1:
-                        modes[0,cnt,4] = sYear
-                        modes[1,cnt,4] = max_ndist
-                    elif maxind == 2:
-                        modes[0,cnt,5] = sYear
-                        modes[1,cnt,5] = max_ndist
-            
-            # ignore
-            else:
-                pass
-    pdb.set_trace()
-    # 最小誤差開始修了年数(1400年)取得
-    sInd = np.argmax(modes[1])
-    eInd = sInd + aYear
-
-    # 最小誤差確率　
-    maxSim = yearErrors[sInd]
+                if not flag3:
+                    ndists = ndist
+                    flag3= True
+                else:
+                    ndists = np.hstack([ndists,ndist])
     
-    return pred[sInd:eInd,:], maxSim
+            maxind = np.argmax(ndists)
+            max_ndist = ndists[maxind]
+            
+            if maxind == 0:
+                modes[cnt,2] = max_ndist
+            
+            elif maxind == 1:    
+                modes[cnt,4] = max_ndist
+            
+            elif maxind == 2:
+                modes[cnt,5] = max_ndist
+    
+            cnt += 1
+        # ignore
+        else:
+            cnt += 1
+            pass
+    
+    # max degree of similatery for all cell, [6,]
+    maxSim = np.max(modes,0)
+
+    return maxSim
 
 # -----------------------------------------------------------------------------
 def gauss(gtY,predY,sigma=100):
@@ -353,8 +360,6 @@ def loadFile(filespath):
 
 
 if __name__ == "__main__":
-    
-   
     """
     # --------------------------------------------------------------
     logfiles = glob.glob(os.path.join(logsPath,dataPath,fname))
@@ -394,22 +399,38 @@ if __name__ == "__main__":
         # V -> yV 
         yV = convV2YearlyData(V)
         # -----------------
-        # 全間隔比較
-        # maxSim : Degree of Similatery
-        # minimum error yV ,shape=[1400,3]
-        #minyV, maxSim = MinErrorNankai(gtUV,yV)
-        # 部分間隔比較
-        minyV, maxSim = MinErrorNankai(yV)
         
-        if not flag:
-            maxSims = maxSim
-            paths = logFullPath
-            flag = True
-        else:
-            maxSims = np.hstack([maxSims,maxSim])
-            paths = np.hstack([paths,logFullPath])
+        # 全間隔
+        if mode == 0:
+            # maxSim : Degree of Similatery
+            # minimum error yV ,shape=[1400,3]
+            minyV, maxSim = MinErrorNankai(gtUV,yV)
+        
+            if not flag:
+                maxSims = maxSim
+                paths = logFullPath
+                flag = True
+            else:
+                maxSims = np.hstack([maxSims,maxSim])
+                paths = np.hstack([paths,logFullPath])
+            
+        # 部分間隔
+        elif mode == 1:
+            maxSim = PartMinErrorNankai(yV)
+        
+            if not flag:
+                maxSims = maxSim
+                paths = logFullPath
+                flag = True
+            else:
+                maxSims = np.vstack([maxSims,maxSim])
+                paths = np.hstack([paths,logFullPath])
     
-    maxSimInds = np.argsort(maxSims)[::-1][:100]
+    if mode == 0:
+        maxSimInds = np.argsort(maxSims)[::-1][:100]
+    elif mode == 1:
+        maxSimInds = np.argsort(maxSims,0)[::-1][:100]
+    
     # path for reading
     maxpaths = paths[maxSimInds]
     # sort degree of similatery 
@@ -419,26 +440,13 @@ if __name__ == "__main__":
     for line in maxpaths:
         # output csv for path
         #with open(f"path_{tfID}_{dataPath}_{cell}.txt","a") as f:
-        with open(f"path_{dataPath}_{cell}.txt","a") as f:  
-            f.write(line + "\n")
+        with open(f"path_{dataPath}_{mode}.txt","a") as f:  
+            f.writelines(line)
+            f.write("\n")
+    
     for ms in maxSim:
         # output csv for path
         #with open(f"DS_{tfID}_{dataPath}_{cell}.txt","a") as f:
-        with open(f"DS_{dataPath}_{cell}.txt","a") as f:
+        with open(f"DS_{dataPath}_{mode}.txt","a") as f:
             f.write(str(ms) + "\n")
     # ----------------------------------------------------------
-    
-        
-        
-        
-        
-        
-    
-    
-    
-    
-    
-    
-
-
-
