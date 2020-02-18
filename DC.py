@@ -147,7 +147,79 @@ def MinErrorNankai(gt,pred):
                 flag = True
             else:
                 yearErrors = np.hstack([yearErrors,yearError])
-         
+        
+        
+    # for 3 cell
+    elif cell == 245:
+        # ----
+        # 真値の地震年数
+        gYear_nk = np.where(gt[:,0] > slip)[0]
+        gYear_tnk = np.where(gt[:,1] > slip)[0]
+        gYear_tk = np.where(gt[:,2] > slip)[0]
+        # ----
+
+        flag = False
+        # Slide each one year 
+        for sYear in np.arange(8000-aYear): 
+            # 予測した地震の年数 + 1400
+            eYear = sYear + aYear
+
+            # 予測した地震年数 only one-cell
+            pYear_nk = np.where(pred[sYear:eYear,0] > slip)[0]
+            pYear_tnk = np.where(pred[sYear:eYear,1] > slip)[0]
+            pYear_tk = np.where(pred[sYear:eYear,2] > slip)[0]
+            
+            # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
+            # for each cell
+            ndist_nk = gauss(gYear_nk,pYear_nk.T)
+            ndist_tnk = gauss(gYear_tnk,pYear_tnk.T)
+            ndist_tk = gauss(gYear_tk,pYear_tk.T)
+
+            # 予測誤差の合計, 回数で割ると当てずっぽうが小さくなる
+            # for each cell
+            yearError_nk = sum(ndist_nk.max(1)/pYear_nk.shape[0])
+            yearError_tnk = sum(ndist_tnk.max(1)/pYear_tnk.shape[0])
+            yearError_tk = sum(ndist_tk.max(1)/pYear_tk.shape[0])
+            
+            # for all cell
+            yearError = yearError_nk + yearError_tnk + yearError_tk
+
+            if not flag:
+                yearErrors = yearError
+                flag = True
+            else:
+                yearErrors = np.hstack([yearErrors,yearError])
+    
+        # 最小誤差開始修了年数(1400年)取得
+        sInd = np.argmax(yearErrors)
+        eInd = sInd + aYear
+    
+        # 最小誤差確率　
+        maxSim = yearErrors[sInd]
+        
+        """
+        # plot ---------------------------------------------------
+        predict = np.zeros([1400,3])
+        true = np.zeros([1400,3])
+        
+        predict[np.where(pred[sInd:eInd]>0)] = 5
+        true[np.where(gt>0)] = 5
+        
+        label = label.split(".")[0].split("\\")[-1]
+        
+        sns.set_style("dark")
+        fig, figInds = plt.subplots(nrows=3, sharex=True)
+        for figInd in np.arange(len(figInds)):
+            figInds[figInd].plot(np.arange(1400), predict[:,figInd],color="skyblue")
+            figInds[figInd].plot(np.arange(1400), true[:,figInd],color="coral")
+        
+        plt.suptitle(f"{np.round(maxSim,5)}")
+        
+        plt.savefig(os.path.join(imagesPath,dataPath,f"{label}.png"))
+        plt.close()
+        # --------------------------------------------------------
+        """
+        
         return pred[sInd:eInd,:], maxSim
 
 # 部分間隔 --------------------------------------------------------------------
@@ -310,7 +382,7 @@ def gauss(gtY,predY,sigma=100):
         gauss = np.exp(-(gtYs - predYs.T)**2/(2*sigma**2))
 
     elif mode == 1:
-        #pdb.set_trace()
+        
         gauss = np.exp(-(gtY - predY)**2/(2*sigma**2))
         
     return gauss    
@@ -372,50 +444,69 @@ if __name__ == "__main__":
     filePath = os.path.join(logsPath,dataPath,fname)
     files = glob.glob(filePath)
     # --------------------------------------------------------------
-    """
-    # --------------------------------------------------------------
-    # loading nankai trough (ground truth)
-    with open(os.path.join(logsPath,"nankairireki.pkl"),'rb') as fp:
-        gtyV = pickle.load(fp)
-    # --------------------------------------------------------------
     
-    for tfID in [190]:
+    # 全間隔 -------------------------------------------------------------------
+    if mode == 0:
+        # --------------------------------------------------------------
+        # loading nankai trough (ground truth)
+        with open(os.path.join(logsPath,"nankairireki.pkl"),'rb') as fp:
+            gtyV = pickle.load(fp)
+        # --------------------------------------------------------------
         
-        # ---- reading gt ---- # 
-        # 全領域と確実領域の南海トラフ巨大地震履歴
-        gtU = gtyV[tfID,:,:]
-        # deltaU -> slip velocity 
-        gtUV = np.vstack([np.zeros(3)[np.newaxis], gtU[1:,:] - gtU[:-1,:]])
-        # -------------------- #
-        """
-    flag = False
-    for fID in np.arange(len(files)):
-        # simulation -----
-        # file path
-        logFullPath = files[fID]
-        print(logFullPath)    
-        # loading logs 
-        V,B = loadABLV(logFullPath)    
-        # V -> yV 
-        yV = convV2YearlyData(V)
-        # -----------------
-        
-        # 全間隔
-        if mode == 0:
-            # maxSim : Degree of Similatery
-            # minimum error yV ,shape=[1400,3]
-            minyV, maxSim = MinErrorNankai(gtUV,yV)
-        
-            if not flag:
-                maxSims = maxSim
-                paths = logFullPath
-                flag = True
-            else:
-                maxSims = np.hstack([maxSims,maxSim])
-                paths = np.hstack([paths,logFullPath])
+        for tfID in [190]:
             
-        # 部分間隔
-        elif mode == 1:
+            # ---- reading gt ---- # 
+            # 全領域と確実領域の南海トラフ巨大地震履歴
+            gtU = gtyV[tfID,:,:]
+            # deltaU -> slip velocity 
+            gtUV = np.vstack([np.zeros(3)[np.newaxis], gtU[1:,:] - gtU[:-1,:]])
+            # -------------------- #
+            
+            flag = False
+            for fID in np.arange(len(files)):
+                # simulation -----
+                # file path
+                logFullPath = files[fID]
+                print(logFullPath)    
+                # loading logs 
+                V,B = loadABLV(logFullPath)    
+                # V -> yV 
+                yV = convV2YearlyData(V)
+                # -----------------
+                # maxSim : Degree of Similatery
+                # minimum error yV ,shape=[1400,3]
+                minyV, maxSim = MinErrorNankai(gtUV,yV)
+                
+                if not flag:
+                    maxSims = maxSim
+                    paths = logFullPath
+                    flag = True
+                else:
+                    maxSims = np.hstack([maxSims,maxSim])
+                    paths = np.hstack([paths,logFullPath])
+            
+            maxSimInds = np.argsort(maxSims)[::-1][:100]
+            # path for reading
+            maxpaths = paths[maxSimInds]
+            # sort degree of similatery 
+            maxSim = maxSims[maxSimInds]
+                    
+            
+    # 部分間隔 -----------------------------------------------------------------    
+    elif mode == 1:
+        
+        flag = False
+        for fID in np.arange(len(files)):
+            # simulation -----
+            # file path
+            logFullPath = files[fID]
+            print(logFullPath)    
+            # loading logs 
+            V,B = loadABLV(logFullPath)    
+            # V -> yV 
+            yV = convV2YearlyData(V)
+            # -----------------
+
             maxSim = PartMinErrorNankai(yV)
         
             if not flag:
@@ -426,16 +517,10 @@ if __name__ == "__main__":
                 maxSims = np.vstack([maxSims,maxSim])
                 paths = np.hstack([paths,logFullPath])
     
-    if mode == 0:
-        maxSimInds = np.argsort(maxSims)[::-1][:100]
-    elif mode == 1:
         maxSimInds = np.argsort(maxSims,0)[::-1][:100]
-    
-    # path for reading
-    maxpaths = paths[maxSimInds]
-    # sort degree of similatery 
-    maxSim = maxSims[maxSimInds]
-    
+        maxpaths = paths[maxSimInds]
+        maxSim = maxSims[maxSimInds]
+        
     # ----------------------------------------------------------
     for line in maxpaths:
         # output csv for path
