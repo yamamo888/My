@@ -13,10 +13,9 @@ import matplotlib.pylab as plt
 
 import numpy as np
 from scipy import stats
-import seaborn as sns
 from natsort import natsorted
 
-#import PlotPF as myPlot
+import PlotPF as myPlot
 
 # ---- params ---- #
 
@@ -71,8 +70,6 @@ def Negative(V,logFullPath,cnt):
 
 #データの読み込み
 def loadABLV(dirPath,logPath,fName):
-#def loadABLV(logPath,fName):
-    
     """
     1.初期アンサンブル作成(iS==0のとき)
     安定状態(2000年以降)を初期状態とする
@@ -80,8 +77,6 @@ def loadABLV(dirPath,logPath,fName):
     """
     # logファイル読み込み
     logFullPath = os.path.join(dirPath,logPath,fName)
-    #logFullPath = os.path.join(logPath,fName)
-    
     data = open(logFullPath).readlines()
     
     # A, B, Lの取得
@@ -98,24 +93,6 @@ def loadABLV(dirPath,logPath,fName):
     isRTOL = [True if data[i].count('value of RTOL')==1 else False for i in np.arange(len(data))]
     vInd = np.where(isRTOL)[0][0]+1
     
-#---------------------------------------------------------------------
-                # only U or V#
-#---------------------------------------------------------------------    
-    
-    flag = False
-    for uI in np.arange(vInd,len(data)): # 2行飛ばしで読み込み
-        
-        tmpU = np.array(data[uI].strip().split(",")[yInd:]).astype(np.float32)
-        
-        if not flag:
-            U = tmpU
-            flag = True
-        else:
-            U = np.vstack([U,tmpU])
-    
-    return U,B
-    
-    """
 #---------------------------------------------------------------------
                         # PFの時 #
 #---------------------------------------------------------------------
@@ -134,11 +111,11 @@ def loadABLV(dirPath,logPath,fName):
             th,V = np.vstack([th,tmpth]),np.vstack([V,tmpV])
     
     return th,V,B
-    """
+
 #---------------------------------------------------------------------
                         # Ensambleの時 #
 #---------------------------------------------------------------------
-    """ 
+    """
     # U,th,Vの値と発生年数t取得（vInd行から最終行まで）
     uI,thI,vI,uthvI = 0,1,2,3
     flag = False
@@ -158,68 +135,17 @@ def loadABLV(dirPath,logPath,fName):
 #---------------------------------------------------------------------
 # ※ Ensambleの時は上の方
 #def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0):
-# ※ PF
-#def convV2YearlyData(th,V,nYear,cnt=0):
-def convV2YearlyData(U,B,nYear,cnt=0):
-
+def convV2YearlyData(th,V,nYear,cell=0,cnt=0):
     """
     Args:
         nYear: number of year (by simulation) -> 10000
         cell: only one cell for ensamble kalman
     """
-
     
-#---------------------------------------------------------------------
-                # only U or interval of eq. #
-#---------------------------------------------------------------------    
-    yU = np.zeros([nYear,8])
-    
-    # 初め手観測した年
-    sYear = np.floor(U[0,yrInd])
-    for year in np.arange(sYear,nYear):
-        # 観測値がある場合
-        if np.sum(np.floor(U[:,yrInd])==year):
-            # 観測値をそのまま代入
-            yU[int(year)] = np.reshape(U[np.floor(U.T[yrInd,:])==year,vInds[0]:],[-1,])
-    
-        # 観測値がない場合
-        else:
-            # th(状態変数):地震時t-1の観測値代入,V(速度):0.0
-            yU[int(year)] = yU[int(year)-1,:] # shape=[100000,8]
-            
-    yU = np.concatenate((yU[stateYear:,2,np.newaxis],yU[stateYear:,4,np.newaxis],yU[stateYear:,5,np.newaxis]),1)
-    yU = yU[1:] - yU[:-1]
-    # [3,]
-    B = np.concatenate((B[2,np.newaxis],B[4,np.newaxis],B[5,np.newaxis]),0)
-    
-    # eq. year
-    nkY = np.where(yU[:,0]>0)[0]
-    tnkY = np.where(yU[:,1]>0)[0]
-    tkY = np.where(yU[:,2]>0)[0]
-    
-    # interval for each cell, [?]
-    intervalnkY = nkY[1:] - nkY[:-1]
-    intervaltnkY = tnkY[1:] - tnkY[:-1]
-    intervaltkY = tkY[1:] - tkY[:-1]
-    #return yU
-    return intervalnkY,intervaltnkY,intervaltkY,B
-    
-    """
-    sns.set_style("dark")
-    fig, figInds = plt.subplots(nrows=3, sharex=True)
-    for figInd in np.arange(len(figInds)):
-        figInds[figInd].plot(np.arange(8000), yU[:,figInd])
-    
-    plt.suptitle(f"nkb:{B[2]} tnkb:{B[4]} tkb:{B[5]}")
-    
-    plt.savefig(os.path.join("images","Umodel",f"U_{B[2]}_{B[4]}_{B[5]}.png"))
-    plt.close()
-    """
 #---------------------------------------------------------------------
                 # PFの時 #
 #---------------------------------------------------------------------    
-    """
-    # シミュレータのU,th,V 発生時データ - > 年数データ 用
+    # シミュレータのU,th,V 発生時データ -> 年数データ 用
     yth, yV = np.zeros([nYear,simlateCell]),np.zeros([nYear,simlateCell])
     
     # 初め手観測した年
@@ -233,15 +159,14 @@ def convV2YearlyData(U,B,nYear,cnt=0):
     
         # 観測値がない場合
         else:
-            
             # th(状態変数):地震時t-1の観測値代入,V(速度):0.0
             yth[int(year)] = yth[int(year)-1,:] # shape=[100000,8]
             yV[int(year)] = float(0) # shape=[100000,8]
     #pdb.set_trace()
     # シミュレーションが安定した2000年以降を用いる
     if cnt == 0:
-        # [year.shape,]
-        yYear = np.reshape(np.floor(V[np.where(V[:,yrInd]>stateYear),yrInd]).astype(int),[-1])
+        # [year.shape,] ※3セルでない
+        yYear = np.where(yV[stateYear:,cell]>slip)[0]
         
         #　発生年数の確認 -------------------------------------------------------
         #myPlot.NumberLine(yYear[:5]) # どれぐらい確認したいか指定
@@ -252,11 +177,11 @@ def convV2YearlyData(U,B,nYear,cnt=0):
     # 途中から始める仕様になってるので、
     elif cnt > 0:
         return yth, yV, np.reshape(np.floor(V[:,yrInd]).astype(int),[-1])
-    """
+   
 #---------------------------------------------------------------------
                     # Ensambleの時 #
 #---------------------------------------------------------------------
-    """ 
+    """
     # シミュレータのU,th,V 発生時データ - > 年数データ 用
     yU, yth, yV = np.zeros([nYear,simlateCell]),np.zeros([nYear,simlateCell]),np.zeros([nYear,simlateCell])
     
@@ -294,14 +219,14 @@ def convV2YearlyData(U,B,nYear,cnt=0):
     # 一番始め以外は、2000年以降 & yUexは更新されるyUtを使い続ける
     elif cnt > 0:    
         return yU, yth, yV, U[:,yrInd]
-    
+    """
 
     #---------------------------------------------------------------------
     # 累積変位データ作成(真)を作成するときはコメントアウトをはずす
     # シミュレーションデータのdeltaTとdeltaUの関係を求める
     # 指定した再来間隔のdeltaUを求める、TP&SP(未実装)
     #---------------------------------------------------------------------
-    
+    """
     #deltaUを求める再来間隔
     years = [90,100,150,200,260,300]
     uInds = 2
@@ -326,7 +251,7 @@ def convV2YearlyData(U,B,nYear,cnt=0):
     """
 #---------------------------------------------------------------------
 #def MinErrorNankai(gt,yU,yUex,yth,yV,cell=0,mimMode=0):    
-def MinErrorNankai(gt,yth,yV,pY,cell=0,gtcell=0):
+def MinErrorNankai(gt,yth,yV,pY,cell=0,gtcell=0,nCell=0):
     """
     シミュレーションされたデータの真値との誤差が最小の1400年間を抽出
     Args:
@@ -345,14 +270,14 @@ def MinErrorNankai(gt,yth,yV,pY,cell=0,gtcell=0):
         # 真値の地震年数
         gYear = np.where(gt[:,gtcell] > slip)[0]
         # ----
-        
+        #pdb.set_trace()
         # ----
         # シミュレーションの値を格納する
-        pred = np.zeros((8000,cell))
+        pred = np.zeros((8000,nCell))
         # 地震が起きた年数だけに値を代入
         pred[pY,:] = 10
         # ----
-        
+        #pdb.set_trace()
         flag = False
         # Slide each one year 
         for sYear in np.arange(8000-aYear): 
@@ -386,7 +311,7 @@ def MinErrorNankai(gt,yth,yV,pY,cell=0,gtcell=0):
         print(f"最大類似度:{np.round(maxSim,6)}\n")
         print(">>>>>>>>\n")
     #pdb.set_trace()
-    return yth[sInd:eInd,:], yV[sInd:eInd,:], pY[(pY>sInd)&(pY<eInd)], sInd, np.round(maxSim,6)
+    return yth[sInd:eInd,:], yV[sInd:eInd,:], pY[(pY>sInd)&(pY<eInd)]-sInd, np.round(maxSim,6)
 
 #---------------------------------------------------------------------
                     # Ensambleの時 #
