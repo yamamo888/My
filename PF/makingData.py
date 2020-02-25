@@ -144,7 +144,7 @@ def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0):
             yth[int(year)] = yth[int(year)-1,:] 
             yV[int(year)] = float(0) 
     
-    yU = np.vstack([yU[0,:], yU[1:] - yU[:-1]])
+    deltaU = np.vstack([yU[0,:], yU[1:] - yU[:-1]])
     
     # シミュレーションが安定した2000年以降を用いる
     if cnt == 0:
@@ -152,27 +152,25 @@ def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0):
             # [year.shape,]
             yYear = np.where(yV[stateYear:,cell]>slip)[0]
         elif cell == 245:
-            
             # ※ Uの発生年数
-            nkYear = np.where(yU[stateYear:,2]>slip)[0]
-            tnkYear = np.where(yU[stateYear:,4]>slip)[0]
-            tkYear = np.where(yU[stateYear:,5]>slip)[0]
+            nkYear = np.where(deltaU[stateYear:,2]>slip)[0]
+            tnkYear = np.where(deltaU[stateYear:,4]>slip)[0]
+            tkYear = np.where(deltaU[stateYear:,5]>slip)[0]
             yYear = [nkYear,tnkYear,tkYear]
        
-        return yth[stateYear:,:], yV[stateYear:,:], yYear
+        return yU[stateYear:,:], yth[stateYear:,:], yV[stateYear:,:], yYear
    
     # 途中から始める仕様になってるので、
     elif cnt > 0:
         if cell == 2 or cell == 4 or cell == 5:
             yYear = np.reshape(np.floor(V[:,yrInd]).astype(int),[-1])
         elif cell == 245:
-            pdb.set_trace()
-            nkYear = np.where(yU[:,2]>slip)[0]
-            tnkYear = np.where(yU[:,4]>slip)[0]
-            tkYear = np.where(yU[:,5]>slip)[0]
+            nkYear = np.where(deltaU[:,2]>slip)[0]
+            tnkYear = np.where(deltaU[:,4]>slip)[0]
+            tkYear = np.where(deltaU[:,5]>slip)[0]
             yYear = [nkYear,tnkYear,tkYear]
             
-        return yth, yV,yYear
+        return yU[:aYear,:], yth[:aYear,:], yV[:aYear,:], yYear
    
 #---------------------------------------------------------------------
                     # Ensambleの時 #
@@ -246,8 +244,11 @@ def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0):
         np.savetxt("deltaTANDdeltaU\\RegNankai{}{}.csv".format(fI,dy),data,delimiter=",",fmt="%.2f")
     """
 #---------------------------------------------------------------------
+# Ensemble
 #def MinErrorNankai(gt,yU,yUex,yth,yV,cell=0,mimMode=0):    
-def MinErrorNankai(gt,yth,yV,pY,cell=0,gtcell=0,nCell=0):
+# one cell
+#def MinErrorNankai(gt,yth,yV,pY,cell=0,gtcell=0,nCell=0):
+def MinErrorNankai(gt,yU,yth,yV,pY,cell=0,gtcell=0,nCell=0):
     """
     シミュレーションされたデータの真値との誤差が最小の1400年間を抽出
     Args:
@@ -359,7 +360,7 @@ def MinErrorNankai(gt,yth,yV,pY,cell=0,gtcell=0,nCell=0):
         tkYear = pY[2][(pY[2]>sInd)&(pY[2]<eInd)]-sInd
         predYear = [nkYear,tnkYear,tkYear]
     
-    return yth[sInd:eInd,:], yV[sInd:eInd,:], predYear, np.round(maxSim,6)
+    return yU[sInd:eInd,:], yth[sInd:eInd,:], yV[sInd:eInd,:], predYear, np.round(maxSim,6)
 
 #---------------------------------------------------------------------
                     # Ensambleの時 #
