@@ -94,28 +94,9 @@ def loadABLV(dirPath,logPath,fName):
     vInd = np.where(isRTOL)[0][0]+1
     
 #---------------------------------------------------------------------
-                        # PFの時 #
+                        # PF Ensambleの時 #
 #---------------------------------------------------------------------
-    # ※ Ensambleと違ってUが必要ない
-    # th(0番目),V(1番目)と発生年数
-    thI,vI,uthvI = 0,1,2
-    flag = False
-    for uI in np.arange(vInd,len(data),uthvI): # 2行飛ばしで読み込み
-        # th V
-        tmpth = np.array(data[uI+thI].strip().split(",")[yInd:]).astype(np.float32)
-        tmpV = np.array(data[uI+vI].strip().split(",")[yInd:]).astype(np.float32)
-        if not flag:
-            th,V = tmpth,tmpV
-            flag = True
-        else:
-            th,V = np.vstack([th,tmpth]),np.vstack([V,tmpV])
     
-    return th,V,B
-
-#---------------------------------------------------------------------
-                        # Ensambleの時 #
-#---------------------------------------------------------------------
-    """
     # U,th,Vの値と発生年数t取得（vInd行から最終行まで）
     uI,thI,vI,uthvI = 0,1,2,3
     flag = False
@@ -131,22 +112,20 @@ def loadABLV(dirPath,logPath,fName):
             U,th,V = np.vstack([U,tmpU]),np.vstack([th,tmpth]),np.vstack([V,tmpV])
     
     return U,th,V,B
-    """
-#---------------------------------------------------------------------
-# ※ Ensambleの時は上の方
-#def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0):
-def convV2YearlyData(th,V,nYear,cell=0,cnt=0):
+    
+#------------------------------------------------------------------------------
+def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0):
     """
     Args:
         nYear: number of year (by simulation) -> 10000
         cell: only one cell for ensamble kalman
     """
     
-#---------------------------------------------------------------------
-                # PFの時 #
-#---------------------------------------------------------------------    
+    #--------------------------------------------------------------------------
+                    # PFの時 #
+    #--------------------------------------------------------------------------    
     # シミュレータのU,th,V 発生時データ -> 年数データ 用
-    yth, yV = np.zeros([nYear,simlateCell]),np.zeros([nYear,simlateCell])
+    yU, yth, yV = np.zeros([nYear,simlateCell]),np.zeros([nYear,simlateCell]),np.zeros([nYear,simlateCell])
     
     # 初め手観測した年
     sYear = np.floor(V[0,yrInd])
@@ -154,29 +133,46 @@ def convV2YearlyData(th,V,nYear,cell=0,cnt=0):
         # 観測値がある場合
         if np.sum(np.floor(V[:,yrInd])==year):
             # 観測値をそのまま代入
+            yU[int(year)] = np.reshape(U[np.floor(U.T[yrInd,:])==year,vInds[0]:],[-1,])
             yth[int(year)] = np.reshape(th[np.floor(th.T[yrInd,:])==year,vInds[0]:],[-1,])
             yV[int(year)] = np.reshape(V[np.floor(V.T[yrInd,:])==year,vInds[0]:],[-1,])
     
         # 観測値がない場合
         else:
             # th(状態変数):地震時t-1の観測値代入,V(速度):0.0
-            yth[int(year)] = yth[int(year)-1,:] # shape=[100000,8]
-            yV[int(year)] = float(0) # shape=[100000,8]
-    #pdb.set_trace()
+            yU[int(year)] = yU[int(year)-1,:] 
+            yth[int(year)] = yth[int(year)-1,:] 
+            yV[int(year)] = float(0) 
+    
+    yU = np.vstack([yU[0,:], yU[1:] - yU[:-1]])
+    
     # シミュレーションが安定した2000年以降を用いる
     if cnt == 0:
-        # [year.shape,] ※3セルでない
-        yYear = np.where(yV[stateYear:,cell]>slip)[0]
-        
-        #　発生年数の確認 -------------------------------------------------------
-        #myPlot.NumberLine(yYear[:5]) # どれぐらい確認したいか指定
-        # ---------------------------------------------------------------------
-        
+        if cell == 2 or cell == 4 or cell == 5:
+            # [year.shape,]
+            yYear = np.where(yV[stateYear:,cell]>slip)[0]
+        elif cell == 245:
+            
+            # ※ Uの発生年数
+            nkYear = np.where(yU[stateYear:,2]>slip)[0]
+            tnkYear = np.where(yU[stateYear:,4]>slip)[0]
+            tkYear = np.where(yU[stateYear:,5]>slip)[0]
+            yYear = [nkYear,tnkYear,tkYear]
+       
         return yth[stateYear:,:], yV[stateYear:,:], yYear
    
     # 途中から始める仕様になってるので、
     elif cnt > 0:
-        return yth, yV, np.reshape(np.floor(V[:,yrInd]).astype(int),[-1])
+        if cell == 2 or cell == 4 or cell == 5:
+            yYear = np.reshape(np.floor(V[:,yrInd]).astype(int),[-1])
+        elif cell == 245:
+            pdb.set_trace()
+            nkYear = np.where(yU[:,2]>slip)[0]
+            tnkYear = np.where(yU[:,4]>slip)[0]
+            tkYear = np.where(yU[:,5]>slip)[0]
+            yYear = [nkYear,tnkYear,tkYear]
+            
+        return yth, yV,yYear
    
 #---------------------------------------------------------------------
                     # Ensambleの時 #
@@ -260,6 +256,8 @@ def MinErrorNankai(gt,yth,yV,pY,cell=0,gtcell=0,nCell=0):
         minMode: 0. after 2000 year, 1. degree of similatery
         pY: eq. year
     """
+    # シミュレーションの値を格納する
+    pred = np.zeros((8000,nCell))
     
 #---------------------------------------------------------------------
                 # PFの時 #
@@ -272,10 +270,8 @@ def MinErrorNankai(gt,yth,yV,pY,cell=0,gtcell=0,nCell=0):
         # ----
         #pdb.set_trace()
         # ----
-        # シミュレーションの値を格納する
-        pred = np.zeros((8000,nCell))
         # 地震が起きた年数だけに値を代入
-        pred[pY,:] = 10
+        pred[pY,:] = 2
         # ----
         #pdb.set_trace()
         flag = False
@@ -293,13 +289,57 @@ def MinErrorNankai(gt,yth,yV,pY,cell=0,gtcell=0,nCell=0):
             # 予測誤差の合計, 回数で割ると当てずっぽうが小さくなる
             yearError = sum(ndist.max(1)/pYear.shape[0])
             # -----------------------------------------------------------------
-
             if not flag:
                 yearErrors = yearError
                 flag = True
             else:
                 yearErrors = np.hstack([yearErrors,yearError])
         
+    # for 3 cell
+    elif cell == 245:
+        # ----
+        # 真値の地震年数
+        gYear_nk = np.where(gt[:,0] > slip)[0]
+        gYear_tnk = np.where(gt[:,1] > slip)[0]
+        gYear_tk = np.where(gt[:,2] > slip)[0]
+        # ----
+        
+        pred[pY[0]] = 2
+        pred[pY[1]] = 2
+        pred[pY[2]] = 2
+        
+        flag = False
+        # Slide each one year 
+        for sYear in np.arange(8000-aYear): 
+            # 予測した地震の年数 + 1400
+            eYear = sYear + aYear
+
+            # 予測した地震年数 only one-cell
+            pYear_nk = np.where(pred[sYear:eYear,0] > slip)[0]
+            pYear_tnk = np.where(pred[sYear:eYear,1] > slip)[0]
+            pYear_tk = np.where(pred[sYear:eYear,2] > slip)[0]
+            
+            # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
+            # for each cell
+            ndist_nk = gauss(gYear_nk,pYear_nk.T)
+            ndist_tnk = gauss(gYear_tnk,pYear_tnk.T)
+            ndist_tk = gauss(gYear_tk,pYear_tk.T)
+
+            # 予測誤差の合計, 回数で割ると当てずっぽうが小さくなる
+            # for each cell
+            yearError_nk = sum(ndist_nk.max(1)/pYear_nk.shape[0])
+            yearError_tnk = sum(ndist_tnk.max(1)/pYear_tnk.shape[0])
+            yearError_tk = sum(ndist_tk.max(1)/pYear_tk.shape[0])
+    
+            # for all cell
+            yearError = yearError_nk + yearError_tnk + yearError_tk
+
+            if not flag:
+                yearErrors = yearError
+                flag = True
+            else:
+                yearErrors = np.hstack([yearErrors,yearError])
+    
         # 最小誤差開始修了年数(1400年)取得
         sInd = np.argmax(yearErrors)
         eInd = sInd + aYear
@@ -310,8 +350,16 @@ def MinErrorNankai(gt,yth,yV,pY,cell=0,gtcell=0,nCell=0):
         print(">>>>>>>>\n")                
         print(f"最大類似度:{np.round(maxSim,6)}\n")
         print(">>>>>>>>\n")
-    #pdb.set_trace()
-    return yth[sInd:eInd,:], yV[sInd:eInd,:], pY[(pY>sInd)&(pY<eInd)]-sInd, np.round(maxSim,6)
+    
+    if cell == 2 or cell == 4 or cell == 5:
+        predYear = pY[(pY>sInd)&(pY<eInd)]-sInd
+    elif cell == 245:
+        nkYear = pY[0][(pY[0]>sInd)&(pY[0]<eInd)]-sInd
+        tnkYear = pY[1][(pY[1]>sInd)&(pY[1]<eInd)]-sInd
+        tkYear = pY[2][(pY[2]>sInd)&(pY[2]<eInd)]-sInd
+        predYear = [nkYear,tnkYear,tkYear]
+    
+    return yth[sInd:eInd,:], yV[sInd:eInd,:], predYear, np.round(maxSim,6)
 
 #---------------------------------------------------------------------
                     # Ensambleの時 #
