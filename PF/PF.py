@@ -12,7 +12,6 @@ import pdb
 import time
 
 import matplotlib.pylab as plt
-
 import numpy as np
 
 from natsort import natsorted
@@ -88,7 +87,7 @@ vInd = 1
 limitNum = 6
 
 # 粒子数
-nP = 2
+nP = 114
 # --------------------------------------------------------------------------- #
 
 # =============================================================================
@@ -360,7 +359,7 @@ if __name__ == "__main__":
             gtJ_tk = np.where(gtV[:,ttI]>0)[0]
             gtJs = [gtJ_nk,gtJ_tnk,gtJ_tk]
         # ------------------------------------------------------------------- #
-        pdb.set_trace()
+        #pdb.set_trace()
         # 真の地震回数に合わせて
         for iS in np.arange(gtJ.shape[0]):
             

@@ -159,7 +159,7 @@ def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0):
             yYear = [nkYear,tnkYear,tkYear]
        
         return yU[stateYear:,:], yth[stateYear:,:], yV[stateYear:,:], yYear
-   
+    
     # 途中から始める仕様になってるので、
     elif cnt > 0:
         if cell == 2 or cell == 4 or cell == 5:
@@ -351,7 +351,8 @@ def MinErrorNankai(gt,yU,yth,yV,pY,cell=0,gtcell=0,nCell=0):
         print(">>>>>>>>\n")                
         print(f"最大類似度:{np.round(maxSim,6)}\n")
         print(">>>>>>>>\n")
-    
+        
+        pdb.set_trace()
     if cell == 2 or cell == 4 or cell == 5:
         predYear = pY[(pY>sInd)&(pY<eInd)]-sInd
     elif cell == 245:
