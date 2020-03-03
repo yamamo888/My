@@ -37,8 +37,11 @@ def cov2corr(cov):
 bsSigma = [[120,100,100],[100,120,100],[100,100,120]]
 mwSigma = [[50,10,10],[10,55,10],[10,10,55]]
 
+#lam, S = np.linalg.eig(bsSigma)
+
 print(bsSigma)
 print(cov2corr(bsSigma))
+#print(cov2corr(lam))
 """
 # multi gauss -----------------------------------------------------------------
 def multinormalSample():
@@ -46,7 +49,8 @@ def multinormalSample():
     sns.set_style("dark")
     
     mu = [standB1,standB2,standB3]
-    bsSigma = [[120,100,100],[100,120,100],[100,100,120]]
+    bsSigma = [[0,250,250],[250,0,250],[250,250,0]]
+    #bsSigma = [[0,50,50],[50,0,50],[50,50,0]]
     
     bs_mgauss = multivariate_normal(mu,bsSigma,500)
     
@@ -58,14 +62,14 @@ def multinormalSample():
     ax = Axes3D(fig)
     
     ax.scatter(bs_mgauss[:,0],bs_mgauss[:,1],bs_mgauss[:,2],c="black",marker="o",alpha=0.5,linewidths=0.5)
-    ax.xaxis.set_major_formatter(FormatStrFormatter("%.0f"))
+    #ax.xaxis.set_major_formatter(FormatStrFormatter("%.0f"))
     
     ax.set_xlabel("nkB")
     ax.set_ylabel("tnkB")
     ax.set_zlabel("tkB")
     
     #plt.show()
-    plt.savefig("bs_sampleB.png")
+    plt.savefig("zero_sampleB.png")
     plt.close()
 # -----------------------------------------------------------------------------
 
