@@ -6,6 +6,7 @@ import pickle
 import pdb
 import time
 import shutil
+import csv
 
 import matplotlib as mpl
 #mpl.use('Agg')
@@ -23,6 +24,7 @@ import PlotPF as myPlot
 yrInd = 1
 yInd = 0
 vInds = [2,3,4,5,6,7,8,9]
+ntI,tntI,ttI = 0,1,2
 simlateCell = 8
 # いいんかな？
 slip = 0
@@ -35,6 +37,8 @@ aYear = 1400
 
 # ---- path ---- #
 copyPath = "logscopy"
+imgPath = "images"
+savetxtPath = "savetxt"
 # -------------- #
 
 #---------------------------------------------------------------------
@@ -114,7 +118,7 @@ def loadABLV(dirPath,logPath,fName):
     return U,th,V,B
     
 #------------------------------------------------------------------------------
-def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0):
+def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0,stYear=0):
     """
     Args:
         nYear: number of year (by simulation) -> 10000
@@ -127,7 +131,7 @@ def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0):
     # シミュレータのU,th,V 発生時データ -> 年数データ 用
     yU, yth, yV = np.zeros([nYear,simlateCell]),np.zeros([nYear,simlateCell]),np.zeros([nYear,simlateCell])
     
-    # 初め手観測した年
+    # 初めて観測した年
     sYear = np.floor(V[0,yrInd])
     for year in np.arange(sYear,nYear):
         # 観測値がある場合
@@ -148,10 +152,7 @@ def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0):
     
     # シミュレーションが安定した2000年以降を用いる
     if cnt == 0:
-        if cell == 2 or cell == 4 or cell == 5:
-            # [year.shape,]
-            yYear = np.where(yV[stateYear:,cell]>slip)[0]
-        elif cell == 245:
+        if cell == 245:
             # ※ Uの発生年数
             nkYear = np.where(deltaU[stateYear:,2]>slip)[0]
             tnkYear = np.where(deltaU[stateYear:,4]>slip)[0]
@@ -162,15 +163,13 @@ def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0):
     
     # 途中から始める仕様になってるので、
     elif cnt > 0:
-        if cell == 2 or cell == 4 or cell == 5:
-            yYear = np.reshape(np.floor(V[:,yrInd]).astype(int),[-1])
-        elif cell == 245:
+        if cell == 245:
             nkYear = np.where(deltaU[:,2]>slip)[0]
             tnkYear = np.where(deltaU[:,4]>slip)[0]
             tkYear = np.where(deltaU[:,5]>slip)[0]
             yYear = [nkYear,tnkYear,tkYear]
-            
-        return yU[:aYear,:], yth[:aYear,:], yV[:aYear,:], yYear
+        #pdb.set_trace()
+        return yU[stYear+stateYear:stYear+stateYear+aYear,:], yth[stYear+stateYear:stYear+stateYear+aYear,:], yV[stYear+stateYear:stYear+stateYear+aYear,:], yYear
    
 #---------------------------------------------------------------------
                     # Ensambleの時 #
@@ -248,7 +247,7 @@ def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0):
 #def MinErrorNankai(gt,yU,yUex,yth,yV,cell=0,mimMode=0):    
 # one cell
 #def MinErrorNankai(gt,yth,yV,pY,cell=0,gtcell=0,nCell=0):
-def MinErrorNankai(gt,yU,yth,yV,pY,cell=0,gtcell=0,nCell=0):
+def MinErrorNankai(gt,yU,yth,yV,pY,cell=0,gtcell=0,nCell=0,label="none",isPlot=False):
     """
     シミュレーションされたデータの真値との誤差が最小の1400年間を抽出
     Args:
@@ -256,6 +255,7 @@ def MinErrorNankai(gt,yU,yth,yV,pY,cell=0,gtcell=0,nCell=0):
         yth,yV: pred UV/theta/V, shape=[8000,8]
         minMode: 0. after 2000 year, 1. degree of similatery
         pY: eq. year
+        isPlot: you want to plot rireki -> isPlot=True
     """
     # シミュレーションの値を格納する
     pred = np.zeros((8000,nCell))
@@ -298,16 +298,17 @@ def MinErrorNankai(gt,yU,yth,yV,pY,cell=0,gtcell=0,nCell=0):
         
     # for 3 cell
     elif cell == 245:
+        #pdb.set_trace()
         # ----
         # 真値の地震年数
-        gYear_nk = np.where(gt[:,0] > slip)[0]
-        gYear_tnk = np.where(gt[:,1] > slip)[0]
-        gYear_tk = np.where(gt[:,2] > slip)[0]
+        gYear_nk = np.where(gt[:,ntI] > slip)[0]
+        gYear_tnk = np.where(gt[:,tntI] > slip)[0]
+        gYear_tk = np.where(gt[:,ttI] > slip)[0]
         # ----
         
-        pred[pY[0]] = 2
-        pred[pY[1]] = 2
-        pred[pY[2]] = 2
+        pred[pY[ntI],ntI] = 30
+        pred[pY[tntI],tntI] = 30
+        pred[pY[ttI],ttI] = 30
         
         flag = False
         # Slide each one year 
@@ -316,9 +317,9 @@ def MinErrorNankai(gt,yU,yth,yV,pY,cell=0,gtcell=0,nCell=0):
             eYear = sYear + aYear
 
             # 予測した地震年数 only one-cell
-            pYear_nk = np.where(pred[sYear:eYear,0] > slip)[0]
-            pYear_tnk = np.where(pred[sYear:eYear,1] > slip)[0]
-            pYear_tk = np.where(pred[sYear:eYear,2] > slip)[0]
+            pYear_nk = np.where(pred[sYear:eYear,ntI] > slip)[0]
+            pYear_tnk = np.where(pred[sYear:eYear,tntI] > slip)[0]
+            pYear_tk = np.where(pred[sYear:eYear,ttI] > slip)[0]
             
             # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
             # for each cell
@@ -352,16 +353,35 @@ def MinErrorNankai(gt,yU,yth,yV,pY,cell=0,gtcell=0,nCell=0):
         print(f"最大類似度:{np.round(maxSim,6)}\n")
         print(">>>>>>>>\n")
         
-        pdb.set_trace()
+        #pdb.set_trace()
     if cell == 2 or cell == 4 or cell == 5:
         predYear = pY[(pY>sInd)&(pY<eInd)]-sInd
     elif cell == 245:
-        nkYear = pY[0][(pY[0]>sInd)&(pY[0]<eInd)]-sInd
-        tnkYear = pY[1][(pY[1]>sInd)&(pY[1]<eInd)]-sInd
-        tkYear = pY[2][(pY[2]>sInd)&(pY[2]<eInd)]-sInd
+        nkYear = pY[ntI][(pY[ntI]>sInd)&(pY[ntI]<eInd)]-sInd
+        tnkYear = pY[tntI][(pY[tntI]>sInd)&(pY[tntI]<eInd)]-sInd
+        tkYear = pY[ttI][(pY[ttI]>sInd)&(pY[ttI]<eInd)]-sInd
         predYear = [nkYear,tnkYear,tkYear]
     
-    return yU[sInd:eInd,:], yth[sInd:eInd,:], yV[sInd:eInd,:], predYear, np.round(maxSim,6)
+    if isPlot:
+        # plot deltaU in pred & gt --------------------------------------------
+        fig, figInds = plt.subplots(nrows=3, sharex=True)
+        for figInd in np.arange(len(figInds)):
+            figInds[figInd].plot(np.arange(1400), pred[sInd:eInd,figInd],color="skyblue")
+            figInds[figInd].plot(np.arange(1400), gt[:,figInd],color="coral")
+        
+        #plt.suptitle(f"nk:{nkYear}\n{tnkYear}\n{tkYear}\n startindex:{sInd}",fontsize="8")
+        plt.suptitle(f"start index:{sInd}")
+        plt.savefig(os.path.join(imgPath,"deltaU",f"{np.round(maxSim,4)}_{label}.png"))
+        plt.close()
+        # ---------------------------------------------------------------------
+        
+        # save eq. ------------------------------------------------------------
+        with open(os.path.join(savetxtPath,"eq",f"{np.round(maxSim,4)}_{label}.txt"),"w") as fp:
+            writer = csv.writer(fp)
+            writer.writerows(predYear)
+        # ---------------------------------------------------------------------
+                   
+    return yU[sInd:eInd,:], yth[sInd:eInd,:], yV[sInd:eInd,:], predYear, np.round(maxSim,6), sInd
 
 #---------------------------------------------------------------------
                     # Ensambleの時 #

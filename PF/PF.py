@@ -30,6 +30,8 @@ cell = int(sys.argv[1])
 dirPath = "logs"
 # In paramHM* file
 paramPath = "parFile"
+# save txt path
+savetxtPath = "savetxt"
 # gt V
 featuresPath = "nankairirekifeature"
 firstEnName = "first*"
@@ -41,12 +43,17 @@ batFile = "PyToCPF.bat"
         
 # --------------------------- parameter --------------------------------- #
 
+isPlot = True
+
 # 南海トラフ巨大地震履歴期間
 gt_Year = 1400
 # シミュレーションの安定した年
 state_Year = 2000
 # シミュレータの年数
 nYear = 10000
+
+# ※8cellにするとき同化タイミング年数
+timings = [84,287,496,761,898,1005]
 
 # only one cell ---------------------------  
 # select gt & obs cell, nankai(2), tonankai(4), tokai(5)
@@ -86,8 +93,13 @@ bInd = 2
 # limit decimal
 limitNum = 6
 
+# 同化回数
+ptime = 6
+
 # 粒子数
-nP = 507
+#nP = 3
+nP = 499
+
 # --------------------------------------------------------------------------- #
 
 # =============================================================================
@@ -95,48 +107,45 @@ nP = 507
 # =============================================================================
 
 # 尤度 ------------------------------------------------------------------------
-def norm_likelihood(y,x,s2=100,standY=0,time=0):
-    
+def norm_likelihood(y,x,s2=100,standYs=0,time=0):
+    """
+    standYs: gt eq. year ex) 1times -> [84,84,84]
+    """
+    #pdb.set_trace()
+    # [3(cell)]
     gauss,years = np.zeros(nCell),np.zeros(nCell)
-    if cell == 2 or cell == 4 or cell == 5:
-        # 1番近い尤度 [1,], plot用, 尤度最大のindex(V,Thの年数を指定するため)
-        gauss = (np.sqrt(2*np.pi*s2))**(-1) * np.exp(-(y-x)**2/(2*s2))
-    
-        return np.max(gauss), x[np.argsort(gauss)[::-1][:3]], x[np.array([np.argmax(gauss)])]
-    
-    elif cell == 245:
-        y_nk = y[ntI][y[ntI]==standY]
-        y_tnk = y[tntI][y[tntI]==standY]
-        y_tk = y[ttI][y[ttI]==standY]
+    if cell == 245:
+        y_nk = y[ntI][y[ntI]==standYs[ntI]]
+        y_tnk = y[tntI][y[tntI]==standYs[tntI]]
+        y_tk = y[ttI][y[ttI]==standYs[ttI]]
         ys = [y_nk,y_tnk,y_tk]
         # 起こってなかったら、0年ヲ入れる
         for i in np.arange(len(ys)):
-            if ys[i] == []:
+            if ys[i].tolist() == []:
                 ys[i] = np.array([0])
-        
+        #pdb.set_trace()
         if not y_nk.tolist() == []: # 地震がそのセルで起きてないとき
             # degree of similatery for each cell
-            gauss_nk = (np.sqrt(2*np.pi*s2))**(-1) * np.exp(-((y_nk-x[ntI])/gt_Year)**2/(2*s2))
+            gauss_nk = 1/(np.sqrt(2*np.pi*s2)) * np.exp(-((y_nk-x[ntI])/10)**2/(2*s2))
             # max of ds year
             year_nk = x[ntI][np.array([np.argmax(gauss_nk)])]
             # max of gauss & years for each cell
             gauss[ntI] = np.max(gauss_nk)
             years[ntI] = year_nk
         if not y_tnk.tolist() == []:
-            gauss_tnk = (np.sqrt(2*np.pi*s2))**(-1) * np.exp(-((y_tnk-x[tntI])/gt_Year)**2/(2*s2))
+            gauss_tnk = 1/(np.sqrt(2*np.pi*s2)) * np.exp(-((y_tnk-x[tntI])/10)**2/(2*s2))
             year_tnk = x[tntI][np.array([np.argmax(gauss_tnk)])]
             gauss[tntI] = np.max(gauss_tnk)
             years[tntI] = year_tnk
         if not y_tk.tolist() == []:
-            gauss_tk = (np.sqrt(2*np.pi*s2))**(-1) * np.exp(-((y_tk-x[ttI])/gt_Year)**2/(2*s2))
+            gauss_tk = 1/(np.sqrt(2*np.pi*s2)) * np.exp(-((y_tk-x[ttI])/10)**2/(2*s2))
             year_tk = x[ttI][np.array([np.argmax(gauss_tk)])]
             gauss[ttI] = np.max(gauss_tk)
             years[ttI] = year_tk
         #pdb.set_trace()
-        # get biggest year
-        indY = np.argmax(gauss)
-        
-        return gauss, np.array([int(years[indY])]),years
+        # sum of gauss, [1,]
+        sumgauss = np.cumsum(gauss)[-1]
+        return gauss, sumgauss, years
 # -----------------------------------------------------------------------------
 
 # 逆関数 -----------------------------------------------------------------------
@@ -153,10 +162,9 @@ def InvF(WC,idex,u):
 # -----------------------------------------------------------------------------
 
 # 層化サンプリング -----------------------------------------------------------------
-def resampling(weights):
+def resampling(initU,weights):
     # weights of index
     idx = np.asanyarray(range(nP))
-    initU = np.random.uniform(0,1/nP)
     thres = [1/nP*i+initU for i in range(nP)]
     wc = np.cumsum(weights)
     k = np.asanyarray([InvF(wc,idx,val) for val in thres])
@@ -171,7 +179,7 @@ def FilterValue(x,wNorm):
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
-def simulate(features,y,pred,t=0,fID=0,standY=0,pTime=0):
+def simulate(features,y,pred,t=0,pTime=0):
     """
     [Args]
         features: システムモデル値xt, th[1400,粒子], V[1400,粒子]
@@ -180,31 +188,28 @@ def simulate(features,y,pred,t=0,fID=0,standY=0,pTime=0):
     """
     #pdb.set_trace()
     # 1. 初期化 ---------------------------------------------------------------
-    if cell == 2 or cell == 4 or cell == 5:
+    if cell == 245:
         # 時系列データ数
-        pf_time = y.shape[0] 
-    elif cell == 245:
         pf_time = pTime
-        
+    
     # 地震発生年数保存　[すべての時系列,100,粒子数,cell数]
     x = np.zeros((pf_time,pred.shape[0],nP,nCell))
-    # 状態ベクトル　※1セルの時おかしいかも
+    # 状態ベクトル theta,v,year　※1セルの時おかしいかも
     ThVec = np.zeros((pf_time,nP,nCell))
     VVec = np.zeros((pf_time,nP,nCell))
-    # 同化年数
-    yearsVec = np.zeros((pf_time,nP,nCell))
+    yearVec = np.zeros((pf_time,nP,nCell))
     # リサンプリング後の特徴量ベクトル
     xResampled = np.zeros((pf_time,nParam,nP,nCell))
-    # 重み
+    # 全部の重み
     w = np.zeros((pf_time,nP,nCell))
+    # 重み
+    maxW = np.zeros((pf_time,nP))
     wNorm = np.zeros((pf_time,nP,nCell))
+    # -------------------------------------------------------------------------
     #pdb.set_trace()
     # -------------------------------------------------------------------------
-    if cell == 2 or cell == 4 or cell == 5:
+    if cell == 245:
         # ※ 地震発生年数 [地震発生年数,粒子数]
-        x[t] = pred
-    elif cell == 245:
-        # nankai,tonakai,tokai
         x[t,:,:,ntI] = pred[:,:,ntI]
         x[t,:,:,tntI] = pred[:,:,tntI]
         x[t,:,:,ttI] = pred[:,:,ttI]
@@ -215,121 +220,98 @@ def simulate(features,y,pred,t=0,fID=0,standY=0,pTime=0):
         # =====================================================================
         #         尤度計算
         # =====================================================================
-        if cell == 2 or cell == 4 or cell == 5:    
+        if cell == 245:
             # predの大きさをそろえてるのを予測した年数だけにする [地震発生年数(可変),]
-            yhat = (x[t,x[t,:,i]>0,i]).astype(int)
-            
-            # 尤度は地震発生年数、重みとかけるのは状態ベクトル
-            # 2.c & 2.d 各粒子の尤度と重み ---------------------------------------
-            # sortW: 地震発生年数(短い順) kInd: 尤度の高かった年数
-            weight, sortW, kInd = norm_likelihood(y[t],yhat)
-            w[t,i] = weight
-            # -----------------------------------------------------------------
-            
-            # 2.a & 2.b システムノイズ ---------------------------------------------
-            Thnoise = np.random.normal(0,0.01*np.mean(features[0][kInd]))
-            Vnoise = np.random.normal(0,0.01*np.mean(features[1][kInd]))
-            # -----------------------------------------------------------------
-            
-            # 尤度の一番高かった年数に合わせる 1400 -> 1, 状態ベクトル + システムノイズ
-            # ※ not noise of b
-            ThVec[t,i] = features[0][kInd,i] + np.abs(Thnoise)
-            VVec[t,i] = features[1][kInd,i] + np.abs(Vnoise)
-            
-            if not flag:
-                sortWs = sortW[:,np.newaxis]
-                kInds = kInd[:,np.newaxis]
-                flag = True
-            else:
-                sortWs = np.hstack([sortWs,sortW[:,np.newaxis]])
-                kInds = np.hstack([kInds,kInd[:,np.newaxis]])
-        # ---------------------------------------------------------------------
-        elif cell == 245:
             yhat_nk = (x[t,x[t,:,i,ntI]>0,i,ntI]).astype(int)
             yhat_tnk = (x[t,x[t,:,i,tntI]>0,i,tntI]).astype(int)
             yhat_tk = (x[t,x[t,:,i,ttI]>0,i,ttI]).astype(int)
-            yhat = [yhat_nk,yhat_tnk,yhat_tk]
             
-            weight, kInd, years = norm_likelihood(y,yhat,standY=standY,time=t)
+            if t > 0:
+                # 2000年 + 同化した年数
+                standInds = sYears + state_Year
+                # 1400年のスケールに合わせる
+                yhat_nk = yhat_nk - standInds[i]
+                yhat_tnk = yhat_tnk - standInds[i]
+                yhat_tk = yhat_tk - standInds[i]
+                #pdb.set_trace()
+            yhat = [yhat_nk,yhat_tnk,yhat_tk]
+            #pdb.set_trace()
+            # 尤度は地震発生年数、重みとかけるのは状態ベクトル
+            # 2.c & 2.d 各粒子の尤度と重み ---------------------------------------
+            standYs = [y[ntI][t],y[tntI][t],y[ttI][t]]
+            # kInd: 尤度の高かった年数
+            weight, maxweight, years = norm_likelihood(y,yhat,standYs=standYs,time=t)
             weight_nk,weight_tnk,weight_tk = weight[ntI],weight[tntI],weight[ttI]
+            # -----------------------------------------------------------------
             
             w[t,i,ntI] = weight_nk
             w[t,i,tntI] = weight_tnk
             w[t,i,ttI] = weight_tk
-            yearsVec[t,i,:] = years
+            maxW[t,i] = maxweight
             #pdb.set_trace()
-            # 2.a & 2.b システムノイズ --------------------------------------------  
-            # [3,]
-            Thnoise = np.random.normal(0,0.01*np.mean(features[0][kInd],1))
-            Vnoise = np.random.normal(0,0.01*np.mean(features[1][kInd],1))
-            # -----------------------------------------------------------------
-            
-            for indC in [ntI,tntI,ttI]:
-                # 尤度の一番高かった年数に合わせる 1400 -> 1, 状態ベクトル + システムノイズ
-                ThVec[t,i,indC] = features[0][kInd,i,indC] + np.abs(Thnoise[0][indC])
-                VVec[t,i,indC] = features[1][kInd,i,indC] + np.abs(Vnoise[0][indC])
-            #pdb.set_trace()
+            for indY,indC in zip(years,[ntI,tntI,ttI]):
+                # 各セルで尤度の一番高かった年数に合わせる 1400 -> 1
+                # ※ 別々の同化タイミングになる
+                ThVec[t,i,indC] = features[0][int(years[indC]),i,indC]
+                VVec[t,i,indC] = features[1][int(years[indC]),i,indC]
+           
             if not flag:
-                kInds = kInd
+                yearInds = years
                 flag = True
             else:
-                # [perticle,]
-                kInds = np.hstack([kInds,kInd])
-    #pdb.set_trace()
+                # [perticle,3]
+                yearInds = np.vstack([yearInds,years])
+    
+    yearVec[t] = yearInds
     # 規格化 -------------------------------------------------------------------
-    if cell == 2 or cell == 4 or cell == 5:        
-        wNorm[t] = w[t]/np.sum(w[t])
-    elif cell == 245:
+    if cell == 245:
+        # [perticles,3]
         wNorm[t] = w[t]/np.sum(w[t],0)
     # -------------------------------------------------------------------------
-    if cell == 2 or cell == 4 or cell == 5:        
-        # =====================================================================
-        #         リサンプリング
-        # =====================================================================
-        # ※ 状態ベクトルを resampling
-        k = resampling(wNorm[t])
-        #xResample[t+1] = x[t+1,k]
-        # theta, v, b
-        xResampled[t,thInd,:] = ThVec[t,k]
-        xResampled[t,vInd,:] = VVec[t,k]
-        # ---------------------------------------------------------------------
-    elif cell == 245:
+    
+    # save likelihood txt -----------------------------------------------------
+    np.savetxt(os.path.join(savetxtPath,"lh",f"sum_lh_{t}.txt"),maxW[t],fmt="%4f")
+    np.savetxt(os.path.join(savetxtPath,"lh",f"lh_{t}.txt"),w[t])
+    # -------------------------------------------------------------------------
+    #pdb.set_trace()
+    # =========================================================================
+    #         リサンプリング
+    # =========================================================================
+    if cell == 245:
         #pdb.set_trace()
-        k_nk = resampling(wNorm[t,:,ntI])
-        k_tnk = resampling(wNorm[t,:,tntI])
-        k_tk = resampling(wNorm[t,:,ttI])
-        
+        initU = np.random.uniform(0,1/nP)
+        # ※ 状態ベクトルを resampling 全て同じinitU       
+        k_nk = resampling(initU,wNorm[t,:,ntI])
+        k_tnk = resampling(initU,wNorm[t,:,tntI])
+        k_tk = resampling(initU,wNorm[t,:,ttI])
+        # theta, v, b
         xResampled[t,thInd,:,ntI] = ThVec[t,k_nk,ntI]
         xResampled[t,thInd,:,tntI] = ThVec[t,k_tnk,tntI]
         xResampled[t,thInd,:,ttI] = ThVec[t,k_tk,ttI]
         
         xResampled[t,vInd,:,ntI] = VVec[t,k_nk,ntI]
-        xResampled[t,vInd,:,tntI] = VVec[t,k_nk,tntI]
-        xResampled[t,vInd,:,ttI] = VVec[t,k_nk,ttI]
+        xResampled[t,vInd,:,tntI] = VVec[t,k_tnk,tntI]
+        xResampled[t,vInd,:,ttI] = VVec[t,k_tk,ttI]
         
         xResampled[t,bInd,:,ntI] = features[bInd][k_nk,ntI]
-        xResampled[t,bInd,:,tntI] = features[bInd][k_nk,tntI]
-        xResampled[t,bInd,:,ttI] = features[bInd][k_nk,ttI]
+        xResampled[t,bInd,:,tntI] = features[bInd][k_tnk,tntI]
+        xResampled[t,bInd,:,ttI] = features[bInd][k_tk,ttI]
         
-        #pdb.set_trace()
     print(f"---- 【{t}】 times ----\n")
     #print(f"重み:",wNorm[t])
-    print("before xVec | resampling xVec\n")
-    print(f"{np.min(ThVec[t])} {np.mean(ThVec[t])} {np.max(ThVec[t])} | {np.min(xResampled[t,thInd])} {np.mean(xResampled[t,thInd])} {np.max(xResampled[t,thInd])}")
-    print(f"{np.min(VVec[t])} {np.mean(VVec[t])} {np.max(VVec[t])} | {np.min(xResampled[t,vInd])} {np.mean(xResampled[t,vInd])} {np.max(xResampled[t,vInd])}")
-    print("-------------------------\n")
+    #print("before xVec | resampling xVec\n")
+    #print(f"{np.min(ThVec[t])} {np.mean(ThVec[t])} {np.max(ThVec[t])} | {np.min(xResampled[t,thInd])} {np.mean(xResampled[t,thInd])} {np.max(xResampled[t,thInd])}")
+    #print(f"{np.min(VVec[t])} {np.mean(VVec[t])} {np.max(VVec[t])} | {np.min(xResampled[t,vInd])} {np.mean(xResampled[t,vInd])} {np.max(xResampled[t,vInd])}")
+    #print("-------------------------\n")
     #pdb.set_trace()
     # 発生年数 plot ------------------------------------------------------------
-    myPlot.NumberLine(np.array([standY]),yearsVec[t],time=t,label=f"years_{t}")
+    myPlot.NumberLine(standYs,yearVec[t],label=f"best_years_{t}")
     # -------------------------------------------------------------------------
-    # 尤度 plot ------------------------------------------------------------
-    myPlot.HistLikelihood(w[t],time=t,label=f"likelihood_{t}")
+    # 尤度 plot ---------------------------------------------------------------
+    #myPlot.HistLikelihood(maxW[t],label=f"best_likelihood_{t}")
     # -------------------------------------------------------------------------
-    #pdb.set_trace()
-    if cell == 2 or cell == 4 or cell == 5:        
-        return xResampled[t], np.reshape(kInds,[-1])
-    elif cell == 245:
-        return xResampled[t], kInds
+    if cell == 245:
+        return xResampled[t], yearVec[t].astype(int)
     
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -359,16 +341,18 @@ if __name__ == "__main__":
             # gt eq. in cell
             gtJ = np.where(gtV[:,gtcell]>0)[0]
         elif cell == 245:
+            # no.4まで学習(津波地震ややこしいから含まない) [11,] [84,287,496or499,761,898,|1005,1107,1254,1344,1346]
             gtJ = np.unique(np.where(gtV>0)[0])
-            gtJ_nk = np.where(gtV[:,ntI]>0)[0]
-            gtJ_tnk = np.where(gtV[:,tntI]>0)[0]
-            gtJ_tk = np.where(gtV[:,ttI]>0)[0]
+            gtJ_nk = np.where(gtV[:,ntI]>0)[0] # [84,287,499,761,898,1005,1107,1254,1346]
+            gtJ_tnk = np.where(gtV[:,tntI]>0)[0] # [84,287,496,761,898,1005,1107,1254,1344]
+            gtJ_tk = np.where(gtV[:,ttI]>0)[0] # [84,287,496,761,898,1107,1254]
             gtJs = [gtJ_nk,gtJ_tnk,gtJ_tk]
         # ------------------------------------------------------------------- #
         #pdb.set_trace()
-        # 真の地震回数に合わせて
-        for iS in np.arange(gtJ.shape[0]):
-            
+        ssYears = np.zeros(nP) # 2000年始まり
+        # 真の地震回数に合わせて 学習期間
+        for iS in np.arange(ptime-1):
+            print(f"*** gt eq.: {gtJs[ntI][iS]} {gtJs[tntI][iS]} {gtJs[ttI][iS]} ***")
             # ------ file 読み込み, 最初は初期アンサンブル読み取り (logs\\*) ------- # 
             files = glob.glob(filePath)
             if iS > 0: # not first ensemble
@@ -377,7 +361,7 @@ if __name__ == "__main__":
             
             # ======================== 粒子 作成 ============================= #
             flag,flag1,flag2 = False,False,False
-            for fID in np.arange(len(files)):
+            for fID in np.arange(nP):
                 
                 # file 読み込み ------------------------------------------------
                 print('reading',files[fID])
@@ -392,23 +376,22 @@ if __name__ == "__main__":
                 # ------------------------- Error --------------------------- #
                 myData.Negative(V,logFullPath,fID) # すべり速度マイナス判定
                 # ----------------------------------------------------------- #
-                # pJ: 地震が起きた年(2000年=0), [8000,8]
-                yU, yth, yV, pJ_all = myData.convV2YearlyData(U,th,V,nYear,cell=cell,cnt=iS) 
-                # -------------------------------------------------------------
                 #pdb.set_trace()
                 # 1回目 -------------------------------------------------------
                 if iS == 0:
-                    if cell == 2 or cell == 4 or cell == 5:
-                        # 類似度比較 最小誤差年取得 ----------------------------- 
-                        # th,V [1400,8] これは1番初めだけ, pJ:発生年数(2000年+sInd=0)
-                        yth, yV, pJ_all, maxSim = myData.MinErrorNankai(gtV,yth,yV,pJ_all,cell=cell,gtcell=gtcell,nCell=nCell)
-                    elif cell == 245:
-                        yU, yth, yV, pJ_all, maxSim = myData.MinErrorNankai(gtV,yU,yth,yV,pJ_all,cell=cell,nCell=nCell)
-                    
-                if cell == 2 or cell == 4 or cell == 5:
+                    # 類似度比較 最小誤差年取得 --------------------------------- 
+                    # th,V [1400,8] これは1番初めだけ, sYear: 2000年以降(次のファイルの開始年数)
+                    if cell == 245:
+                        # pJ: 地震が起きた年(2000年=0), [8000,8]
+                        yU, yth, yV, pJ_all = myData.convV2YearlyData(U,th,V,nYear,cell=cell,cnt=iS) 
+                                
+                        yU, yth, yV, pJ_all, maxSim, sYear = myData.MinErrorNankai(gtV,yU,yth,yV,pJ_all,cell=cell,nCell=nCell,label=f"{np.round(B[nI],limitNum)}_{np.round(B[tnI],limitNum)}_{np.round(B[tI],limitNum)}",isPlot=isPlot)
+                
+                if iS > 0:
+                        yU, yth, yV, pJ_all = myData.convV2YearlyData(U,th,V,nYear,cell=cell,cnt=iS,stYear=int(ssYears[fID])) 
+                
+                if cell == 245:
                     # concatするために長さそろえる
-                    pJ = np.pad(pJ_all,(0,200-pJ_all.shape[0]),"constant",constant_values=0)
-                elif cell == 245:
                     nkJ = np.pad(pJ_all[0],(0,200-pJ_all[0].shape[0]),"constant",constant_values=0)
                     tnkJ = np.pad(pJ_all[1],(0,200-pJ_all[1].shape[0]),"constant",constant_values=0)
                     tkJ = np.pad(pJ_all[2],(0,200-pJ_all[2].shape[0]),"constant",constant_values=0)
@@ -417,29 +400,7 @@ if __name__ == "__main__":
                 # -------------------------------------------------------------
                 #pdb.set_trace()
                 # 状態ベクトル ---------------------------------------------------
-                if cell == 2 or cell == 4 or cell == 5:
-                    if not flag1:
-                        # [1400,8,粒子]
-                        yth_all = yth[:,:,np.newaxis]
-                        yV_all = yV[:,:,np.newaxis]
-                        B_all = B
-                        # [1400,粒子]
-                        yths = yth[:,cell,np.newaxis]
-                        yVs = yV[:,cell,np.newaxis]
-                        # 年数
-                        pJs = pJ[:,np.newaxis] 
-                        
-                        flag1 = True
-                    else:
-                        yth_all = np.concatenate([yth_all,yth[:,:,np.newaxis]],2)
-                        yV_all = np.concatenate([yV_all,yV[:,:,np.newaxis]],2)
-                        B_all = np.vstack([B_all,B])
-                        
-                        yths = np.hstack([yths,yth[:,cell,np.newaxis]])
-                        yVs = np.hstack([yVs,yV[:,cell,np.newaxis]])
-                        
-                        pJs = np.hstack([pJs,pJ[:,np.newaxis]])
-                elif cell == 245:
+                if cell == 245:
                     if not flag1:
                         # [1400,8,粒子]
                         yth_all = yth[:,:,np.newaxis]
@@ -448,7 +409,7 @@ if __name__ == "__main__":
                         B_all = B
                         # 年数
                         pJs = pJ[:,np.newaxis] 
-                        
+                        sYears = sYear
                         flag1 = True
                     else:
                         yth_all = np.concatenate([yth_all,yth[:,:,np.newaxis]],2)
@@ -457,6 +418,7 @@ if __name__ == "__main__":
                         B_all = np.vstack([B_all,B])
                     
                         pJs = np.hstack([pJs,pJ[:,np.newaxis]])
+                        sYears = np.vstack([sYears,sYear])
                 # -------------------------------------------------------------
             if cell == 245:
                 # [1400,perticle,3(cell)]
@@ -466,44 +428,25 @@ if __name__ == "__main__":
             #pdb.set_trace()
             Xt = [yths,yVs,Bs]
             B_all = B_all.T
+            if iS == 0:
+                ssYears = sYears
             # =============================================================== #
             #pdb.set_trace()
             # -------------------------- Call PF ---------------------------- #
             print("---- Start PF !! ----\n")
-            if iS >= 0:
-                if cell == 2 or cell == 4 or cell == 5:
-                    # resampled: [theta,V,B,perticle] kInds: index, [perticle,]
-                    resampled, kInds = simulate(Xt,gtJ,pJs,t=iS,fID=tfID)    
-                elif cell == 245:
-                   # resampled [Th/V,perticles,3(cell)]
-                   resampled, kInds = simulate(Xt,gtJs,pJs,t=iS,fID=tfID,standY=gtJ[iS],pTime=gtJ.shape[0])        
+            if cell == 245:
+               # resampled [Th/V,perticles,3(cell)]
+               resampled, kInds = simulate(Xt,gtJs,pJs,t=iS,pTime=ptime)        
             # --------------------------------------------------------------- # 
             #pdb.set_trace()
             # リサンプリングした値を代入 ---------------------------------------------
-            if cell == 2 or cell == 4 or cell == 5:
-                # 同化年数だけの Th,V,B
-                for i in np.arange(kInds.shape[0]):
-                    tmp1 = yth_all[kInds[i],:,i]
-                    tmp2 = yV_all[kInds[i],:,i]
-                    if not flag2:
-                        yth_rYear = tmp1[:,np.newaxis]
-                        yV_rYear = tmp2[:,np.newaxis]
-                        flag2 = True
-                    else:
-                        yth_rYear = np.concatenate([yth_rYear,tmp1[:,np.newaxis]],1)
-                        yV_rYear = np.concatenate([yV_rYear,tmp2[:,np.newaxis]],1)
-            
-                # [8cell,perticle]
-                yth_rYear[cell] = resampled[thInd]
-                yV_rYear[cell] = resampled[vInd]
-                
-            elif cell == 245:
+            if cell == 245:
                 # 8セル分のth,vにresampleした値を代入(次の初期値の準備)
-                for i in np.arange(kInds.shape[0]):
-                    # U,theta,V yth_all [1400,8(cell),perticle] -> [8,] -> [8,perticle]
-                    tmp0 = yU_all[kInds[i],:,i]
-                    tmp1 = yth_all[kInds[i],:,i]
-                    tmp2 = yV_all[kInds[i],:,i]
+                for i in np.arange(nP): # perticle分
+                    # U,theta,V,yth_all [1400,8(cell),perticle] -> [8,] -> [perticles,8]
+                    tmp0 = yU_all[timings[iS],:,i]
+                    tmp1 = yth_all[timings[iS],:,i]
+                    tmp2 = yV_all[timings[iS],:,i]
                     
                     if not flag2:
                         yU_rYear = tmp0
@@ -514,8 +457,8 @@ if __name__ == "__main__":
                         yU_rYear = np.vstack([yU_rYear,tmp0])
                         yth_rYear = np.vstack([yth_rYear,tmp1])
                         yV_rYear = np.vstack([yV_rYear,tmp2])
-                
-                # for nankai,tonankai,tokai [perticles,8(cell)]
+                #pdb.set_trace()
+                # [perticles,8(cell)] <- [th/v/b,perticles,3(cell)]
                 yth_rYear.T[1] = resampled[thInd,:,ntI]
                 yth_rYear.T[nI] = resampled[thInd,:,ntI]
                 yth_rYear.T[3] = resampled[thInd,:,tntI]
@@ -542,8 +485,8 @@ if __name__ == "__main__":
                 # 3 受け渡された番号のparfileを読み取りsimulation実行
             # --------------------------------------------------------------- #
             FLAG = False
-            for lNum in np.arange(resampled.shape[1]): # perticleの分
-                
+            for lNum in np.arange(nP): # perticleの分
+                #pdb.set_trace()
                 # ========================= 1 =============================== #
                 # defaultparfileファイルを読み込む
                 with open("parfileHM031def.txt","r") as fp:
@@ -552,8 +495,8 @@ if __name__ == "__main__":
                 alllines = [alllines[i].strip().split(",") for i in np.arange(len(alllines))]
                 # ※ gtの発生年数に合わせる
                 # 計算ステップ指定 (各データで異なる)
-                alllines[0][0] = str(gtJ[iS] + 1)
-                alllines[0][1] = str(1400)
+                alllines[0][0] = str(ssYears[lNum][0] + state_Year)
+                alllines[0][1] = str(ssYears[lNum][0] + state_Year + gt_Year)
                 #pdb.set_trace()
                 # パラメータ設定行抽出
                 lines = alllines[Sfl:Efl]
