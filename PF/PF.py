@@ -227,12 +227,16 @@ def simulate(features,y,pred,t=0,pTime=0):
             yhat_tk = (x[t,x[t,:,i,ttI]>0,i,ttI]).astype(int)
             
             if t > 0:
-                # 2000年 + 同化した年数
-                standInds = sYears + state_Year
-                # 1400年のスケールに合わせる
-                yhat_nk = yhat_nk - standInds[i]
-                yhat_tnk = yhat_tnk - standInds[i]
-                yhat_tk = yhat_tk - standInds[i]
+                try:
+                    # 2000年 + 同化した年数
+                    standInds = ssYears[i] + state_Year
+                    # 1400年のスケールに合わせる
+                    yhat_nk = yhat_nk - standInds
+                    yhat_tnk = yhat_tnk - standInds
+                    yhat_tk = yhat_tk - standInds
+                    print(yhat_tk)
+                except IndexError:
+                    pdb.set_trace()
                 #pdb.set_trace()
             yhat = [yhat_nk,yhat_tnk,yhat_tk]
             #pdb.set_trace()
@@ -248,13 +252,14 @@ def simulate(features,y,pred,t=0,pTime=0):
             w[t,i,tntI] = weight_tnk
             w[t,i,ttI] = weight_tk
             maxW[t,i] = maxweight
-            #pdb.set_trace()
             for indY,indC in zip(years,[ntI,tntI,ttI]):
                 # 各セルで尤度の一番高かった年数に合わせる 1400 -> 1
                 # ※ 別々の同化タイミングになる
-                ThVec[t,i,indC] = features[0][int(years[indC]),i,indC]
-                VVec[t,i,indC] = features[1][int(years[indC]),i,indC]
-           
+                try:
+                    ThVec[t,i,indC] = features[0][int(years[indC]),i,indC]
+                    VVec[t,i,indC] = features[1][int(years[indC]),i,indC]
+                except IndexError:
+                    pdb.set_trace()
             if not flag:
                 yearInds = years
                 flag = True
@@ -354,9 +359,15 @@ if __name__ == "__main__":
         for iS in np.arange(ptime-1):
             print(f"*** gt eq.: {gtJs[ntI][iS]} {gtJs[tntI][iS]} {gtJs[ttI][iS]} ***")
             # ------ file 読み込み, 最初は初期アンサンブル読み取り (logs\\*) ------- # 
-            files = glob.glob(filePath)
-            if iS > 0: # not first ensemble
-                files = [s for s in files if "log_{}_".format(iS-1) in s]
+            allfiles = glob.glob(filePath)
+            files = []
+            if iS == 0:
+                for lf in natsorted(allfiles):
+                    files.append(lf)
+            else: # not first ensemble
+                logfiles = [s for s in allfiles if "log_{}_".format(iS-1) in s]
+                for lf in natsorted(logfiles):
+                    files.append(lf)
             # --------------------------------------------------------------- #
             
             # ======================== 粒子 作成 ============================= #
@@ -366,16 +377,13 @@ if __name__ == "__main__":
                 # file 読み込み ------------------------------------------------
                 print('reading',files[fID])
                 file = os.path.basename(files[fID])
-                logFullPath = os.path.join(dirPath,logsPath,file)
-                data = open(logFullPath).readlines()
+                #logFullPath = os.path.join(dirPath,logsPath,file)
+                #data = open(logFullPath).readlines()
                 # -------------------------------------------------------------
                 
                 # 特徴量読み込み -----------------------------------------------
                 # loading U,theta,V,B [number of data,10]
                 U,th,V,B = myData.loadABLV(dirPath,logsPath,file)
-                # ------------------------- Error --------------------------- #
-                myData.Negative(V,logFullPath,fID) # すべり速度マイナス判定
-                # ----------------------------------------------------------- #
                 #pdb.set_trace()
                 # 1回目 -------------------------------------------------------
                 if iS == 0:
@@ -392,9 +400,9 @@ if __name__ == "__main__":
                 
                 if cell == 245:
                     # concatするために長さそろえる
-                    nkJ = np.pad(pJ_all[0],(0,200-pJ_all[0].shape[0]),"constant",constant_values=0)
-                    tnkJ = np.pad(pJ_all[1],(0,200-pJ_all[1].shape[0]),"constant",constant_values=0)
-                    tkJ = np.pad(pJ_all[2],(0,200-pJ_all[2].shape[0]),"constant",constant_values=0)
+                    nkJ = np.pad(pJ_all[0],(0,300-pJ_all[0].shape[0]),"constant",constant_values=0)
+                    tnkJ = np.pad(pJ_all[1],(0,300-pJ_all[1].shape[0]),"constant",constant_values=0)
+                    tkJ = np.pad(pJ_all[2],(0,300-pJ_all[2].shape[0]),"constant",constant_values=0)
                     # [100,3(cell)]
                     pJ = np.concatenate((nkJ[:,np.newaxis],tnkJ[:,np.newaxis],tkJ[:,np.newaxis]),1)
                 # -------------------------------------------------------------
