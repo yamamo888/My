@@ -6,6 +6,7 @@ import numpy as np
 
 import matplotlib.pylab as plt
 import matplotlib.pyplot as plt2
+from mpl_toolkits.mplot3d import Axes3D
 import pylab
 import seaborn as sns
 
@@ -19,6 +20,7 @@ lhPath = "lhs"
 
 # parameter -------------------------------------------------------------------
 cellname = ["nk","tnk","tk"]
+ntI,tntI,ttI = 0,1,2
 # -----------------------------------------------------------------------------
 
 # 数直線 -----------------------------------------------------------------------
@@ -63,7 +65,7 @@ def NumberLine(gt,pred,label="auto"):
 # -----------------------------------------------------------------------------
 
 # ヒストグラム --------------------------------------------------------------------
-def HistLikelihood(weights,time=0,label="auto"):
+def HistLikelihood(weights,label="auto",color="black"):
     #pdb.set_trace()
     
     # mean & var for label
@@ -71,12 +73,43 @@ def HistLikelihood(weights,time=0,label="auto"):
     lhVar = np.var(weights,0)
     
     sns.set_style("dark")
-    sns.distplot(weights,kde=False,rug=False) 
+    sns.distplot(weights,kde=False,rug=False,color=color) 
+    
+    plt.xlim([0,0.12])
+    plt.ylim([0,175])
     plt.suptitle(f"mean:{lhMean}\n var:{lhVar}")
     plt.savefig(os.path.join(imgPath,lhPath,f"{label}.png"))
     plt.close()
 
 # -----------------------------------------------------------------------------
+    
+# 散布図 -----------------------------------------------------------------------
+def scatter3D(x,y,z,rangeP,title="none",label="none"):
+    #pdb.set_trace()
+    #print("-----")
+    #print(np.min(x),np.min(y),np.min(z))
+    #print(np.max(x),np.max(y),np.max(z))
+    sns.set_style("dark")
+
+    fig = plt.figure()
+    ax = Axes3D(fig)
+    ax.scatter(x,y,z,c="black",marker="o",alpha=0.5,linewidths=0.5)
+    
+    ax.set_xlabel("nk")
+    ax.set_ylabel("tnk")
+    ax.set_zlabel("tk")
+    
+    ax.set_xlim(rangeP[0][ntI],rangeP[1][ntI])
+    ax.set_ylim(rangeP[0][tntI],rangeP[1][tntI])
+    ax.set_zlim(rangeP[0][ttI],rangeP[1][ttI])
+
+    ax.set_title(f"{title}")
+    
+    plt.savefig(os.path.join(imgPath,"PF",f"{label}.png"))
+    #plt.show()
+    plt.close()
+# -----------------------------------------------------------------------------
+
 
         
         
