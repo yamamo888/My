@@ -16,16 +16,12 @@ from natsort import natsorted
 import subprocess
 
 # ---------------------------- Path ------------------------------
-
 visualPath = "visualization"
 scatterPath = "scatter"
 resultsPath = "results"
 savedpklPath = "nankaipicklessoft"
 savedpklPath = "nankaipickles"
-#savedpklPath = "nankaipickles_halfhalfadapt"
-orPath = "nankaipicklesACML"
 # -----------------------------------------------------------------
-
 
 # -----------------------------------------------------------------
 def Ttest(pred1,pred2):
@@ -286,9 +282,8 @@ def HistPercentile(gt,pred,mode="none"):
 
     plt.savefig(f"{label}.png")
     plt.close()
-# ----------------- mv file GoogleDrive/dirName -------------------
-def ToGoogle(dataName="none",dirName="none"):
-    subprocess.run("mv",f"{dataName}",f"{dirName}")
+
+# -----------------------------------------------------------------
 """
 # ----------------------- Command ---------------------------------
 # number of bottom data
@@ -312,6 +307,7 @@ pklfullPath = []
 for path in natsorted(paths):
     pklfullPath.append(path)    
 
+pdb.set_trace()
 # only Ordinary Regression pkl saved path
 orpklpath = glob.glob(os.path.join(resultsPath,orPath,filePath))
 # loading OR pkl data
@@ -324,7 +320,7 @@ with open(orpklpath[-1],"rb") as fp:
     teloss_or = pickle.load(fp)
 label = orpklpath[-1].split("/")[-1][:-4]
 #BasicStatistics(teY,predY_or,mode=f"{label}")
-BottomScatter(teY,predY_or,predY_or,mode=f"{label}")
+#BottomScatter(teY,predY_or,predY_or,mode=f"{label}")
 """
 # loading Anc pkl data
 #with open(pklfullPath[4],"rb") as fp:
