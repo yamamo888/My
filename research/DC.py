@@ -19,53 +19,6 @@ import csv
 
 import PlotPF as myPlot
 
-# ---- command ---- #
-cell = int(sys.argv[1])
-mode = int(sys.argv[2])
-# ----------------- #
-
-# ---- bool ---- #
-ismakingbestPath = False
-ismakingbestpartPath = False
-issavebestPath = False
-ismakingminPath = True
-# -------------- #
-
-# ---- path ---- #
-logsPath = 'logs'
-imgPath = "images"
-# simulated path
-dataPath = 'b2b3b4b5b60-100'
-#dataPath = "tmp"
-#dataPath = "190"
-featurePath = "nankairirekifeature"
-dsdirPath = "DS_path"
-fname = '*.txt' 
-# -------------- #
-
-# ---- params ---- #
-if mode == 0:
-    # gt cell index
-    if cell == 2:
-        gtcell = 0
-    elif cell == 4:
-        gtcell = 1
-    elif cell == 5:
-        gtcell = 2
-    
-# eq. year in logs     
-yInd = 1
-vInds = [2,3,4,5,6,7,8,9]
-simlateCell = 8
-slip = 0
-nCell = 8
-# 安定した年
-stateYear = 2000
-# assimilation period
-aYear = 1400
-nYear = 10000
-# ---------------- #
-
 # -----------------------------------------------------------------------------
 # makingData.pyとはちょっと違う
 def loadABLV(logFullPath):
@@ -120,6 +73,34 @@ def convV2YearlyData(V):
     yV = np.concatenate((yV[stateYear:,2,np.newaxis],yV[stateYear:,4,np.newaxis],yV[stateYear:,5,np.newaxis]),1)
     
     return yV
+
+# 間隔　------------------------------------------------------------------------
+def convV2IntervalData(V):
+    
+    sYear = np.floor(V[0,yInd])
+    yV = np.zeros([nYear,nCell])
+    
+    for year in np.arange(sYear,nYear):
+        if np.sum(np.floor(V[:,yInd])==year):
+            yV[int(year)] = V[np.floor(V[:,yInd])==year,vInds[0]:]
+        else:
+            yV[int(year)] = yV[int(year)-1,:] # shape=[100000,8]
+            
+    yV = np.concatenate((yV[stateYear:,2,np.newaxis],yV[stateYear:,4,np.newaxis],yV[stateYear:,5,np.newaxis]),1)
+    yV = yV[1:] - yV[:-1]
+    
+    # eq. year
+    nkY = np.where(yV[:,0]>0)[0]
+    tnkY = np.where(yV[:,1]>0)[0]
+    tkY = np.where(yV[:,2]>0)[0]
+    
+    # interval for each cell, [?]
+    intervalnkY = nkY[1:] - nkY[:-1]
+    intervaltnkY = tnkY[1:] - tnkY[:-1]
+    intervaltkY = tkY[1:] - tkY[:-1]
+    
+    return intervalnkY, intervaltnkY, intervaltkY
+# -----------------------------------------------------------------------------
     
 # 全間隔 ----------------------------------------------------------------------
 def MinErrorNankai(gt,pred,label="none",isPlot=False):
@@ -393,6 +374,53 @@ def gauss(gtY,predY,sigma=100):
 # -----------------------------------------------------------------------------
 if __name__ == "__main__":
     
+    # ---- command ---- #
+    cell = int(sys.argv[1])
+    mode = int(sys.argv[2])
+    # ----------------- #
+    
+    # ---- bool ---- #
+    ismakingbestPath = False
+    ismakingbestpartPath = False
+    issavebestPath = False
+    ismakingminPath = True
+    # -------------- #
+    
+    # ---- path ---- #
+    logsPath = 'logs'
+    imgPath = "images"
+    # simulated path
+    dataPath = 'b2b3b4b5b60-100'
+    #dataPath = "tmp"
+    #dataPath = "190"
+    featurePath = "nankairirekifeature"
+    dsdirPath = "DS_path"
+    fname = '*.txt' 
+    # -------------- #
+    
+    # ---- params ---- #
+    if mode == 0:
+        # gt cell index
+        if cell == 2:
+            gtcell = 0
+        elif cell == 4:
+            gtcell = 1
+        elif cell == 5:
+            gtcell = 2
+        
+    # eq. year in logs     
+    yInd = 1
+    vInds = [2,3,4,5,6,7,8,9]
+    simlateCell = 8
+    slip = 0
+    nCell = 8
+    # 安定した年
+    stateYear = 2000
+    # assimilation period
+    aYear = 1400
+    nYear = 10000
+    # ---------------- #
+
     # -------------------------------------------------------------------------
     with open(os.path.join(featurePath,"nankairireki.pkl"),'rb') as fp:
             gtyV = pickle.load(fp) # [256,1400,3]
@@ -603,7 +631,6 @@ if __name__ == "__main__":
             for ind in np.arange(maxSimInds.shape[1]):
                 maxpath = np.reshape(paths[maxSimInds[:,ind]],[-1,])
                 maxSim = maxSims[:,ind]
-            
                 # -------------------------------------------------------------
                 for line in maxpath:
                     # output csv for path
