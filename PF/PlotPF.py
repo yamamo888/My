@@ -65,7 +65,7 @@ def NumberLine(gt,pred,label="auto"):
 # -----------------------------------------------------------------------------
 
 # ヒストグラム --------------------------------------------------------------------
-def HistLikelihood(weights,label="auto",color="black"):
+def Histgram(weights,label="auto",color="black"):
     #pdb.set_trace()
     
     # mean & var for label
@@ -75,20 +75,19 @@ def HistLikelihood(weights,label="auto",color="black"):
     sns.set_style("dark")
     sns.distplot(weights,kde=False,rug=False,color=color) 
     
-    plt.xlim([0,0.12])
-    plt.ylim([0,175])
+    plt.xlim([0,1])
+    #plt.ylim([0,45000])
     plt.suptitle(f"mean:{lhMean}\n var:{lhVar}")
-    plt.savefig(os.path.join(imgPath,lhPath,f"{label}.png"))
+    plt.savefig(os.path.join(imgPath,"deltaU",f"{label}.png"))
+    #plt.savefig(os.path.join(imgPath,lhPath,f"{label}.png"))
     plt.close()
 
 # -----------------------------------------------------------------------------
     
 # 散布図 -----------------------------------------------------------------------
-def scatter3D(x,y,z,rangeP,title="none",label="none"):
+def scatter3D(x,y,z,rangeP=0,title="none",label="none"):
     #pdb.set_trace()
-    #print("-----")
-    #print(np.min(x),np.min(y),np.min(z))
-    #print(np.max(x),np.max(y),np.max(z))
+    
     sns.set_style("dark")
 
     fig = plt.figure()
@@ -105,8 +104,32 @@ def scatter3D(x,y,z,rangeP,title="none",label="none"):
 
     ax.set_title(f"{title}")
     
-    plt.savefig(os.path.join(imgPath,"PF",f"{label}.png"))
+    #plt.savefig(os.path.join(imgPath,"PF",f"{label}.png"))
+    plt.savefig(os.path.join(imgPath,f"{label}.png"))
     #plt.show()
+    plt.close()
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+def rireki(gt,pred,dirPath="none",title="none",label="none"):
+    #pdb.set_trace()
+    sns.set_style("dark")
+    
+    fig, axes = plt.subplots(nrows=6, sharex=True)
+    # gt(over) & predict(under) nankai -> tonankai -> tokai
+    axes[0].plot(np.arange(gt.shape[0]), gt[:,ntI], color="orange")
+    axes[1].plot(np.arange(pred.shape[0]), pred[:,ntI], color="royalblue")
+    axes[2].plot(np.arange(gt.shape[0]), gt[:,tntI], color="orange")
+    axes[3].plot(np.arange(pred.shape[0]), pred[:,tntI], color="royalblue")
+    axes[4].plot(np.arange(gt.shape[0]), gt[:,ttI], color="orange")
+    axes[5].plot(np.arange(pred.shape[0]), pred[:,ttI], color="royalblue")
+
+    #figInds[figInd].plot(np.arange(pred.shape[0]), pred[:,figInd], color="royalblue")
+    #figInds[figInd].plot(np.arange(gt.shape[0]), gt[:,figInd], color="orange")
+
+    plt.suptitle(f"{title}")
+    
+    plt.savefig(os.path.join(imgPath,dirPath,f"{label}.png"))
     plt.close()
 # -----------------------------------------------------------------------------
 
