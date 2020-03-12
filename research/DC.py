@@ -23,10 +23,11 @@ import PlotPF as myPlot
 logsPath = 'logs'
 imgPath = "images"
 # simulated path
-#dataPath = 'b2b3b4b5b60-100'
 dataPath = "deltaU"
-#dataPath = "190"
 featurePath = "nankairirekifeature"
+# for linux var.
+#dataPath = 'b2b3b4b5b60-100'
+#featurePath = "features"
 dsdirPath = "DS_path"
 fname = '*.txt' 
 # --------------- #
@@ -510,11 +511,6 @@ if __name__ == "__main__":
     # -------------- #
     
     # -------------------------------------------------------------------------
-    with open(os.path.join(featurePath,"nankairireki.pkl"),'rb') as fp:
-            gtyV = pickle.load(fp) # [256,1400,3]
-    # -------------------------------------------------------------------------
-    #pdb.set_trace()
-    # -------------------------------------------------------------------------
     if ismakingbestPath:
         # ---------------------------------------------------------------------
         dsfilePath = os.path.join(dsdirPath,"DS*")
@@ -566,10 +562,6 @@ if __name__ == "__main__":
             yV = convV2YearlyData(V)
             # ※エラーはくかも
             b = np.concatenate((tmpb[2,np.newaxis],tmpb[4,np.newaxis],tmpb[5,np.newaxis]),0)
-            
-            # plot yV ---------------------------------------------------------
-            #bestyV, _ = MinErrorNankai(gtyV[190,:,:],yV,label=f"{np.round(b[0],6)}_{np.round(b[1],6)}_{np.round(b[2],6)}",isPlot=True)
-            # -----------------------------------------------------------------
             
             if not flag:
                 B = b
