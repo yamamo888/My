@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+# -*- coding: utf-8 -*-
+
 import os
 import glob
 import pickle
@@ -41,36 +43,6 @@ imgPath = "images"
 savetxtPath = "savetxt"
 # -------------- #
 
-#---------------------------------------------------------------------
-
-#　数値計算できないファイルをコピー
-def Empty(logFullPath):
-     
-    # copy先のディレクトリ
-     newdirPath = os.path.join(copyPath,os.path.dirname(logFullPath).split("\\")[1])
-     # copy
-     shutil.copy2(logFullPath,newdirPath)
-     print("Death!")
-     #pdb.set_trace()
-     pass
-#---------------------------------------------------------------------
-
-def Negative(V,logFullPath,cnt):
-    """
-    マイナスのすべり速度が出た場合は計算できない
-    つぎのディレクトリに送る
-    """
-    
-    # 同化開始のV
-    startV = V[0,:]
-    if any(startV < 0):
-        # copy先のディレクトリ
-        newdirPath = os.path.join(copyPath,os.path.dirname(logFullPath).split("\\")[1])
-        # copy
-        shutil.copy2(logFullPath,newdirPath)
-            
-        print("Negative Death!")
-#---------------------------------------------------------------------
 
 #データの読み込み
 def loadABLV(dirPath,logPath,fName):
@@ -125,9 +97,6 @@ def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0,stYear=0):
         cell: only one cell for ensamble kalman
     """
     
-    #--------------------------------------------------------------------------
-                    # PFの時 #
-    #--------------------------------------------------------------------------    
     # シミュレータのU,th,V 発生時データ -> 年数データ 用
     yU, yth, yV = np.zeros([nYear,simlateCell]),np.zeros([nYear,simlateCell]),np.zeros([nYear,simlateCell])
     
@@ -172,81 +141,7 @@ def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0,stYear=0):
         return yU[stYear+stateYear:stYear+stateYear+aYear,:], yth[stYear+stateYear:stYear+stateYear+aYear,:], yV[stYear+stateYear:stYear+stateYear+aYear,:], yYear
    
 #---------------------------------------------------------------------
-                    # Ensambleの時 #
-#---------------------------------------------------------------------
-    """
-    # シミュレータのU,th,V 発生時データ - > 年数データ 用
-    yU, yth, yV = np.zeros([nYear,simlateCell]),np.zeros([nYear,simlateCell]),np.zeros([nYear,simlateCell])
-    
-    try:
-        # 初め手観測した年
-        sYear = np.floor(V[0,yrInd])
-        for year in np.arange(sYear,nYear):
-            # 観測値がある場合
-            if np.sum(np.floor(U[:,yrInd])==year):
-                # 観測値をそのまま代入
-                # self.U[地震,Xyr+nCell]
-                yU[int(year)] = np.reshape(U[np.floor(U[:,yrInd])==year,vInds[0]:],[-1,])
-                yth[int(year)] = np.reshape(th[np.floor(th.T[yrInd,:])==year,vInds[0]:],[-1,])
-                yV[int(year)] = np.reshape(V[np.floor(V.T[yrInd,:])==year,vInds[0]:],[-1,])
-        
-            # 観測値がない場合
-            else:
-                
-                # U(累積変位),th(状態変数):地震時t-1の観測値代入,V(速度):0.0
-                yU[int(year)] = yU[int(year)-1,:] # shape=[100000,8]
-                yth[int(year)] = yth[int(year)-1,:] # shape=[100000,8]
-                yV[int(year)] = float(0) # shape=[100000,8]
-    
-    except IndexError:
-        print("IndexError: out of range")
-    
-    # シミュレーションが安定した2000年以降を用いる, 地震発生年 (どこかのセルで発生した場合)
-    # 0年目の時のために、yUexを出力
-    if cnt == 0:
-         # 2000年より前に地震が起きていなければ
-        if all(yU[:stateYear,cell]<yU[stateYear,cell]) == False:
-            return yU[stateYear:,:], yU[stateYear-1], yth[stateYear:,:], yV[stateYear:,:], U[:,yrInd]
-        else:
-            return yU[stateYear:,:], yU[np.where(yU[:stateYear,cell]<yU[stateYear,cell])[0][-1],:], yth[stateYear:,:], yV[stateYear:,:], U[:,yrInd]
-    # 一番始め以外は、2000年以降 & yUexは更新されるyUtを使い続ける
-    elif cnt > 0:    
-        return yU, yth, yV, U[:,yrInd]
-    """
 
-    #---------------------------------------------------------------------
-    # 累積変位データ作成(真)を作成するときはコメントアウトをはずす
-    # シミュレーションデータのdeltaTとdeltaUの関係を求める
-    # 指定した再来間隔のdeltaUを求める、TP&SP(未実装)
-    #---------------------------------------------------------------------
-    """
-    #deltaUを求める再来間隔
-    years = [90,100,150,200,260,300]
-    uInds = 2
-    #for dy in np.arange(sYear,eYear):
-    for dy in years:
-        jt1 = (np.arange(int(sYear),int(eYear),dy)).tolist()
-        jt2 = (np.arange(int(sYear),int(eYear),dy)).tolist()[1:]
-        flag = False
-        for t1,t2 in zip(jt1,jt2):
-            if np.any(np.floor(self.U[:,1]) == t1 ) and np.any(np.floor(self.U[:,1]) == t2 ):
-                du,dt = self.U[np.where(self.U[:,self.yrInd].astype(int)==t2)]-self.U[np.where(self.U[:,self.yrInd].astype(int)==t1)],t2-t1
-                if not flag:
-                    deltaU,deltaT = du,dt
-                    flag = True
-                else:
-                    deltaU,deltaT = np.vstack([deltaU,du]),np.vstack([deltaT,dt])
-
-        meanU = np.mean(deltaU[:,uInds:],axis=0)
-        # parFile番号格納
-        data = np.c_[meanU]
-        np.savetxt("deltaTANDdeltaU\\RegNankai{}{}.csv".format(fI,dy),data,delimiter=",",fmt="%.2f")
-    """
-#---------------------------------------------------------------------
-# Ensemble
-#def MinErrorNankai(gt,yU,yUex,yth,yV,cell=0,mimMode=0):    
-# one cell
-#def MinErrorNankai(gt,yth,yV,pY,cell=0,gtcell=0,nCell=0):
 def MinErrorNankai(gt,yU,yth,yV,pY,cell=0,gtcell=0,nCell=0,label="none",isPlot=False):
     """
     シミュレーションされたデータの真値との誤差が最小の1400年間を抽出
@@ -260,44 +155,8 @@ def MinErrorNankai(gt,yU,yth,yV,pY,cell=0,gtcell=0,nCell=0,label="none",isPlot=F
     # シミュレーションの値を格納する
     pred = np.zeros((8000,nCell))
     
-#---------------------------------------------------------------------
-                # PFの時 #
-#---------------------------------------------------------------------        
-    if cell == 2 or cell == 4 or cell == 5:
-        
-        # ----
-        # 真値の地震年数
-        gYear = np.where(gt[:,gtcell] > slip)[0]
-        # ----
-        #pdb.set_trace()
-        # ----
-        # 地震が起きた年数だけに値を代入
-        pred[pY,:] = 2
-        # ----
-        #pdb.set_trace()
-        flag = False
-        # Slide each one year 
-        for sYear in np.arange(8000-aYear): 
-            # 予測した地震の年数 + 1400
-            eYear = sYear + aYear
-
-            # 予測した地震年数 
-            pYear = np.where(pred[sYear:eYear] > slip)[0]
-            
-            # 類似度 -----------------------------------------------------------
-            # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
-            ndist = gauss(gYear,pYear.T)
-            # 予測誤差の合計, 回数で割ると当てずっぽうが小さくなる
-            yearError = sum(ndist.max(1)/pYear.shape[0])
-            # -----------------------------------------------------------------
-            if not flag:
-                yearErrors = yearError
-                flag = True
-            else:
-                yearErrors = np.hstack([yearErrors,yearError])
-        
     # for 3 cell
-    elif cell == 245:
+    if cell == 245:
         #pdb.set_trace()
         # ----
         # 真値の地震年数
@@ -353,15 +212,12 @@ def MinErrorNankai(gt,yU,yth,yV,pY,cell=0,gtcell=0,nCell=0,label="none",isPlot=F
         print(f"最大類似度:{np.round(maxSim,6)}\n")
         print(">>>>>>>>\n")
         
-        #pdb.set_trace()
-    if cell == 2 or cell == 4 or cell == 5:
-        predYear = pY[(pY>sInd)&(pY<eInd)]-sInd
-    elif cell == 245:
+    
         nkYear = pY[ntI][(pY[ntI]>sInd)&(pY[ntI]<eInd)]-sInd
         tnkYear = pY[tntI][(pY[tntI]>sInd)&(pY[tntI]<eInd)]-sInd
         tkYear = pY[ttI][(pY[ttI]>sInd)&(pY[ttI]<eInd)]-sInd
         predYear = [nkYear,tnkYear,tkYear]
-    
+
     if isPlot:
         # plot deltaU in pred & gt --------------------------------------------
         fig, figInds = plt.subplots(nrows=3, sharex=True)
@@ -383,62 +239,6 @@ def MinErrorNankai(gt,yU,yth,yV,pY,cell=0,gtcell=0,nCell=0,label="none",isPlot=F
                    
     return yU[sInd:eInd,:], yth[sInd:eInd,:], yV[sInd:eInd,:], predYear, np.round(maxSim,6), sInd
 
-#---------------------------------------------------------------------
-                    # Ensambleの時 #
-#---------------------------------------------------------------------
-    """    
-    # ---- 1 ---- #
-    if mimMode == 0:
-        return yU[:1400,:], yUex, yth[:1400,:], yV[:1400,:]
-    # ----------- #
-    
-    # ---- 2 ---- #
-    elif mimMode == 1:        
-        if cell == 2 or cell == 4 or cell == 5:
-            pred = yV[:,cell]
-            
-            # ----
-            # 真値の地震年数
-            gYear = np.where(gt[:,0] > slip)[0]
-            # ----
-
-            flag = False
-            # Slide each one year 
-            for sYear in np.arange(8000-aYear): 
-                # 予測した地震の年数 + 1400
-                eYear = sYear + aYear
-
-                # 予測した地震年数 
-                pYear = np.where(pred[sYear:eYear] > slip)[0]
-
-                # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
-                ndist = gauss(gYear,pYear.T)
-
-                # 予測誤差の合計, 回数で割ると当てずっぽうが小さくなる
-                yearError = sum(ndist.max(1)/pYear.shape[0])
-
-                if not flag:
-                    yearErrors = yearError
-                    flag = True
-                else:
-                    yearErrors = np.hstack([yearErrors,yearError])
-            
-            # 最小誤差開始修了年数(1400年)取得
-            sInd = np.argmax(yearErrors)
-            eInd = sInd + aYear
-
-            # 最小誤差確率　
-            maxSim = yearErrors[sInd]
-            
-            print(">>>>>>>>\n")                
-            print(f"最大類似度:{np.round(maxSim,6)}\n")
-            print(">>>>>>>>\n")
-        
-        if sInd != 0 and any(yU[:sInd,cell]<yU[sInd,cell]):
-            yUex = yU[np.where(yU[:sInd,cell]<yU[sInd,cell])[0][-1],:]
-        # 開始インデックスが 0 or sIndの前に滑ってる場合、そのままyUex出力
-        return yU[sInd:eInd,:], yUex, yth[sInd:eInd,:], yV[sInd:eInd,:]
-        """
 #--------------------------
 def gauss(gtY,predY,sigma=100):
 
