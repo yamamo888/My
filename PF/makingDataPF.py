@@ -90,7 +90,7 @@ def loadABLV(dirPath,logPath,fName):
     return U,th,V,B
     
 #------------------------------------------------------------------------------
-def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0,stYear=0):
+def convV2YearlyData(U,th,V,nYear,cnt=0,stYear=0):
     """
     Args:
         nYear: number of year (by simulation) -> 10000
@@ -121,103 +121,97 @@ def convV2YearlyData(U,th,V,nYear,cell=0,cnt=0,stYear=0):
     
     # シミュレーションが安定した2000年以降を用いる
     if cnt == 0:
-        if cell == 245:
-            # ※ Uの発生年数
-            nkYear = np.where(deltaU[stateYear:,2]>slip)[0]
-            tnkYear = np.where(deltaU[stateYear:,4]>slip)[0]
-            tkYear = np.where(deltaU[stateYear:,5]>slip)[0]
-            yYear = [nkYear,tnkYear,tkYear]
-       
+        # ※ Uの発生年数
+        nkYear = np.where(deltaU[stateYear:,2]>slip)[0]
+        tnkYear = np.where(deltaU[stateYear:,4]>slip)[0]
+        tkYear = np.where(deltaU[stateYear:,5]>slip)[0]
+        yYear = [nkYear,tnkYear,tkYear]
+   
         return yU[stateYear:,:], yth[stateYear:,:], yV[stateYear:,:], yYear
     
     # 途中から始める仕様になってるので、
     elif cnt > 0:
-        if cell == 245:
-            nkYear = np.where(deltaU[:,2]>slip)[0]
-            tnkYear = np.where(deltaU[:,4]>slip)[0]
-            tkYear = np.where(deltaU[:,5]>slip)[0]
-            yYear = [nkYear,tnkYear,tkYear]
+        
+        nkYear = np.where(deltaU[:,2]>slip)[0]
+        tnkYear = np.where(deltaU[:,4]>slip)[0]
+        tkYear = np.where(deltaU[:,5]>slip)[0]
+        yYear = [nkYear,tnkYear,tkYear]
         #pdb.set_trace()
         return yU[stYear+stateYear:stYear+stateYear+aYear,:], yth[stYear+stateYear:stYear+stateYear+aYear,:], yV[stYear+stateYear:stYear+stateYear+aYear,:], yYear
    
 #---------------------------------------------------------------------
 
-def MinErrorNankai(gt,yU,yth,yV,pY,cell=0,gtcell=0,nCell=0,label="none",isPlot=False):
+def MinErrorNankai(gt,yU,yth,yV,pY,nCell=0,label="none",isPlot=False):
     """
     シミュレーションされたデータの真値との誤差が最小の1400年間を抽出
     Args:
         gt: ground truth V
         yth,yV: pred UV/theta/V, shape=[8000,8]
-        minMode: 0. after 2000 year, 1. degree of similatery
         pY: eq. year
         isPlot: you want to plot rireki -> isPlot=True
     """
     # シミュレーションの値を格納する
     pred = np.zeros((8000,nCell))
     
-    # for 3 cell
-    if cell == 245:
-        #pdb.set_trace()
-        # ----
-        # 真値の地震年数
-        gYear_nk = np.where(gt[:,ntI] > slip)[0]
-        gYear_tnk = np.where(gt[:,tntI] > slip)[0]
-        gYear_tk = np.where(gt[:,ttI] > slip)[0]
-        # ----
-        
-        pred[pY[ntI],ntI] = 30
-        pred[pY[tntI],tntI] = 30
-        pred[pY[ttI],ttI] = 30
-        
-        flag = False
-        # Slide each one year 
-        for sYear in np.arange(8000-aYear): 
-            # 予測した地震の年数 + 1400
-            eYear = sYear + aYear
-
-            # 予測した地震年数 only one-cell
-            pYear_nk = np.where(pred[sYear:eYear,ntI] > slip)[0]
-            pYear_tnk = np.where(pred[sYear:eYear,tntI] > slip)[0]
-            pYear_tk = np.where(pred[sYear:eYear,ttI] > slip)[0]
-            
-            # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
-            # for each cell
-            ndist_nk = gauss(gYear_nk,pYear_nk.T)
-            ndist_tnk = gauss(gYear_tnk,pYear_tnk.T)
-            ndist_tk = gauss(gYear_tk,pYear_tk.T)
-
-            # 予測誤差の合計, 回数で割ると当てずっぽうが小さくなる
-            # for each cell
-            yearError_nk = sum(ndist_nk.max(1)/pYear_nk.shape[0])
-            yearError_tnk = sum(ndist_tnk.max(1)/pYear_tnk.shape[0])
-            yearError_tk = sum(ndist_tk.max(1)/pYear_tk.shape[0])
+    # ----
+    # 真値の地震年数
+    gYear_nk = np.where(gt[:,ntI] > slip)[0]
+    gYear_tnk = np.where(gt[:,tntI] > slip)[0]
+    gYear_tk = np.where(gt[:,ttI] > slip)[0]
+    # ----
     
-            # for all cell
-            yearError = yearError_nk + yearError_tnk + yearError_tk
-
-            if not flag:
-                yearErrors = yearError
-                flag = True
-            else:
-                yearErrors = np.hstack([yearErrors,yearError])
+    pred[pY[ntI],ntI] = 30
+    pred[pY[tntI],tntI] = 30
+    pred[pY[ttI],ttI] = 30
     
-        # 最小誤差開始修了年数(1400年)取得
-        sInd = np.argmax(yearErrors)
-        eInd = sInd + aYear
+    flag = False
+    # Slide each one year 
+    for sYear in np.arange(8000-aYear): 
+        # 予測した地震の年数 + 1400
+        eYear = sYear + aYear
 
-        # 最小誤差確率　
-        maxSim = yearErrors[sInd]
+        # 予測した地震年数 only one-cell
+        pYear_nk = np.where(pred[sYear:eYear,ntI] > slip)[0]
+        pYear_tnk = np.where(pred[sYear:eYear,tntI] > slip)[0]
+        pYear_tk = np.where(pred[sYear:eYear,ttI] > slip)[0]
         
-        print(">>>>>>>>\n")                
-        print(f"最大類似度:{np.round(maxSim,6)}\n")
-        print(">>>>>>>>\n")
-        
+        # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
+        # for each cell
+        ndist_nk = gauss(gYear_nk,pYear_nk.T)
+        ndist_tnk = gauss(gYear_tnk,pYear_tnk.T)
+        ndist_tk = gauss(gYear_tk,pYear_tk.T)
+
+        # 予測誤差の合計, 回数で割ると当てずっぽうが小さくなる
+        # for each cell
+        yearError_nk = sum(ndist_nk.max(1)/pYear_nk.shape[0])
+        yearError_tnk = sum(ndist_tnk.max(1)/pYear_tnk.shape[0])
+        yearError_tk = sum(ndist_tk.max(1)/pYear_tk.shape[0])
+
+        # for all cell
+        yearError = yearError_nk + yearError_tnk + yearError_tk
+
+        if not flag:
+            yearErrors = yearError
+            flag = True
+        else:
+            yearErrors = np.hstack([yearErrors,yearError])
+
+    # 最小誤差開始修了年数(1400年)取得
+    sInd = np.argmax(yearErrors)
+    eInd = sInd + aYear
+
+    # 最小誤差確率　
+    maxSim = yearErrors[sInd]
     
-        nkYear = pY[ntI][(pY[ntI]>sInd)&(pY[ntI]<eInd)]-sInd
-        tnkYear = pY[tntI][(pY[tntI]>sInd)&(pY[tntI]<eInd)]-sInd
-        tkYear = pY[ttI][(pY[ttI]>sInd)&(pY[ttI]<eInd)]-sInd
-        predYear = [nkYear,tnkYear,tkYear]
+    print(">>>>>>>>\n")                
+    print(f"最大類似度:{np.round(maxSim,6)}\n")
+    print(">>>>>>>>\n")
 
+    nkYear = pY[ntI][(pY[ntI]>sInd)&(pY[ntI]<eInd)]-sInd
+    tnkYear = pY[tntI][(pY[tntI]>sInd)&(pY[tntI]<eInd)]-sInd
+    tkYear = pY[ttI][(pY[ttI]>sInd)&(pY[ttI]<eInd)]-sInd
+    predYear = [nkYear,tnkYear,tkYear]
+    
     if isPlot:
         # plot deltaU in pred & gt --------------------------------------------
         fig, figInds = plt.subplots(nrows=3, sharex=True)
