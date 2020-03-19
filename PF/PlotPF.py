@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 
 import os
+import glob
 
 import numpy as np
 
 import matplotlib.pylab as plt
 import matplotlib.pyplot as plt2
+import matplotlib.animation as animation
 from mpl_toolkits.mplot3d import Axes3D
+from PIL import Image
+
 import pylab
 import seaborn as sns
 
@@ -65,7 +69,7 @@ def NumberLine(gt,pred,label="auto"):
 # -----------------------------------------------------------------------------
 
 # ヒストグラム --------------------------------------------------------------------
-def Histgram(weights,label="auto",color="black"):
+def HistLikelihood(weights,label="auto",color="black"):
     #pdb.set_trace()
     
     # mean & var for label
@@ -75,17 +79,16 @@ def Histgram(weights,label="auto",color="black"):
     sns.set_style("dark")
     sns.distplot(weights,kde=False,rug=False,color=color) 
     
-    plt.xlim([0,1])
-    #plt.ylim([0,45000])
+    #plt.xlim([0,0.12])
+    #plt.ylim([0,175])
     plt.suptitle(f"mean:{lhMean}\n var:{lhVar}")
-    plt.savefig(os.path.join(imgPath,"deltaU",f"{label}.png"))
-    #plt.savefig(os.path.join(imgPath,lhPath,f"{label}.png"))
+    plt.savefig(os.path.join(imgPath,lhPath,f"{label}.png"))
     plt.close()
 
 # -----------------------------------------------------------------------------
     
 # 散布図 -----------------------------------------------------------------------
-def scatter3D(x,y,z,rangeP=0,title="none",label="none"):
+def scatter3D(x,y,z,rangeP,title="none",label="none"):
     #pdb.set_trace()
     
     sns.set_style("dark")
@@ -104,36 +107,32 @@ def scatter3D(x,y,z,rangeP=0,title="none",label="none"):
 
     ax.set_title(f"{title}")
     
-    #plt.savefig(os.path.join(imgPath,"PF",f"{label}.png"))
-    plt.savefig(os.path.join(imgPath,f"{label}.png"))
+    plt.savefig(os.path.join(imgPath,"PF",f"{label}.png"))
     #plt.show()
     plt.close()
 # -----------------------------------------------------------------------------
 
-# -----------------------------------------------------------------------------
-def rireki(gt,pred,dirPath="none",title="none",label="none"):
+# アニメーション -------------------------------------------------------------------
+def gif2Animation(gifPath,label="none"):
     #pdb.set_trace()
-    sns.set_style("dark")
+    # *png path
+    gifs = glob.glob(gifPath)
     
-    fig, axes = plt.subplots(nrows=6, sharex=True)
-    # gt(over) & predict(under) nankai -> tonankai -> tokai
-    axes[0].plot(np.arange(gt.shape[0]), gt[:,ntI], color="orange")
-    axes[1].plot(np.arange(pred.shape[0]), pred[:,ntI], color="royalblue")
-    axes[2].plot(np.arange(gt.shape[0]), gt[:,tntI], color="orange")
-    axes[3].plot(np.arange(pred.shape[0]), pred[:,tntI], color="royalblue")
-    axes[4].plot(np.arange(gt.shape[0]), gt[:,ttI], color="orange")
-    axes[5].plot(np.arange(pred.shape[0]), pred[:,ttI], color="royalblue")
-
-    #figInds[figInd].plot(np.arange(pred.shape[0]), pred[:,figInd], color="royalblue")
-    #figInds[figInd].plot(np.arange(gt.shape[0]), gt[:,figInd], color="orange")
-
-    plt.suptitle(f"{title}")
+    fig = plt.figure()
     
-    plt.savefig(os.path.join(imgPath,dirPath,f"{label}.png"))
-    plt.close()
+    imgs = []
+    for gif in gifs:
+        
+        img = Image.open(gif)
+        imgs.append([plt.imshow(img)])
+    
+    # making animation
+    myAnima = animation.ArtistAnimation(fig, imgs)
+    #plt.show()
+    pw = animation.PillowWriter(fps=20)
+    myAnima.save(os.path.join(imgPath,"animaPF",f"{label}.gif"), writer=pw)
 # -----------------------------------------------------------------------------
-
-
+    
         
         
         

@@ -15,8 +15,9 @@ import makingData as myData
 import PlotPF as myPlot
 
 # bool --------
-isLH = True
-isBVTh = True
+isLH = False
+isBVTh = False
+isAnima = True
 # -------------
 
 # path ----------
@@ -28,6 +29,7 @@ outputPath = "190"
 featuresPath = "nankairirekifeature"
 txtPath = "*txt"
 saveimgPath = "PF"
+animaPath = "animaPF"
 # ---------------
 
 filePath = os.path.join(paramPath,outputPath,txtPath)
@@ -142,3 +144,7 @@ if isBVTh:
         myPlot.scatter3D(Thetas[:,ntI,iS],Thetas[:,tntI,iS],Thetas[:,ttI,iS],rangeP=[minTheta,maxTheta],title=f"Theta {iS}times",label=f"Theta_{iS}")
         myPlot.scatter3D(Vs[:,ntI,iS],Vs[:,tntI,iS],Vs[:,ttI,iS],rangeP=[minV,maxV],title=f"V {iS}times",label=f"V_{iS}")
 # -----------------------------------------------------------------------------
+
+if isAnima:
+    gifPath = os.path.join(imgPath,animaPath,"*png")
+    myPlot.gif2Animation(gifPath,"paramB")
