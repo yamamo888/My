@@ -16,7 +16,7 @@ import PlotPF as myPlot
 
 # bool --------
 isLH = True
-isBVTh = False
+isBVTh = True
 # -------------
 
 # path ----------
@@ -24,26 +24,26 @@ logsPath = "logs"
 imgPath = "images"
 savetxtPath = "savetxt"
 paramPath = "parFile"
-dirPath = "last"
 outputPath = "190"
 featuresPath = "nankairirekifeature"
 txtPath = "*txt"
 saveimgPath = "PF"
 # ---------------
 
-#filePath = os.path.join(logsPath,dirPath,txtPath)
 filePath = os.path.join(paramPath,outputPath,txtPath)
 files = glob.glob(filePath)
 
 # parameter ----
-nCell = 8
 Sfl = 4
 Efl = 12
-limitNum = 6
+
 ntI,tntI,ttI = 0,1,2
 nYear = 1400
-slip = 1
-iS = 5
+nCell = 3
+# Num. of assimulation times
+iS = 9
+# Num. of perticles
+nP = 500
 # --------------
 
 # likelihood hist plot --------------------------------------------------------  
@@ -57,9 +57,9 @@ if isLH:
         lh = np.loadtxt(lhfile)
         sum_lh = np.loadtxt(sumlhfile)
          
-        myPlot.HistLikelihood(lh[:,ntI],label=f"nk_{t}",color="skyblue")
+        myPlot.HistLikelihood(lh[:,ntI],label=f"nk_{t}",color="orange")
         myPlot.HistLikelihood(lh[:,tntI],label=f"tnk_{t}",color="forestgreen")
-        myPlot.HistLikelihood(lh[:,ttI],label=f"tk_{t}",color="coral")
+        myPlot.HistLikelihood(lh[:,ttI],label=f"tk_{t}",color="royalblue")
         # nk + tnk + tk of likelihood
         myPlot.HistLikelihood(sum_lh,label=f"all_{t}")
 # -----------------------------------------------------------------------------
@@ -68,15 +68,16 @@ if isLH:
 if isBVTh:
     
     # [perticles,cell,times]
-    Bs = np.zeros([499,3,iS])
-    Thetas = np.zeros([499,3,iS])
-    Vs = np.zeros([499,3,iS])
+    Bs = np.zeros([nP,nCell,iS])
+    Thetas = np.zeros([nP,nCell,iS])
+    Vs = np.zeros([nP,nCell,iS])
     # only first b file
     ffilePath = os.path.join(logsPath,"bzero",txtPath)
     ffiles = glob.glob(ffilePath)
-    
+
+    # first b -----------------------------------------------------------------
     flag = False
-    for fID in np.arange(iS):
+    for fID in np.arange(nP):
         file = os.path.basename(ffiles[fID])
         _,_,_,tmpB = myData.loadABLV(logsPath,"bzero",file)
         
@@ -89,7 +90,7 @@ if isBVTh:
             B = np.vstack([B,tmpB])
     
     minB,maxB = np.min(B,0),np.max(B,0)
-    # first b
+    
     myPlot.scatter3D(B[:,ntI],B[:,tntI],B[:,ttI],rangeP=[minB,maxB],title="first B",label="first_B")
     # -------------------------------------------------------------------------
     
@@ -131,11 +132,9 @@ if isBVTh:
     # min & max [3(cell),7(files)]
     minThetas,maxThetas = np.min(Thetas,0),np.max(Thetas,0)
     minVs,maxVs = np.min(Vs,0),np.max(Vs,0)
-    #minBs,maxBs = np.min(Bs,0),np.max(Bs,0)
     
     minTheta,maxTheta = np.min(minThetas,1),np.max(maxThetas,1)
     minV,maxV = np.min(minVs,1),np.max(maxVs,1)
-    #minB,maxB = np.min(minBs,1),np.max(maxBs,1)
     
     for iS in np.arange(Bs.shape[-1]):
         # Scatter B, theta, V
