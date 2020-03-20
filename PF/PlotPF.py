@@ -120,14 +120,22 @@ def gif2Animation(gifPath,label="none"):
     
     fig = plt.figure()
     
+    # animationの体裁を整える
+    ax = plt.subplot()
+    ax.spines['right'].set_color('None')
+    ax.spines['left'].set_color('None')
+    ax.spines['top'].set_color('None')
+    ax.spines['bottom'].set_color('None')
+    ax.tick_params(axis='x',which='both',top='off',bottom='off',labelbottom='off')
+    ax.tick_params(axis='y',which='both',left='off',right='off',labelleft='off')
+
     imgs = []
     for gif in gifs:
-        
         img = Image.open(gif)
         imgs.append([plt.imshow(img)])
     
     # making animation
-    myAnima = animation.ArtistAnimation(fig, imgs)
+    myAnima = animation.ArtistAnimation(fig, imgs, repeat_delay=10000)
     #plt.show()
     pw = animation.PillowWriter(fps=20)
     myAnima.save(os.path.join(imgPath,"animaPF",f"{label}.gif"), writer=pw)
