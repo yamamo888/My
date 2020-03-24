@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import sys
 import pickle
 import time
 import glob
@@ -15,33 +16,45 @@ import DC as myData
 import warnings
 warnings.filterwarnings('ignore')
 
+# mode ------------------------------------------------------------------------
+# 0: gauss誤差 1:二乗誤差
+mode = int(sys.argv[1])
+#　Num. of iter
+itrNum = int(sys.argv[2])
+# -----------------------------------------------------------------------------
+
 # path ------------------------------------------------------------------------
-featuresPath = "features"
+logsPath = "logs"
+#featuresPath = "features"
+featuresPath = "nankairirekifeature"
 paramCSV = "bayesParam.csv"
-batFile = "featureV.bat"
-dirPath = "bayesB"
+batFile = "PyToCBayes.bat"
+dirPath = "deltaU_bayes"
+# -----------------------------------------------------------------------------
 
 # paramters -------------------------------------------------------------------
 # for nankai rireki
 tfID = 190
-cnt = 0
 slip = 1
 aYear = 1400
 
-# Num. of iteration for bayes
-itrNum = 10
-# under & over limit
+# range of under & over in parameter
 nkmin,nkmax = 0.0110,0.0170
 tnkmin,tnkmax = 0.0110,0.0170
 tkmin,tkmax = 0.0110,0.0170
 
-# パラメータの下限・上限
 # 連続値の場合は、事前分布指定可（default:連続一様分布、対数一様分布も指定可）
 pbounds = {"b1":(nkmin,nkmax),"b2":(tnkmin,tnkmax),"b3":(tkmin,tkmax)}
-
 # -----------------------------------------------------------------------------
 
-def MinErrorNankai(gt,pred):
+ # reading nankai rireki ------------------------------------------------------
+with open(os.path.join(featuresPath,"nankairireki.pkl"), "rb") as fp:
+        nkfiles = pickle.load(fp)
+gt = nkfiles[tfID,:,:]
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+def GaussErrorNankai(pred):
     
     gYear_nk = np.where(gt[:,0] > slip)[0]
     gYear_tnk = np.where(gt[:,1] > slip)[0]
@@ -54,7 +67,7 @@ def MinErrorNankai(gt,pred):
         pYear_nk = np.where(pred[sYear:eYear,0] > slip)[0]
         pYear_tnk = np.where(pred[sYear:eYear,1] > slip)[0]
         pYear_tk = np.where(pred[sYear:eYear,2] > slip)[0]
-        
+        # gauss error
         ndist_nk = gauss(gYear_nk,pYear_nk.T)
         ndist_tnk = gauss(gYear_tnk,pYear_tnk.T)
         ndist_tk = gauss(gYear_tk,pYear_tk.T)
@@ -72,7 +85,6 @@ def MinErrorNankai(gt,pred):
             yearErrors = np.hstack([yearErrors,yearError])
 
     sInd = np.argmax(yearErrors)
-    eInd = sInd + aYear
 
     maxSim = yearErrors[sInd]
           
@@ -93,19 +105,14 @@ def gauss(gtY,predY,sigma=100):
 # reading files ---------------------------------------------------------------
 def readFiles():
     
-    # reading nankai rireki ---------------------------------------------------
-    with open(os.path.join(featuresPath,"nankairireki.pkl"), "rb") as fp:
-            nkfiles = pickle.load(fp)
-    gtV = nkfiles[tfID,:,:]
-    # -------------------------------------------------------------------------
-    
     # reading predict logs ----------------------------------------------------
-    fileName = f"{cnt}_*"
-    filePath = os.path.join(dirPath,fileName)
+    #fileName = f"{cnt}_*"
+    fileName = f"*txt"
+    filePath = os.path.join(logsPath,dirPath,fileName)
     files = glob.glob(filePath)
     # -------------------------------------------------------------------------
-    cnt += 1
-    return gtV, files
+    
+    return files
 # -----------------------------------------------------------------------------
 
 # making logs -----------------------------------------------------------------
@@ -138,23 +145,55 @@ def func(b1,b2,b3):
     
     # simulation
     makeLog(b1,b2,b3)
-    
+
     # reading gt & logs
-    gtV, files = readFiles()
-    
-    for file in files:
-        U,B = myData.loadABLV(os.path.join(dirPath,file))
+    logfiles = readFiles()
+    #pdb.set_trace()
+    for file in logfiles:
+        # U:[None,10], B:[3,]
+        U,B = myData.loadABLV(file)
         deltaU = myData.convV2YearlyData(U)
-        maxSim = MinErrorNankai(gtV,deltaU)
-    
+        
+        if mode == 0:
+            # degree of similatery
+            maxSim = GaussErrorNankai(deltaU)
+        #elif mode == 1:
+            #maxSim = MSErrorNanaki(deltaU)
+        
     return maxSim
 # -----------------------------------------------------------------------------
 
 # Start Bayes -----------------------------------------------------------------
-opt = BayesianOptimization(f=func,pbounds=pbounds)
+# verbose: 学習過程表示 0:無し, 1:すべて, 2:最大値更新時
+opt = BayesianOptimization(f=func,pbounds=pbounds,verbose=2)
+# init_points:最初に取得するf(x)の数、ランダムに選択される
+# n_iter:試行回数(default:25パターンのパラメータで学習)
 opt.maximize(init_points=3,n_iter=itrNum)
+# -----------------------------------------------------------------------------
+#pdb.set_trace()
+# Result ----------------------------------------------------------------------
+res = opt.res # all
+best_res = opt.max # max optimize
+# sort based on 'target'(maxSim)
+sort_res = sorted(res, key=lambda x: x['target'])
+# -----------------------------------------------------------------------------
 
-# result
-res = opt.res
-best_res = opt.max
+# Save params -----------------------------------------------------------------
+flag = False
+for line in sort_res:
+    
+    # directory -> numpy [1,] [3,]
+    target = np.array([line['target']])
+    param = np.concatenate((np.array([line['params']['b1']]),np.array([line['params']['b2']]),np.array([line['params']['b3']])),0)
+    
+    if not flag:
+        targets = target
+        params = param
+        flag = True
+    else:
+        targets = np.vstack([targets,target])
+        params = np.vstack([params,param])
+    
+np.savetxt(f"BO_target_{mode}_{itrNum}.txt",targets,fmt="%6f")
+np.savetxt(f"BO_paramb_{mode}_{itrNum}.txt",params,fmt=f"%6f")
 # -----------------------------------------------------------------------------
