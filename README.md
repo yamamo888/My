@@ -22,26 +22,25 @@
 
 ### Particle Filter
 
-'PF.py'
+`PF.py`
+
+- 設定
+mode 0:学習と評価, 1:真値がない時だけ+penalty, 2:全てに+penalty
 
 <br>
 
-'makingDataPF.py'
+`makingDataPF.py`
 
 deltaU, theta, V, B を読み取る
 
-<br>
 
-類似度
-
-- ガウスではかる
+- 類似度
+	- ガウスではかる
 
 
 
 ### Result of Experiment
 
-'resultPF.py'
+`resultPF.py`
 
-<br>
-
-'PlotPF.py'
+`PlotPF.py`
