@@ -17,19 +17,19 @@ from scipy import stats
 import pandas as pd
 import csv
 
-#import PlotPF as myPlot
+import PlotPF as myPlot
 
 # ---- path ---- #
 logsPath = 'logs'
 imgPath = "images"
 # simulated path
 # for windows var.
-#dataPath = "tmp"
-#featurePath = "nankairirekifeature"
+dataPath = "tmp"
+featurePath = "nankairirekifeature"
 # for linux var.
-dataPath = 'b2b3b4b5b60-100'
-featurePath = "features"
-dsdirPath = "DS_path"
+#dataPath = 'b2b3b4b5b60-100'
+#featurePath = "features"
+dsdirPath = "MSE"
 fname = '*.txt' 
 # --------------- #
 
@@ -148,7 +148,7 @@ def convV2IntervalData(V):
 # -----------------------------------------------------------------------------
     
 # 全間隔 ----------------------------------------------------------------------
-def MinErrorNankai(gt,pred,label="none",isPlot=False):
+def MinErrorNankai(gt,pred):
     
     # ----
     # 真値の地震発生年数
@@ -229,7 +229,7 @@ def MinErrorNankai(gt,pred,label="none",isPlot=False):
        
     # 最小誤差確率　
     maxSim = yearErrors[sInd]
-    return maxSim
+    return maxSim, pred[sInd:sInd+aYear]
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
@@ -263,10 +263,51 @@ if __name__ == "__main__":
     # ----------------- #
 
     # ---- bool ---- #
+    # 3.
+    isplotbestPath = True
+    # 2. best 100 txt
     ismakingbestPath = False
-    ismakingminPath = True
+    # 1. all research
+    ismakingminPath = False
     isPlot = False
     # -------------- #
+    
+    # -------------------------------------------------------------------------
+    # loading nankai trough (ground truth)
+    with open(os.path.join(featurePath,"nankairireki.pkl"),'rb') as fp:
+        gts = pickle.load(fp)
+    # -------------------------------------------------------------------------
+  
+    # -------------------------------------------------------------------------
+    if isplotbestPath:    
+        # ---------------------------------------------------------------------
+        logfilePath = os.path.join(dsdirPath,"best100_2","*txt")
+        
+        logfiles = glob.glob(logfilePath)
+        # ---------------------------------------------------------------------
+        flag = False
+        for logfile in logfiles:
+            
+            print(logfile)
+            
+            V,B = loadABLV(logfile)
+            yV = convV2YearlyData(V)
+            maxSim, pred = MinErrorNankai(gts[190,:,:],yV)
+            # eq. of pred
+            predeq_nk = np.where(pred[:,ntI]>th)[0]
+            predeq_tnk = np.where(pred[:,tntI]>th)[0]
+            predeq_tk = np.where(pred[:,ttI]>th)[0]
+            
+            # plot gt & pred rireki
+            myPlot.Rireki(gts[190,:,:],pred,title=f"{predeq_nk}\n{predeq_tnk}\n{predeq_tk}",label=f"{maxSim}_{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}")
+            
+            if not flag:
+                Bs = B
+                flag = True
+            else:
+                Bs = np.vstack([Bs,B])
+        myPlot.scatter3D(Bs[:,ntI],Bs[:,tntI],Bs[:,ttI],rangeP=[np.min(Bs,0),np.max(Bs,0)],title="top 100",label="best100_2")
+    # -------------------------------------------------------------------------
     
     # -------------------------------------------------------------------------
     if ismakingbestPath:
@@ -293,15 +334,16 @@ if __name__ == "__main__":
                 DS = np.hstack([DS,ds])
                 Path = np.hstack([Path,np.array(path)])
         # get best 100 in ds
-        bestInds = np.argsort(DS)[::-1][:100]
+        #bestInds = np.argsort(DS)[::-1][:100]
+        bestInds = np.argsort(DS)[:100]
         bestPath = Path[bestInds]
         bestDS = DS[bestInds]
         # ---------------------------------------------------------------------
-        
+        pdb.set_trace()
         # save best path & ds -------------------------------------------------
         with open(os.path.join(dsdirPath,"bestPath100.txt"),"w") as f:
             f.write("\n".join(bestPath))
-        np.savetxt(os.path.join(dsdirPath,"bestDS100.txt"),bestDS)
+        np.savetxt(os.path.join(dsdirPath,"bestDS100.txt"),bestDS,fmt=f"%0d")
         # ---------------------------------------------------------------------
     # -------------------------------------------------------------------------
     
@@ -315,11 +357,6 @@ if __name__ == "__main__":
         #pdb.set_trace()
         # 全間隔 ---------------------------------------------------------------
         if mode == 0 or mode == 2:
-            # --------------------------------------------------------------
-            # loading nankai trough (ground truth)
-            with open(os.path.join(featurePath,"nankairireki.pkl"),'rb') as fp:
-                gts = pickle.load(fp)
-            # --------------------------------------------------------------
             cnt = 0
             for tfID in [190]:
                 
@@ -329,7 +366,8 @@ if __name__ == "__main__":
                 flag = False
                 for file in files:
                     # simulation ------
-                    print(file)    
+                    print(file)
+                    print(len(files)-cnt)
                     # loading logs B:[3,]
                     V,B = loadABLV(file)    
                     # V -> yV 
@@ -337,7 +375,7 @@ if __name__ == "__main__":
                     # -----------------
 
                     # maxSim : Degree of Similatery
-                    maxSim = MinErrorNankai(gtyV,yV)
+                    maxSim, _ = MinErrorNankai(gtyV,yV)
                     
                     if not flag:
                         maxSims = maxSim
@@ -346,6 +384,8 @@ if __name__ == "__main__":
                     else:
                         maxSims = np.hstack([maxSims,maxSim])
                         paths = np.hstack([paths,file])
+                    
+                    cnt += 1
                 
                 # min error top 100
                 maxSimInds = np.argsort(maxSims)[:100]
