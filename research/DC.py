@@ -157,8 +157,54 @@ def MinErrorNankai(gt,pred):
     gYear_tk = np.where(gt[:,2] > slip)[0]
     # ----
     
+    # 閾値 & 二乗誤差 順番
+    if mode == 3:
+        flag = False
+        # Slide each one year 
+        for sYear in np.arange(8000-aYear): 
+            eYear = sYear + aYear
+            
+            # Num. of gt eq
+            gNum_nk = gYear_nk.shape[0]
+            gNum_tnk = gYear_tnk.shape[0]
+            gNum_tk = gYear_tk.shape[0]
+            
+            # 閾値以上の予測した地震年数
+            pYear_nk = np.where(pred[sYear:eYear,0] > th)[0][:gNum_nk]
+            pYear_tnk = np.where(pred[sYear:eYear,1] > th)[0][:gNum_tnk]
+            pYear_tk = np.where(pred[sYear:eYear,2] > th)[0][:gNum_tk]
+            
+            # gtよりpredの地震回数が少ない場合
+            if pYear_nk.shape[0] < gNum_nk:
+                pYear_nk = np.hstack([pYear_nk, np.tile(pYear_nk[-1], gNum_nk-pYear_nk.shape[0])])
+            if pYear_tnk.shape[0] < gNum_tnk:
+                pYear_tnk = np.hstack([pYear_tnk, np.tile(pYear_tnk[-1], gNum_tnk-pYear_tnk.shape[0])])
+            if pYear_tk.shape[0] < gNum_tk:
+                pYear_tk = np.hstack([pYear_tk, np.tile(pYear_tk[-1], gNum_tk-pYear_tk.shape[0])])
+            # [9,]
+            ndist_nk = gauss(gYear_nk,pYear_nk)
+            ndist_tnk = gauss(gYear_tnk,pYear_tnk)
+            ndist_tk = gauss(gYear_tk,pYear_tk)
+            
+            # 真値に合わせて二乗誤差
+            yearError_nk = np.sum(ndist_nk)
+            yearError_tnk = np.sum(ndist_tnk)
+            yearError_tk = np.sum(ndist_tk)
+            
+            yearError = yearError_nk + yearError_tnk + yearError_tk
+              
+            if not flag:
+                yearErrors = yearError
+                flag = True
+            else:
+                yearErrors = np.hstack([yearErrors,yearError])
+               
+        # 最小誤差開始修了年数(1400年)取得
+        sInd = np.argmin(yearErrors)
+        
+
     # 閾値 & 二乗誤差
-    if mode == 2:
+    elif mode == 2:
        
         flag = False
         # Slide each one year 
@@ -226,7 +272,7 @@ def MinErrorNankai(gt,pred):
         
         # 最小誤差開始修了年数(1400年)取得
         sInd = np.argmax(yearErrors)
-       
+
     # 最小誤差確率　
     maxSim = yearErrors[sInd]
     return maxSim, pred[sInd:sInd+aYear]
@@ -235,8 +281,8 @@ def MinErrorNankai(gt,pred):
 # -----------------------------------------------------------------------------
 def gauss(gtY,predY,sigma=100):
     
+    # gauss
     if mode == 0:
-        #pdb.set_trace()
         # predict matrix for matching times of gt eq.
         predYs = predY.repeat(gtY.shape[0],0).reshape(-1,gtY.shape[0])
         # gt var.
@@ -244,13 +290,19 @@ def gauss(gtY,predY,sigma=100):
     
         gauss = np.exp(-(gtYs - predYs.T)**2/(2*sigma**2))
      
+    # mse
     elif mode == 2:
        
         predYs = predY.repeat(gtY.shape[0],0).reshape(-1,gtY.shape[0])
         gtYs = gtY.repeat(predY.shape[0],0).reshape(-1,predY.shape[0])
     
         gauss = (gtYs - predYs.T)**2
+    
+    # mse
+    elif mode == 3:
         
+        gauss = (gtY - predY)**2
+    
     return gauss    
 # -----------------------------------------------------------------------------
     
@@ -258,17 +310,16 @@ def gauss(gtY,predY,sigma=100):
 if __name__ == "__main__":
     
     # ---- command ---- #
-    cell = int(sys.argv[1])
-    mode = int(sys.argv[2]) # 0:全探索 gauss var 2:全探索 vecter var
+    mode = int(sys.argv[1]) # 0:全探索 gauss var 2:全探索 vecter var 3:全探索 順番 var
     # ----------------- #
 
     # ---- bool ---- #
     # 3.
-    isplotbestPath = True
+    isplotbestPath = False
     # 2. best 100 txt
     ismakingbestPath = False
     # 1. all research
-    ismakingminPath = False
+    ismakingminPath = True
     isPlot = False
     # -------------- #
     
@@ -356,7 +407,7 @@ if __name__ == "__main__":
         # --------------------------------------------------------------
         #pdb.set_trace()
         # 全間隔 ---------------------------------------------------------------
-        if mode == 0 or mode == 2:
+        if mode == 0 or mode == 2 or mode == 3:
             cnt = 0
             for tfID in [190]:
                 
