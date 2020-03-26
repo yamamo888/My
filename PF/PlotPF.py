@@ -107,7 +107,7 @@ def scatter3D(x,y,z,rangeP,title="none",label="none"):
 
     ax.set_title(f"{title}")
     
-    plt.savefig(os.path.join(imgPath,"PF",f"{label}.png"))
+    plt.savefig(os.path.join(imgPath,"MSE",f"{label}.png"))
     #plt.show()
     plt.close()
 # -----------------------------------------------------------------------------
@@ -140,6 +140,34 @@ def gif2Animation(gifPath,label="none"):
     pw = animation.PillowWriter(fps=20)
     myAnima.save(os.path.join(imgPath,"animaPF",f"{label}.gif"), writer=pw)
 # -----------------------------------------------------------------------------
+
+# 地震履歴 ---------------------------------------------------------------------
+def Rireki(gt,pred,title="none",label="none",isShare=False,isSeparate=True):
+    
+    sns.set_style("dark")
+
+    # share gt & pred
+    if isShare:
+        fig, figInds = plt.subplots(nrows=3, sharex=True)
+        for figInd in np.arange(len(figInds)):
+            figInds[figInd].plot(np.arange(pred.shape[0]), pred[:,figInd],color="skyblue")
+            figInds[figInd].plot(np.arange(gt.shape[0]), gt[:,figInd],color="coral")
+    
+    if isSeparate:
+        colors = ["coral","skyblue","coral","skyblue","coral","skyblue"]
+        plot_data = [gt[:,ntI],pred[:,ntI],gt[:,tntI],pred[:,tntI],gt[:,ttI],pred[:,ttI]]
+        
+        fig = plt.figure()
+        fig, axes = plt.subplots(nrows=6,sharex="col")
+        for row,(color,data) in enumerate(zip(colors,plot_data)):
+            axes[row].plot(np.arange(1400), data, color=color)
+    
+    plt.suptitle(f"{title}", fontsize=8)
+    plt.savefig(os.path.join(imgPath,"MSE",f"{label}.png"))
+    plt.close()
+    
+# -----------------------------------------------------------------------------
+
     
         
         
