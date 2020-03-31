@@ -21,6 +21,8 @@ warnings.filterwarnings('ignore')
 mode = int(sys.argv[1])
 #　Num. of iter
 itrNum = int(sys.argv[2])
+# Num. of traial
+trID = int(sys.argv[3])
 # -----------------------------------------------------------------------------
 
 # path ------------------------------------------------------------------------
@@ -30,6 +32,7 @@ featuresPath = "nankairirekifeature"
 paramCSV = "bayesParam.csv"
 batFile = "PyToCBayes.bat"
 dirPath = "deltaU_bayes"
+savedirPath = "BO"
 # -----------------------------------------------------------------------------
 
 # paramters -------------------------------------------------------------------
@@ -92,13 +95,64 @@ def GaussErrorNankai(pred):
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
+def MSErrorNankai(pred):
+    
+    gYear_nk = np.where(gt[:,0] > slip)[0]
+    gYear_tnk = np.where(gt[:,1] > slip)[0]
+    gYear_tk = np.where(gt[:,2] > slip)[0]
+    
+    flag = False
+    # Slide each one year 
+    for sYear in np.arange(8000-aYear): 
+        eYear = sYear + aYear
+
+        # 閾値以上の予測した地震年数
+        pYear_nk = np.where(pred[sYear:eYear,0] > slip)[0]
+        pYear_tnk = np.where(pred[sYear:eYear,1] > slip)[0]
+        pYear_tk = np.where(pred[sYear:eYear,2] > slip)[0]
+        
+        ndist_nk = gauss(gYear_nk,pYear_nk.T)
+        ndist_tnk = gauss(gYear_tnk,pYear_tnk.T)
+        ndist_tk = gauss(gYear_tk,pYear_tk.T)
+        
+        # 真値に合わせて二乗誤差
+        yearError_nk = np.sum(np.min(ndist_nk,1))
+        yearError_tnk = np.sum(np.min(ndist_tnk,1))
+        yearError_tk = np.sum(np.min(ndist_tk,1))
+        
+        yearError = yearError_nk + yearError_tnk + yearError_tk
+          
+        if not flag:
+            yearErrors = yearError
+            flag = True
+        else:
+            yearErrors = np.hstack([yearErrors,yearError])
+           
+    # 最小誤差開始修了年数(1400年)取得
+    sInd = np.argmin(yearErrors)
+    
+    maxSim = yearErrors[sInd]
+    
+    return maxSim
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
 def gauss(gtY,predY,sigma=100):
     
-    predYs = predY.repeat(gtY.shape[0],0).reshape(-1,gtY.shape[0])
-    gtYs = gtY.repeat(predY.shape[0],0).reshape(-1,predY.shape[0])
-
-    gauss = np.exp(-(gtYs - predYs.T)**2/(2*sigma**2))
-
+    if mode == 0:
+        
+        predYs = predY.repeat(gtY.shape[0],0).reshape(-1,gtY.shape[0])
+        gtYs = gtY.repeat(predY.shape[0],0).reshape(-1,predY.shape[0])
+    
+        gauss = np.exp(-(gtYs - predYs.T)**2/(2*sigma**2))
+        
+    elif mode == 1:
+       
+        predYs = predY.repeat(gtY.shape[0],0).reshape(-1,gtY.shape[0])
+        gtYs = gtY.repeat(predY.shape[0],0).reshape(-1,predY.shape[0])
+    
+        gauss = (gtYs - predYs.T)**2
+        
     return gauss
 # -----------------------------------------------------------------------------
 
@@ -157,9 +211,10 @@ def func(b1,b2,b3):
         if mode == 0:
             # degree of similatery
             maxSim = GaussErrorNankai(deltaU)
-        #elif mode == 1:
-            #maxSim = MSErrorNanaki(deltaU)
-        
+        elif mode == 1:
+            maxSim = MSErrorNankai(deltaU)
+            maxSim = 1/maxSim
+    #pdb.set_trace()
     return maxSim
 # -----------------------------------------------------------------------------
 
@@ -168,7 +223,7 @@ def func(b1,b2,b3):
 opt = BayesianOptimization(f=func,pbounds=pbounds,verbose=2)
 # init_points:最初に取得するf(x)の数、ランダムに選択される
 # n_iter:試行回数(default:25パターンのパラメータで学習)
-opt.maximize(init_points=3,n_iter=itrNum)
+opt.maximize(init_points=5,n_iter=itrNum)
 # -----------------------------------------------------------------------------
 #pdb.set_trace()
 # Result ----------------------------------------------------------------------
@@ -194,6 +249,6 @@ for line in sort_res:
         targets = np.vstack([targets,target])
         params = np.vstack([params,param])
     
-np.savetxt(f"BO_target_{mode}_{itrNum}.txt",targets,fmt="%6f")
-np.savetxt(f"BO_paramb_{mode}_{itrNum}.txt",params,fmt=f"%6f")
+np.savetxt(os.path.join(savedirPath,f"BO_target_{mode}_{itrNum}_{trID}.txt"),targets,fmt="%6f")
+np.savetxt(os.path.join(savedirPath,f"BO_paramb_{mode}_{itrNum}_{trID}.txt"),params,fmt=f"%6f")
 # -----------------------------------------------------------------------------
