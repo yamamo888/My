@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 
-# -*- coding: utf-8 -*-
-
 import os
 import glob
 import pickle
@@ -29,20 +27,15 @@ vInds = [2,3,4,5,6,7,8,9]
 ntI,tntI,ttI = 0,1,2
 simlateCell = 8
 # いいんかな？
-slip = 0
+slip = 1
+# theresholds of eq. for MSError
+th = 1
 
 # 安定した年
 stateYear = 2000
 # assimilation period
 aYear = 1400
 # ---------------- #
-
-# ---- path ---- #
-copyPath = "logscopy"
-imgPath = "images"
-savetxtPath = "savetxt"
-# -------------- #
-
 
 #データの読み込み
 def loadABLV(dirPath,logPath,fName):
@@ -59,7 +52,6 @@ def loadABLV(dirPath,logPath,fName):
     #A = np.zeros(nCell)
     B = np.zeros(simlateCell)
     #L = np.zeros(nCell)
-    
     for i in np.arange(1,simlateCell+1):
         # cell番号に合わせてdata読み取り
         tmp = np.array(data[i].strip().split(",")).astype(np.float32)
@@ -70,9 +62,9 @@ def loadABLV(dirPath,logPath,fName):
     vInd = np.where(isRTOL)[0][0]+1
     
 #---------------------------------------------------------------------
-                        # PF Ensambleの時 #
+                    # PF Ensambleの時 #
 #---------------------------------------------------------------------
-    
+
     # U,th,Vの値と発生年数t取得（vInd行から最終行まで）
     uI,thI,vI,uthvI = 0,1,2,3
     flag = False
@@ -86,11 +78,11 @@ def loadABLV(dirPath,logPath,fName):
             flag = True
         else:
             U,th,V = np.vstack([U,tmpU]),np.vstack([th,tmpth]),np.vstack([V,tmpV])
-    
+
     return U,th,V,B
-    
+
 #------------------------------------------------------------------------------
-def convV2YearlyData(U,th,V,nYear,cnt=0,stYear=0):
+def convV2YearlyData(U,th,V,nYear=10000,cnt=0,stYear=0):
     """
     Args:
         nYear: number of year (by simulation) -> 10000
@@ -136,12 +128,11 @@ def convV2YearlyData(U,th,V,nYear,cnt=0,stYear=0):
         tnkYear = np.where(deltaU[:,4]>slip)[0]
         tkYear = np.where(deltaU[:,5]>slip)[0]
         yYear = [nkYear,tnkYear,tkYear]
-        #pdb.set_trace()
+        
         return yU[stYear+stateYear:stYear+stateYear+aYear,:], yth[stYear+stateYear:stYear+stateYear+aYear,:], yV[stYear+stateYear:stYear+stateYear+aYear,:], yYear
    
-#---------------------------------------------------------------------
-
-def MinErrorNankai(gt,yU,yth,yV,pY,nCell=0,label="none",isPlot=False):
+#------------------------------------------------------------------------------
+def GaussErrorNankai(gt,yU,yth,yV,pY,nCell=0):
     """
     シミュレーションされたデータの真値との誤差が最小の1400年間を抽出
     Args:
@@ -177,9 +168,9 @@ def MinErrorNankai(gt,yU,yth,yV,pY,nCell=0,label="none",isPlot=False):
         
         # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
         # for each cell
-        ndist_nk = gauss(gYear_nk,pYear_nk.T)
-        ndist_tnk = gauss(gYear_tnk,pYear_tnk.T)
-        ndist_tk = gauss(gYear_tk,pYear_tk.T)
+        ndist_nk = calcDist(gYear_nk,pYear_nk.T)
+        ndist_tnk = calcDist(gYear_tnk,pYear_tnk.T)
+        ndist_tk = calcDist(gYear_tk,pYear_tk.T)
 
         # 予測誤差の合計, 回数で割ると当てずっぽうが小さくなる
         # for each cell
@@ -211,37 +202,86 @@ def MinErrorNankai(gt,yU,yth,yV,pY,nCell=0,label="none",isPlot=False):
     tnkYear = pY[tntI][(pY[tntI]>sInd)&(pY[tntI]<eInd)]-sInd
     tkYear = pY[ttI][(pY[ttI]>sInd)&(pY[ttI]<eInd)]-sInd
     predYear = [nkYear,tnkYear,tkYear]
-    
-    if isPlot:
-        # plot deltaU in pred & gt --------------------------------------------
-        fig, figInds = plt.subplots(nrows=3, sharex=True)
-        for figInd in np.arange(len(figInds)):
-            figInds[figInd].plot(np.arange(1400), pred[sInd:eInd,figInd],color="skyblue")
-            figInds[figInd].plot(np.arange(1400), gt[:,figInd],color="coral")
-        
-        #plt.suptitle(f"nk:{nkYear}\n{tnkYear}\n{tkYear}\n startindex:{sInd}",fontsize="8")
-        plt.suptitle(f"start index:{sInd}")
-        plt.savefig(os.path.join(imgPath,"deltaU",f"{np.round(maxSim,4)}_{label}.png"))
-        plt.close()
-        # ---------------------------------------------------------------------
-        
-        # save eq. ------------------------------------------------------------
-        with open(os.path.join(savetxtPath,"eq",f"{np.round(maxSim,4)}_{label}.txt"),"w") as fp:
-            writer = csv.writer(fp)
-            writer.writerows(predYear)
-        # ---------------------------------------------------------------------
-                   
+                    
     return yU[sInd:eInd,:], yth[sInd:eInd,:], yV[sInd:eInd,:], predYear, np.round(maxSim,6), sInd
+# -----------------------------------------------------------------------------
 
-#--------------------------
-def gauss(gtY,predY,sigma=100):
+# -----------------------------------------------------------------------------
+def MSErrorNankai(gt,yU,yth,yV,pY,nCell=0):
+    
+    # ground truth eq.
+    gYear_nk = np.where(gt[:,0] > slip)[0]
+    gYear_tnk = np.where(gt[:,1] > slip)[0]
+    gYear_tk = np.where(gt[:,2] > slip)[0]
+    
+    # predicted eq.
+    pred = np.zeros((8000,nCell))
+    pred[pY[ntI],ntI] = 30
+    pred[pY[tntI],tntI] = 30
+    pred[pY[ttI],ttI] = 30
+    
+    flag = False
+    # Slide each one year 
+    for sYear in np.arange(8000-aYear): 
+        eYear = sYear + aYear
 
-    # predict matrix for matching times of gt eq.
-    predYs = predY.repeat(gtY.shape[0],0).reshape(-1,gtY.shape[0])
-    # gt var.
-    gtYs = gtY.repeat(predY.shape[0],0).reshape(-1,predY.shape[0])
+        # 閾値以上の予測した地震年数
+        pYear_nk = np.where(pred[sYear:eYear,ntI] > th)[0]
+        pYear_tnk = np.where(pred[sYear:eYear,tntI] > th)[0]
+        pYear_tk = np.where(pred[sYear:eYear,ttI] > th)[0]
+        
+        ndist_nk = calcDist(gYear_nk,pYear_nk.T,error=1)
+        ndist_tnk = calcDist(gYear_tnk,pYear_tnk.T,error=1)
+        ndist_tk = calcDist(gYear_tk,pYear_tk.T,error=1)
+        
+        # 真値に合わせて二乗誤差
+        yearError_nk = np.sum(np.min(ndist_nk,1))
+        yearError_tnk = np.sum(np.min(ndist_tnk,1))
+        yearError_tk = np.sum(np.min(ndist_tk,1))
+        
+        yearError = yearError_nk + yearError_tnk + yearError_tk
+          
+        if not flag:
+            yearErrors = yearError
+            flag = True
+        else:
+            yearErrors = np.hstack([yearErrors,yearError])
+           
+    # 最小誤差開始修了年数(1400年)取得
+    sInd = np.argmin(yearErrors)
+    eInd = sInd + aYear
+    
+    nkYear = pY[ntI][(pY[ntI]>sInd)&(pY[ntI]<eInd)]-sInd
+    tnkYear = pY[tntI][(pY[tntI]>sInd)&(pY[tntI]<eInd)]-sInd
+    tkYear = pY[ttI][(pY[ttI]>sInd)&(pY[ttI]<eInd)]-sInd
+    predYear = [nkYear,tnkYear,tkYear]
+    
+    maxSim = yearErrors[sInd]
+    
+    return yU[sInd:eInd,:], yth[sInd:eInd,:], yV[sInd:eInd,:], predYear, maxSim, sInd
+# -----------------------------------------------------------------------------
+    
+#------------------------------------------------------------------------------
+def calcDist(gtY,predY,sigma=100,error=0):
+    if error == 0: # gauss    
+        # predict matrix for matching times of gt eq.
+        predYs = predY.repeat(gtY.shape[0],0).reshape(-1,gtY.shape[0])
+        # gt var.
+        gtYs = gtY.repeat(predY.shape[0],0).reshape(-1,predY.shape[0])
+    
+        dist = np.exp(-(gtYs - predYs.T)**2/(2*sigma**2))
 
-    gauss = np.exp(-(gtYs - predYs.T)**2/(2*sigma**2))
-
-    return gauss
-#--------------------------
+    elif error == 1:
+        predYs = predY.repeat(gtY.shape[0],0).reshape(-1,gtY.shape[0])
+        gtYs = gtY.repeat(predY.shape[0],0).reshape(-1,predY.shape[0])
+    
+        dist = (gtYs - predYs.T)**2
+    
+    elif error == 2:
+        predYs = predY.repeat(gtY.shape[0],0).reshape(-1,gtY.shape[0])
+        gtYs = gtY.repeat(predY.shape[0],0).reshape(-1,predY.shape[0])
+    
+        dist = np.abs(gtYs - predYs.T)
+        
+    return dist
+#------------------------------------------------------------------------------
