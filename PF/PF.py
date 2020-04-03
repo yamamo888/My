@@ -448,7 +448,7 @@ def simulate(features,y,x,t=0,pTime=0,sy=0):
         myPlot.NumberLine(standYs,yearInds,label=f"best_years_{t}")
     # -------------------------------------------------------------------------
 
-    return xResampled, yearInds.astype(int), updatesy
+    return xResampled, yearInds.astype(int), updatesy, k
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -574,16 +574,25 @@ if __name__ == "__main__":
             # resampled: [Th/V,perticles,3(cell)], 
             # kInds: best year
             # ssYears: update start of assimulation years
-            resampled, kInds, ssYears = simulate(Xt,gtJs,pJs,t=iS,pTime=ptime,sy=ssYears)
+            # updateID: resampled index
+            resampled, bestyears, ssYears, updateID = simulate(Xt,gtJs,pJs,t=iS,pTime=ptime,sy=ssYears)
             # --------------------------------------------------------------- #
             #pdb.set_trace()
             # リサンプリングした値を代入 ---------------------------------------------
             # 8セル分のth,vにresampleした値を代入(次の初期値の準備)
             for i in np.arange(nP): # perticle分
-                # U,theta,V,yth_all [1400,8(cell),perticle] -> [8,] -> [perticles,8]
-                tmp0 = yU_all[timings[iS],:,i]
-                tmp1 = yth_all[timings[iS],:,i]
-                tmp2 = yV_all[timings[iS],:,i]
+                
+                if mode == 1:
+                    # U,theta,V,yth_all [1400,8(cell),perticle] -> [8,] -> [perticles,8]
+                    tmp0 = yU_all[timings[iS],:,i]
+                    tmp1 = yth_all[timings[iS],:,i]
+                    tmp2 = yV_all[timings[iS],:,i]
+                    
+                elif mode == 2 or mode == 3 or mode == 4:
+                    # 各パーティクルの開始年数に合わせる                    
+                    tmp0 = yU_all[updateID[i],:,i]
+                    tmp1 = yth_all[updateID[i],:,i]
+                    tmp2 = yV_all[updateID[i],:,i]
 
                 if not flag2:
                     yU_rYear = tmp0
