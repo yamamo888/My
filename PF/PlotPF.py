@@ -107,8 +107,8 @@ def scatter3D(x,y,z,rangeP,path="none",title="none",label="none",isResults=False
         xmean,ymean,zmean = np.mean(x),np.mean(y),np.mean(z)
         xmedian,ymedian,zmedian = statistics.median(x),statistics.median(y),statistics.median(z)
         
-        ax.scatter(xmean,ymean,zmean,c="red",marker="o",alpha=0.5,linewidths=0.5)
-        ax.scatter(xmedian,ymedian,zmedian,c="orange",marker="o",alpha=0.5,linewidths=0.5)
+        ax.scatter(xmean,ymean,zmean,c="red",marker="o",linewidths=0.5)
+        ax.scatter(xmedian,ymedian,zmedian,c="green",marker="o",linewidths=0.5)
     
     ax.set_xlabel("nk")
     ax.set_ylabel("tnk")
@@ -119,7 +119,7 @@ def scatter3D(x,y,z,rangeP,path="none",title="none",label="none",isResults=False
     ax.set_zlim(rangeP[0][ttI],rangeP[1][ttI])
     
     if isResults:
-        ax.set_title(f"{title}\n{np.round(xmean,3)} {np.round(ymean,3)} {np.round(zmean,3)}")
+        ax.set_title(f"{title}\n{np.round(xmean,6)} {np.round(ymean,6)} {np.round(zmean,6)}")
     else:
         ax.set_title(f"{title}")
     
@@ -166,6 +166,7 @@ def Rireki(gt,predict,path="deltaU",title="none",label="none",isResearch=False,i
     pred = np.zeros([1400,3])
     
     if isResearch:
+        #pdb.set_trace()
         # gt eq.
         gYear_nk = np.where(gt[:,0] > th)[0]
         gYear_tnk = np.where(gt[:,1] > th)[0]
@@ -187,7 +188,6 @@ def Rireki(gt,predict,path="deltaU",title="none",label="none",isResearch=False,i
         pred[predict[tntI].tolist(),tntI] = 25
         pred[predict[ttI].tolist(),ttI] = 25
         
-    
     else:
         pred[np.where(predict[:,ntI]>1)[0],ntI] = 25
         pred[np.where(predict[:,tntI]>1)[0],tntI] = 25
@@ -210,7 +210,7 @@ def Rireki(gt,predict,path="deltaU",title="none",label="none",isResearch=False,i
             axes[row].plot(np.arange(1400), data, color=color)
     
     plt.suptitle(f"{title}", fontsize=8)
-    plt.savefig(os.path.join(imgPath,path,f"{label}.png"))
+    plt.savefig(os.path.join(imgPath,path,f"{title}_{label}.png"))
     plt.close()
     
     if isResearch:
