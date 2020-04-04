@@ -43,8 +43,8 @@ batFile = "PyToCPF.bat"
 
 # --------------------------- parameter --------------------------------- #
 
-isPlot = True
-isSavetxt = True
+isPlot = False
+isSavetxt = False
 
 # 南海トラフ巨大地震履歴期間
 gt_Year = 1400
@@ -578,22 +578,15 @@ if __name__ == "__main__":
             resampled, bestyears, ssYears, updateID = simulate(Xt,gtJs,pJs,t=iS,pTime=ptime,sy=ssYears)
             # --------------------------------------------------------------- #
             #pdb.set_trace()
-            # リサンプリングした値を代入 ---------------------------------------------
+            # リサンプリングした値を代入 -----------------------------------------------
             # 8セル分のth,vにresampleした値を代入(次の初期値の準備)
             for i in np.arange(nP): # perticle分
                 
-                if mode == 1:
-                    # U,theta,V,yth_all [1400,8(cell),perticle] -> [8,] -> [perticles,8]
-                    tmp0 = yU_all[timings[iS],:,i]
-                    tmp1 = yth_all[timings[iS],:,i]
-                    tmp2 = yV_all[timings[iS],:,i]
-                    
-                elif mode == 2 or mode == 3 or mode == 4:
-                    # 各パーティクルの開始年数に合わせる                    
-                    tmp0 = yU_all[updateID[i],:,i]
-                    tmp1 = yth_all[updateID[i],:,i]
-                    tmp2 = yV_all[updateID[i],:,i]
-
+                # U,theta,V,yth_all [1400,8(cell),perticle] -> [8,] -> [perticles,8]
+                tmp0 = yU_all[timings[iS],:,i]
+                tmp1 = yth_all[timings[iS],:,i]
+                tmp2 = yV_all[timings[iS],:,i]
+                
                 if not flag2:
                     yU_rYear = tmp0
                     yth_rYear = tmp1
@@ -623,6 +616,8 @@ if __name__ == "__main__":
             B_all[tnI] = resampled[bInd].T[tntI]
             B_all[tI] = resampled[bInd].T[ttI]
             # --------------------------------------------------------------- #
+            print(yth_rYear)
+            print(yV_rYear)
             #pdb.set_trace()
             # --------------------------- Xt-1 作成手順 ---------------------- #
                 # 1 parfileをアンサンブル分作成
