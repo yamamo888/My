@@ -4,7 +4,6 @@ import os
 import glob
 
 import numpy as np
-import statistics
 
 import matplotlib.pylab as plt
 import matplotlib.pyplot as plt2
@@ -17,8 +16,6 @@ import seaborn as sns
 
 import pdb
 
-import makingDataPF as myData
-
 # path ------------------------------------------------------------------------
 imgPath = "images"
 numLinePath = "numlines"
@@ -28,11 +25,10 @@ lhPath = "lhs"
 # parameter -------------------------------------------------------------------
 cellname = ["nk","tnk","tk"]
 ntI,tntI,ttI = 0,1,2
-th = 0
 # -----------------------------------------------------------------------------
 
 # 数直線 -----------------------------------------------------------------------
-def NumberLine(gt,pred,label="auto",isSave=True):
+def NumberLine(gt,pred,label="auto"):
     """
     発生年数がどうなってるかを確認したくって
     [Args]
@@ -40,7 +36,7 @@ def NumberLine(gt,pred,label="auto",isSave=True):
         pred: 予測値t [perticles,cells]
     """
     for cell in np.arange(3):
-        
+        #pdb.set_trace()
         # predict year [perticles,]
         x = gt[cell]
         xhat = pred[:,cell]
@@ -60,19 +56,16 @@ def NumberLine(gt,pred,label="auto",isSave=True):
         plt2.hlines(y=0,xmin=xMin,xmax=xMax,color="silver") #横軸
         pylab.box(False) #枠を消す
         # -----------------------------------------------------------------
-        
+       
         # 散布図 -----------------------------------------------------------
-        plt2.scatter(xhat,yhat,c='skyblue') # predict
-        plt2.scatter(x,y[0],c='coral') # ground truth
-        plt2.scatter(int(np.mean(xhat)),y[0],c='royalblue') # mean of predict
-        plt2.scatter(int(statistics.median(xhat)),y[0],c='forestgreen') # median of predict
-        plt2.title(f"min:{int(np.min(xhat))} max:{int(np.max(xhat))} mean:{int(np.mean(xhat))}")
+        plt2.scatter(xhat,yhat,c='skyblue') # 予測値
+        plt2.scatter(x,y[0],c='coral') # 真値
+        plt2.title(f"min:{int(np.min(xhat))} max:{int(np.max(xhat))}")
         # -----------------------------------------------------------------
+        plt2.savefig(os.path.join(imgPath,numLinePath,f"{label}_{cellname[cell]}.png"),bbox_inches="tight")
+        #plt2.savefig(os.path.join(imgPath,numLinePath,f"{label}.png"))
         
-        if isSave:
-            plt2.savefig(os.path.join(imgPath,numLinePath,f"{label}_{cellname[cell]}.png"),bbox_inches="tight")
-            plt2.close()
-        
+        plt2.close()
 # -----------------------------------------------------------------------------
 
 # ヒストグラム --------------------------------------------------------------------
@@ -91,24 +84,17 @@ def HistLikelihood(weights,label="auto",color="black"):
     plt.suptitle(f"mean:{lhMean}\n var:{lhVar}")
     plt.savefig(os.path.join(imgPath,lhPath,f"{label}.png"))
     plt.close()
+
 # -----------------------------------------------------------------------------
     
 # 散布図 -----------------------------------------------------------------------
-def scatter3D(x,y,z,rangeP,path="none",title="none",label="none",isResults=False):
-    #pdb.set_trace()
+def scatter3D(x,y,z,rangeP,path="none",title="none",label="none"):
     
     sns.set_style("dark")
 
     fig = plt.figure()
     ax = Axes3D(fig)
     ax.scatter(x,y,z,c="black",marker="o",alpha=0.5,linewidths=0.5)
-    
-    if isResults:
-        xmean,ymean,zmean = np.mean(x),np.mean(y),np.mean(z)
-        xmedian,ymedian,zmedian = statistics.median(x),statistics.median(y),statistics.median(z)
-        
-        ax.scatter(xmean,ymean,zmean,c="red",marker="o",linewidths=0.5)
-        ax.scatter(xmedian,ymedian,zmedian,c="green",marker="o",linewidths=0.5)
     
     ax.set_xlabel("nk")
     ax.set_ylabel("tnk")
@@ -117,18 +103,39 @@ def scatter3D(x,y,z,rangeP,path="none",title="none",label="none",isResults=False
     ax.set_xlim(rangeP[0][ntI],rangeP[1][ntI])
     ax.set_ylim(rangeP[0][tntI],rangeP[1][tntI])
     ax.set_zlim(rangeP[0][ttI],rangeP[1][ttI])
+
+    ax.set_title(f"{title}")
     
-    if isResults:
-        ax.set_title(f"{title}\n{np.round(xmean,6)} {np.round(ymean,6)} {np.round(zmean,6)}")
-    else:
-        ax.set_title(f"{title}")
-    
-    
-    plt.savefig(os.path.join(imgPath,path,f"{label}.png"))
-    #plt.show()
+    plt.savefig(os.path.join(imgPath,"MSE",f"{label}.png"))
     plt.close()
 # -----------------------------------------------------------------------------
+    
+# heatmap + 散布図 -------------------------------------------------------------
+def scatter3D_heatmap(x,y,z,var,rangeP,path="none",title="none",label="none"):
+    """
+    Args
+        val: variable for heatmap
+    """
+    # normalize variable(var) into 0 to 1
+    nolmilizedVar = list((var - min(var)) / (max(var) - min(var)))
+    
+    colors = plt.cm.hot(nolmilizedVar)
+    
+    fig = plt.figure()
+    ax = Axes3D(fig)
+    
+    ax.scatter(x,y,z,c=colors,marker="o",alpha=0.5)
+    
+    ax.set_xlim(rangeP[0][ntI],rangeP[1][ntI])
+    ax.set_ylim(rangeP[0][tntI],rangeP[1][tntI])
+    ax.set_zlim(rangeP[0][ttI],rangeP[1][ttI])
 
+    ax.set_title(f"{title}")
+    
+    plt.savefig(os.path.join(imgPath,"MSE",f"{label}.png"))
+    plt.close()
+# -----------------------------------------------------------------------------
+    
 # アニメーション -------------------------------------------------------------------
 def gif2Animation(gifPath,label="none"):
     #pdb.set_trace()
@@ -159,40 +166,10 @@ def gif2Animation(gifPath,label="none"):
 # -----------------------------------------------------------------------------
 
 # 地震履歴 ---------------------------------------------------------------------
-def Rireki(gt,predict,path="deltaU",title="none",label="none",isResearch=False,isShare=False,isSeparate=True):
+def Rireki(gt,pred,title="none",label="none",isShare=False,isSeparate=True):
     
     sns.set_style("dark")
 
-    pred = np.zeros([1400,3])
-    
-    if isResearch:
-        #pdb.set_trace()
-        # gt eq.
-        gYear_nk = np.where(gt[:,0] > th)[0]
-        gYear_tnk = np.where(gt[:,1] > th)[0]
-        gYear_tk = np.where(gt[:,2] > th)[0]
-        # mse
-        ndist_nk = myData.calcDist(gYear_nk,predict[ntI].T,error=2)
-        ndist_tnk = myData.calcDist(gYear_tnk,predict[tntI].T,error=2)
-        ndist_tk = myData.calcDist(gYear_tk,predict[ttI].T,error=2)
-        
-        yearError_nk = np.sum(np.min(ndist_nk,1))
-        yearError_tnk = np.sum(np.min(ndist_tnk,1))
-        yearError_tk = np.sum(np.min(ndist_tk,1))
-        # sum year error
-        yearError = yearError_nk + yearError_tnk + yearError_tk
-        
-        title = yearError
-        
-        pred[predict[ntI].tolist(),ntI] = 25
-        pred[predict[tntI].tolist(),tntI] = 25
-        pred[predict[ttI].tolist(),ttI] = 25
-        
-    else:
-        pred[np.where(predict[:,ntI]>1)[0],ntI] = 25
-        pred[np.where(predict[:,tntI]>1)[0],tntI] = 25
-        pred[np.where(predict[:,ttI]>1)[0],ttI] = 25
-        
     # share gt & pred
     if isShare:
         fig, figInds = plt.subplots(nrows=3, sharex=True)
@@ -210,11 +187,8 @@ def Rireki(gt,predict,path="deltaU",title="none",label="none",isResearch=False,i
             axes[row].plot(np.arange(1400), data, color=color)
     
     plt.suptitle(f"{title}", fontsize=8)
-    plt.savefig(os.path.join(imgPath,path,f"{title}_{label}.png"))
+    plt.savefig(os.path.join(imgPath,"MSE",f"{label}.png"))
     plt.close()
-    
-    if isResearch:
-        return yearError
     
 # -----------------------------------------------------------------------------
 
