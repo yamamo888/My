@@ -11,6 +11,7 @@ import time
 
 import matplotlib.pylab as plt
 import numpy as np
+from scipy.stats import poisson
 
 from natsort import natsorted
 
@@ -85,15 +86,10 @@ safetyNum = 100
 # Num. of assimilation
 ptime = len(timings)
 
-# Num. of perticles
-#nP = 4
-nP = 501
-
 # 1400年間の開始年数保存用
-ssYears = np.zeros(nP)
-
+ssYears = []
+           
 # --------------------------------------------------------------------------- #
-
 
 #　尤度 + safety & penalty -----------------------------------------------------
 def norm_likelihood_safetypenalty(y,x,s2=100,standYs=0,time=0):
@@ -166,8 +162,48 @@ def norm_likelihood_safetypenalty(y,x,s2=100,standYs=0,time=0):
 
     # sum of gauss, [1,]
     sumgauss = np.cumsum(gauss)[-1]
-    
+    #pdb.set_trace()
     return gauss, sumgauss, years
+# -----------------------------------------------------------------------------
+    
+# -----------------------------------------------------------------------------
+def norm_likelihood_times(y,x,standYs=0):
+    """
+    Args
+        y: gt eq.
+        x: pred eq.
+    """
+    
+    y_nk = np.array([standYs[ntI]])
+    y_tnk = np.array([standYs[tntI]])
+    y_tk = np.array([standYs[ttI]])
+    # gt eq. times
+    yt_nk = y_nk.shape[0]
+    yt_tnk = y_tnk.shape[0]
+    yt_tk = y_tk.shape[0]
+    
+    # gt eq. times in all cell [1,] == 2 or 3?
+    y_times = yt_nk + yt_tnk + yt_tk
+    
+    # pred eq. for |pred eq.| < +-penalty year
+    x_nk = np.where((y_nk - penaltyNum < x[ntI]) & (x[ntI] < y_nk + penaltyNum)) 
+    x_tnk = np.where((y_tnk - penaltyNum < x[tntI]) & (x[tntI] < y_tnk + penaltyNum)) 
+    x_tk = np.where((y_tk - penaltyNum < x[ttI]) & (x[ttI] < y_tk + penaltyNum)) 
+    # pred eq. times
+    xt_nk = x_nk[0].shape[0]
+    xt_tnk = x_tnk[0].shape[0]
+    xt_tk = x_tk[0].shape[0]
+    # pred eq. times in all cell
+    x_times = xt_nk + xt_tnk + xt_tk
+    
+    # rambda & k for poisson
+    mu,k = y_times, x_times
+    # poisson for eq. times
+    eq_poisson = poisson.pmf(k,mu)
+    
+    #pdb.set_trace()
+    
+    return eq_poisson
 # -----------------------------------------------------------------------------
 
 # 逆関数 -----------------------------------------------------------------------
@@ -200,7 +236,7 @@ def FilterValue(x,wNorm):
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
-def simulate(features,y,x,t=0,pTime=0,sy=0):
+def simulate(features,y,x,t=0,pTime=0,sy=0,nP=0):
     """
     Args
         features: システムモデル値xt. th[1400,perticles,3], V[1400,perticles,3], b[perticles,3]
@@ -217,8 +253,11 @@ def simulate(features,y,x,t=0,pTime=0,sy=0):
     xResampled = np.zeros((nParam,nP,nCell))
     # all weight
     maxW = np.zeros((nP))
-    # weight in each cell + penalty
-    w = np.zeros((nP,nCell+1))
+    # weight for eq. year in each cell + penalty
+    gw = np.zeros((nP,nCell+1))
+    # weight for eq. times
+    pw = np.zeros((nP,nCell+1))
+    
     wNorm = np.zeros((nP))
     # -------------------------------------------------------------------------
     #pdb.set_trace()
@@ -249,9 +288,19 @@ def simulate(features,y,x,t=0,pTime=0,sy=0):
 
         if mode == 3 or mode == 4 or mode == 5:
             weight, maxweight, years = norm_likelihood_safetypenalty(y,yhat,standYs=standYs,time=t)
+            
+            gw[i] = weight
+            maxW[i] = maxweight
+            
+        if mode == 6:
+            pweight = norm_likelihood_times(y,yhat,standYs=standYs)
+            gweight, gmaxweight, years = norm_likelihood_safetypenalty(y,yhat,standYs=standYs,time=t)
         
-        w[i] = weight
-        maxW[i] = maxweight
+            gw[i] = gweight
+            pw[i] = pweight
+            
+            maxW[i] = gmaxweight + pweight
+            
         # ---------------------------------------------------------------------
         #pdb.set_trace()
         for indY,indC in zip(years,[ntI,tntI,ttI]):
@@ -278,7 +327,7 @@ def simulate(features,y,x,t=0,pTime=0,sy=0):
         # [perticles,]
         wNorm = maxW/np.sum(maxW)
         
-    elif mode == 4 or mode == 5:
+    elif mode == 4 or mode == 5 or mode == 6:
         # scalling maximum(M),minimum(m)
         xmax = np.max(maxW)
         xmin = np.min(maxW)
@@ -294,11 +343,15 @@ def simulate(features,y,x,t=0,pTime=0,sy=0):
 
     # save year & likelihood txt ----------------------------------------------
     if isSavetxt:
-        if mode == 4 or mode == 5:
+        if mode == 4 or mode == 5 or mode == 6:
             np.savetxt(os.path.join(savetxtPath,"lh",f"sum_lh_{t}.txt"),scaledW,fmt="%4f")
         else:    
             np.savetxt(os.path.join(savetxtPath,"lh",f"sum_lh_{t}.txt"),maxW,fmt="%4f")
-        np.savetxt(os.path.join(savetxtPath,"lh",f"lh_{t}.txt"),w)
+        if mode == 6:            
+            np.savetxt(os.path.join(savetxtPath,"lh",f"lh_p_{t}.txt"),pw)
+            np.savetxt(os.path.join(savetxtPath,"lh",f"lh_g_{t}.txt"),gw)
+        else:
+            np.savetxt(os.path.join(savetxtPath,"lh",f"lh_{t}.txt"),gw)
         np.savetxt(os.path.join(savetxtPath,"bestyear",f"by_{t}.txt"),yearInds,fmt="%d")
     # -------------------------------------------------------------------------
     #pdb.set_trace()
@@ -318,16 +371,18 @@ def simulate(features,y,x,t=0,pTime=0,sy=0):
         # array[cell,perticles] V & theta parameterがすべて同じ組み合わせになるのを防ぐため
         Thnoise = np.array([np.random.normal(0,0.01*np.mean(ThVec[:,cell]),nP) for cell in np.arange(nCell)])
         Vnoise = np.array([np.random.normal(0,0.01*np.mean(VVec[:,cell]),nP) for cell in np.arange(nCell)])
-        bnoise = np.array([np.random.normal(0,0.01*np.mean(features[bInd][:,cell]),nP) for cell in np.arange(nCell)])
+        #bnoise = np.array([np.random.normal(0,0.01*np.mean(features[bInd][:,cell]),nP) for cell in np.arange(nCell)])
         # ---------------------------------------------------------------------
     
         xResampled[thInd] = ThVec[k] + np.abs(Thnoise).T
         xResampled[vInd] = VVec[k] + np.abs(Vnoise).T
-        xResampled[bInd] = features[bInd][k] + np.abs(bnoise).T
+        xResampled[bInd] = features[bInd][k]
+        # Add noise
+        #xResampled[bInd] = features[bInd][k] + np.abs(bnoise).T
         
         updatesy = sy[k]
     
-    if mode == 5:
+    if mode == 5 or mode == 6:
         #pdb.set_trace()
         # index for mean theta,V,b
         indmu = np.argmax(wNorm)
@@ -359,7 +414,7 @@ def simulate(features,y,x,t=0,pTime=0,sy=0):
     if isPlot:
         myPlot.NumberLine(standYs,yearInds,label=f"best_years_{t}")
         
-        if mode == 4 or mode == 5:
+        if mode == 4 or mode == 5 or mode == 6:
             xt = features[bInd][k]
             np.savetxt(os.path.join(savetxtPath,'B',f'{iS}.txt'),xt,fmt='%6f')
     # -------------------------------------------------------------------------
@@ -414,8 +469,9 @@ if __name__ == "__main__":
                 logfiles = [s for s in allfiles if "log_{}_".format(iS-1) in s]
                 for lf in natsorted(logfiles):
                     files.append(lf)
-            # --------------------------------------------------------------- #
-
+            # --------------------------------------------------------------- #            
+            # Num. of perticles
+            nP = len(files)            
             # ======================== 粒子 作成 ============================= #
             flag,flag1,flag2 = False,False,False
             for fID in np.arange(nP):
@@ -431,7 +487,8 @@ if __name__ == "__main__":
 
                 if iS == 0:
                     # 類似度比較 最小誤差年取得 ---------------------------------
-                    # th,V [1400,8] これは1番初めだけ, sYear: 2000年以降(次のファイルの開始年数)
+                    # th,V [1400,8] これは1番初めだけ 
+                    # sYear: 2000年以降(次のファイルの開始年数)
                     # pJ: 地震が起きた年(2000年=0), [8000,8]
                     yU, yth, yV, pJ_all = myData.convV2YearlyData(U,th,V,nYear,cnt=iS)
                     yU, yth, yV, pJ_all, maxSim, sYear = myData.MSErrorNankai(gtV,yU,yth,yV,pJ_all,nCell=nCell)
@@ -482,14 +539,14 @@ if __name__ == "__main__":
             #pdb.set_trace()
             # -------------------------- Call PF ---------------------------- #
             print("---- Start PF !! ----\n")
-            # resampled: [Th/V,perticles,3(cell)], 
+            # resampled: [Th/V,perticles,3(cell)]
             # kInds: best year
             # ssYears: update start of assimulation years
             # updateID: resampled index
-            resampled, bestyears, ssYears, updateID = simulate(Xt,gtJs,pJs,t=iS,pTime=ptime,sy=ssYears)
+            resampled, bestyears, ssYears, updateID = simulate(Xt,gtJs,pJs,t=iS,pTime=ptime,sy=ssYears,nP=nP)
             # --------------------------------------------------------------- #
             #pdb.set_trace()
-            # リサンプリングした値を代入 -----------------------------------------------
+            # リサンプリングした値を代入 ----------------------------------------------
             # 8セル分のth,vにresampleした値を代入(次の初期値の準備)
             for i in np.arange(nP): # perticle分
                 
