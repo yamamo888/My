@@ -31,8 +31,8 @@ ntI,tntI,ttI = 0,1,2
 def NumberLine(gt,pred,label="auto"):
     """
     発生年数がどうなってるかを確認したくって
-    [Args]
-        gt   : 真値t list[nk,tnk,tk]
+    Args
+        gt: 真値t list[nk,tnk,tk]
         pred: 予測値t [perticles,cells]
     """
     for cell in np.arange(3):
@@ -43,15 +43,16 @@ def NumberLine(gt,pred,label="auto"):
         y = [0] * 1 # y = 0
         yhat = [0] * xhat.shape[0]
         
-        # 数直線 -----------------------------------------------------------
+        # 数直線 ---------------------------------------------------------------
         fig,ax=plt2.subplots(figsize=(10,10)) #画像サイズ
         fig.set_figheight(1) #高さ調整
         ax.tick_params(labelbottom=True, bottom=False) #x軸設定
         ax.tick_params(labelleft=False, left=False) #y軸設定
-        # -----------------------------------------------------------------
+        # ---------------------------------------------------------------------
        
-        # グラフの体裁--------------------------------------------------------
-        xMin, xMax = np.min(np.append(x,xhat)), np.max(np.append(x,xhat))  
+        # グラフの体裁 -----------------------------------------------------------
+        #xMin, xMax = np.min(np.append(x,xhat)), np.max(np.append(x,xhat))  
+        xMin, xMax = 0, 1400  
         plt2.tight_layout() #グラフの自動調整    
         plt2.hlines(y=0,xmin=xMin,xmax=xMax,color="silver") #横軸
         pylab.box(False) #枠を消す
@@ -106,7 +107,7 @@ def scatter3D(x,y,z,rangeP,path="none",title="none",label="none"):
 
     ax.set_title(f"{title}")
     
-    plt.savefig(os.path.join(imgPath,"MSE",f"{label}.png"))
+    plt.savefig(os.path.join(imgPath,path,f"{label}.png"))
     plt.close()
 # -----------------------------------------------------------------------------
     
@@ -116,10 +117,15 @@ def scatter3D_heatmap(x,y,z,var,rangeP,path="none",title="none",label="none"):
     Args
         val: variable for heatmap
     """
-    # normalize variable(var) into 0 to 1
-    nolmilizedVar = list((var - min(var)) / (max(var) - min(var)))
+    #pdb.set_trace()
     
-    colors = plt.cm.hot(nolmilizedVar)
+    sns.set_style("dark")
+
+    # normalize variable(var) into 0 to 1
+    nlVar = list((var - min(var)) / (max(var) - min(var)))
+    
+    # red(row,<<0) -> yellow(high)
+    colors = plt.cm.autumn(nlVar)
     
     fig = plt.figure()
     ax = Axes3D(fig)
@@ -132,7 +138,7 @@ def scatter3D_heatmap(x,y,z,var,rangeP,path="none",title="none",label="none"):
 
     ax.set_title(f"{title}")
     
-    plt.savefig(os.path.join(imgPath,"MSE",f"{label}.png"))
+    plt.savefig(os.path.join(imgPath,path,f"{label}.png"))
     plt.close()
 # -----------------------------------------------------------------------------
     
