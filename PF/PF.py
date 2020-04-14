@@ -91,7 +91,7 @@ ssYears = []
            
 # --------------------------------------------------------------------------- #
 
-#　尤度 + safety & penalty -----------------------------------------------------
+#　尤度 + safety & penalty (地震発生年数) ---------------------------------------
 def norm_likelihood_safetypenalty(y,x,s2=100,standYs=0,time=0):
     gauss,years = np.zeros(nCell+1),np.zeros(nCell) # for penalty
 
@@ -166,7 +166,7 @@ def norm_likelihood_safetypenalty(y,x,s2=100,standYs=0,time=0):
     return gauss, sumgauss, years
 # -----------------------------------------------------------------------------
     
-# -----------------------------------------------------------------------------
+# 尤度 (penalty区間地震発生回数) -----------------------------------------------------------
 def norm_likelihood_times(y,x,standYs=0):
     """
     Args
@@ -196,16 +196,46 @@ def norm_likelihood_times(y,x,standYs=0):
     # pred eq. times in all cell
     x_times = xt_nk + xt_tnk + xt_tk
     
-    # rambda & k for poisson
-    mu,k = y_times, x_times
     # poisson for eq. times
-    eq_poisson = poisson.pmf(k,mu)
+    poissons = poisson.pmf(x_times,y_times)
+    
+    #poisson_nk = poisson.pmf(xt_nk,yt_nk)
+    #poisson_tnk = poisson.pmf(xt_tnk,yt_tnk)
+    #poisson_tk = poisson.pmf(xt_tk,yt_tk)
+    #poissons = poisson_nk + poisson_tnk + poisson_tk
     
     #pdb.set_trace()
     
-    return eq_poisson
+    return poissons
 # -----------------------------------------------------------------------------
-
+    
+# 尤度 (すべての地震発生回数) -----------------------------------------------------
+def norm_likelihood_alltimes(y,x):
+    #pdb.set_trace()
+    
+    # gt eq. times
+    yt_nk = y[ntI].shape[0]
+    yt_tnk = y[tntI].shape[0]
+    yt_tk = np.array(y[ttI]).shape[0]
+    y_times = yt_nk + yt_tnk + yt_tk
+    
+    # pred eq. times
+    xt_nk = x[ntI].shape[0]
+    xt_tnk = x[tntI].shape[0]
+    xt_tk = x[ttI].shape[0]
+    x_times = xt_nk + xt_tnk + xt_tk
+    
+    # poisson for eq. times
+    #poisson_nk = poisson.pmf(xt_nk,yt_nk)
+    #poisson_tnk = poisson.pmf(xt_tnk,yt_tnk)
+    #poisson_tk = poisson.pmf(xt_tk,yt_tk)
+    #poissons = poisson_nk + poisson_tnk + poisson_tk
+    
+    poissons = poisson.pmf(x_times,y_times)
+    
+    return poissons
+# -----------------------------------------------------------------------------
+    
 # 逆関数 -----------------------------------------------------------------------
 def InvF(WC,idex,u):
     """
@@ -292,15 +322,24 @@ def simulate(features,y,x,t=0,pTime=0,sy=0,nP=0):
             gw[i] = weight
             maxW[i] = maxweight
             
-        if mode == 6:
-            pweight = norm_likelihood_times(y,yhat,standYs=standYs)
+        if mode == 6 or mode == 7 or mode == 9 or mode == 10:
             gweight, gmaxweight, years = norm_likelihood_safetypenalty(y,yhat,standYs=standYs,time=t)
+            pweight = norm_likelihood_times(y,yhat,standYs=standYs)
+            
+            gw[i] = gweight
+            pw[i] = pweight
+            
+            maxW[i] = gmaxweight + pweight
+        
+        if mode == 8:
+            gweight, gmaxweight, years = norm_likelihood_safetypenalty(y,yhat,standYs=standYs,time=t)
+            pweight = norm_likelihood_alltimes(y,yhat)
         
             gw[i] = gweight
             pw[i] = pweight
             
             maxW[i] = gmaxweight + pweight
-            
+        
         # ---------------------------------------------------------------------
         #pdb.set_trace()
         for indY,indC in zip(years,[ntI,tntI,ttI]):
@@ -323,11 +362,11 @@ def simulate(features,y,x,t=0,pTime=0,sy=0,nP=0):
             yearInds = np.vstack([yearInds,years])
     #pdb.set_trace()
     # 規格化 -------------------------------------------------------------------
-    if mode == 3:
+    if mode == 3 or mode == 9 or mode == 10:
         # [perticles,]
         wNorm = maxW/np.sum(maxW)
         
-    elif mode == 4 or mode == 5 or mode == 6:
+    elif mode == 4 or mode == 5 or mode == 6 or mode == 7 or mode == 8:
         # scalling maximum(M),minimum(m)
         xmax = np.max(maxW)
         xmin = np.min(maxW)
@@ -343,11 +382,11 @@ def simulate(features,y,x,t=0,pTime=0,sy=0,nP=0):
 
     # save year & likelihood txt ----------------------------------------------
     if isSavetxt:
-        if mode == 4 or mode == 5 or mode == 6:
+        if mode == 4 or mode == 5 or mode == 6 or mode == 7 or mode == 8:
             np.savetxt(os.path.join(savetxtPath,"lh",f"sum_lh_{t}.txt"),scaledW,fmt="%4f")
         else:    
             np.savetxt(os.path.join(savetxtPath,"lh",f"sum_lh_{t}.txt"),maxW,fmt="%4f")
-        if mode == 6:            
+        if mode == 6 or mode == 7 or mode == 8 or mode == 9 or mode == 10:            
             np.savetxt(os.path.join(savetxtPath,"lh",f"lh_p_{t}.txt"),pw)
             np.savetxt(os.path.join(savetxtPath,"lh",f"lh_g_{t}.txt"),gw)
         else:
@@ -364,7 +403,7 @@ def simulate(features,y,x,t=0,pTime=0,sy=0,nP=0):
     # index for resampling
     k = resampling(initU,wNorm)
         
-    if mode == 3 or mode == 4:
+    if mode == 3 or mode == 4 or mode == 7 or mode == 10:
         
         # system noise --------------------------------------------------------
         # ※元の値と足してもマイナスになるかも
@@ -382,7 +421,7 @@ def simulate(features,y,x,t=0,pTime=0,sy=0,nP=0):
         
         updatesy = sy[k]
     
-    if mode == 5 or mode == 6:
+    if mode == 5 or mode == 6 or mode == 8 or mode == 9:
         #pdb.set_trace()
         # index for mean theta,V,b
         indmu = np.argmax(wNorm)
@@ -414,7 +453,7 @@ def simulate(features,y,x,t=0,pTime=0,sy=0,nP=0):
     if isPlot:
         myPlot.NumberLine(standYs,yearInds,label=f"best_years_{t}")
         
-        if mode == 4 or mode == 5 or mode == 6:
+        if mode == 4 or mode == 5 or mode == 6 or mode == 7 or mode == 8 or mode == 9 or mode == 10:
             xt = features[bInd][k]
             np.savetxt(os.path.join(savetxtPath,'B',f'{iS}.txt'),xt,fmt='%6f')
     # -------------------------------------------------------------------------
