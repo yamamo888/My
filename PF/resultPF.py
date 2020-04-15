@@ -19,7 +19,7 @@ import PlotPF as myPlot
 # bool --------
 isLH = True
 isBVTh = True
-isLast = False # for notupdataPF
+isLast = True # for notupdataPF
 isAnima = False
 # -------------
 
@@ -211,7 +211,17 @@ if isBVTh:
         updateBs = np.array([sb for sb in standB])
         # plot
         meanB,medianB = np.mean(updateBs,0),np.median(updateBs,0)
+        # Num.of perticle for label
         numBs = updateBs.shape[0]
+        # index max perticle
+        maxBsind = [i for i,x in enumerate(ratebs) if x == max(ratebs)]
+        # max perticle
+        maxBs = np.array([np.array(updateBs[ind]) for ind in maxBsind])
+        # rate of max perticle
+        maxrate = int(np.max(ratebs[maxBsind]))
+        #pdb.set_trace()
+        # save paramters (high rate of perticle)
+        np.savetxt(os.path.join(savetxtPath,'maxB',f'maxB_{iS+1}_{maxrate}.txt'),maxBs*1000000,fmt='%d',delimiter=',')
         myPlot.scatter3D_heatmap(updateBs[:,ntI],updateBs[:,tntI],updateBs[:,ttI],ratebs,rangeP=[minB,maxB],path='PF',title=f'mean:{meanB}\n median:{medianB}',label=f'Bheatmap_{iS+1}_{numBs}')
     # -------------------------------------------------------------------------
     
@@ -257,11 +267,15 @@ if isLast:
        
        U, th, V, B = myData.loadABLV(logsPath,outputPath,file)
        B = np.concatenate([B[2,np.newaxis],B[4,np.newaxis],B[5,np.newaxis]],0)
-       _, _, _, pJ_all = myData.convV2YearlyData(U,th,V,nYear=10000,cnt=1,stYear=int(U[0,1]))
+       stYear = int(U[0,1]) - 2000
+       deltaU, _, _, pJ_all = myData.convV2YearlyData(U,th,V,nYear=10000,cnt=1,stYear=stYear)
+       #pdb.set_trace()
        # predict eq.
-       predV = [pJ_all[ntI]-int(U[0,1]),pJ_all[tntI]-int(U[0,1]),pJ_all[ttI]-int(U[0,1])]
+       deltaU = np.concatenate([deltaU[:,2,np.newaxis],deltaU[:,4,np.newaxis],deltaU[:,5,np.newaxis]],1)
+       pred = [pJ_all[ntI]-int(U[0,1]),pJ_all[tntI]-int(U[0,1]),pJ_all[ttI]-int(U[0,1])]
+       gt = [np.where(gtV[:,ntI]>0)[0],np.where(gtV[:,tntI]>0)[0],np.where(gtV[:,ttI]>0)[0]]
        # plot & mae eq. of predict & gt
-       maxSim = myPlot.Rireki(gtV,predV,path="Last",label=f"{iS}_{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}",isResearch=True)
+       maxSim = myPlot.Rireki(gt,pred,path="rireki",label=f"{iS}_{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}",isResearch=True)
 
        index = np.append(index,fID)
        if not flag:
@@ -275,8 +289,8 @@ if isLast:
     sortfID = index[sortInd]
     
     # save sort mae & index
-    np.savetxt(os.path.join(savetxtPath,f"maxSims.txt"),sort_maxSims,fmt=f"%d")
-    np.savetxt(os.path.join(savetxtPath,f"index.txt"),sortInd,fmt=f"%d")       
+    np.savetxt(os.path.join(savetxtPath,'mae',f"maxSims.txt"),sort_maxSims,fmt=f"%d")
+    np.savetxt(os.path.join(savetxtPath,'mae',f"index.txt"),sortInd,fmt=f"%d")       
 # -----------------------------------------------------------------------------
 
 # animate image of param b ----------------------------------------------------

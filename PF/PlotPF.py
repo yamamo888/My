@@ -172,10 +172,33 @@ def gif2Animation(gifPath,label="none"):
 # -----------------------------------------------------------------------------
 
 # 地震履歴 ---------------------------------------------------------------------
-def Rireki(gt,pred,title="none",label="none",isShare=False,isSeparate=True):
+def Rireki(gt,pred,path='none',title="none",label="none",isShare=False,isSeparate=True,isResearch=False):
+    """
+    Args
+        gt: gt slip [1400,3]
+    """
     
+    if isResearch:
+        
+        dists = []
+        # del 0 year
+        pred_nk = np.array([s for s in pred[ntI].tolist() if s != 0])
+        pred_tnk = np.array([s for s in pred[tntI].tolist() if s != 0])
+        pred_tk = np.array([s for s in pred[ttI].tolist() if s != 0])
+        
+        
+        for gy,py in zip([gt[ntI],gt[tntI],gt[ttI]],[pred_nk,pred_tnk,pred_tk]):
+            
+            # predict year & gt year
+            pys = py.repeat(gy.shape[0],0).reshape(-1,gy.shape[0])
+            gys = gy.repeat(py.shape[0],0).reshape(-1,py.shape[0])
+            # abs error
+            dist = np.min(np.abs(gys-pys.T),1)
+            dists = np.append(dists,np.sum(dist))
+        
+        title = int(sum(dists))
+        
     sns.set_style("dark")
-
     # share gt & pred
     if isShare:
         fig, figInds = plt.subplots(nrows=3, sharex=True)
@@ -185,7 +208,28 @@ def Rireki(gt,pred,title="none",label="none",isShare=False,isSeparate=True):
     
     if isSeparate:
         colors = ["coral","skyblue","coral","skyblue","coral","skyblue"]
-        plot_data = [gt[:,ntI],pred[:,ntI],gt[:,tntI],pred[:,tntI],gt[:,ttI],pred[:,ttI]]
+        
+        # scalling var.
+        predV,gtV = np.zeros([1400,3]),np.zeros([1400,3])
+        
+        # del first year 
+        pred_nk = [s for s in pred[ntI].tolist() if s != 0]
+        pred_tnk = [s for s in pred[tntI].tolist() if s != 0]
+        pred_tk = [s for s in pred[ttI].tolist() if s != 0]
+        
+        predV[pred_nk,ntI] = 5
+        predV[pred_tnk,tntI] = 5
+        predV[pred_tk,ttI] = 5
+        
+        gtV[gt[ntI].tolist(),ntI] = 5
+        gtV[gt[tntI].tolist(),tntI] = 5
+        gtV[gt[ttI].tolist(),ttI] = 5
+        #pdb.set_trace()
+        
+        # [1400,3]
+        plot_data = [gtV[:,ntI],predV[:,ntI],gtV[:,tntI],predV[:,tntI],gtV[:,ttI],predV[:,ttI]]
+        # not scalling var. [1400,3]
+        #plot_data = [gt[:,ntI],pred[:,ntI],gt[:,tntI],pred[:,tntI],gt[:,ttI],pred[:,ttI]]
         
         fig = plt.figure()
         fig, axes = plt.subplots(nrows=6,sharex="col")
@@ -193,14 +237,9 @@ def Rireki(gt,pred,title="none",label="none",isShare=False,isSeparate=True):
             axes[row].plot(np.arange(1400), data, color=color)
     
     plt.suptitle(f"{title}", fontsize=8)
-    plt.savefig(os.path.join(imgPath,"MSE",f"{label}.png"))
+    plt.savefig(os.path.join(imgPath,path,f"{label}.png"))
     plt.close()
     
+    if isResearch:
+        return int(np.sum(dists))
 # -----------------------------------------------------------------------------
-
-    
-        
-        
-        
-        
-        
