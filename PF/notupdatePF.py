@@ -14,12 +14,17 @@ import numpy as np
 
 from natsort import natsorted
 
+import simulatePF
 import makingDataPF as myData
 import PlotPF as myPlot
 
 
+"""
+動かし方：
+logs/190_1 作成
+"""
 
-# ----------------------------- Path ------------------------------------ #
+# -------------------------------- Path ------------------------------------- #
 # In first ensamble file & logs file
 dirPath = "logs"
 # In paramHM* file
@@ -33,9 +38,9 @@ fileName = "*txt"
 K8_AV2File = "K8_AV2.txt"
 paramCSV = "ParamFilePF.csv"
 batFile = "PyToCPF.bat"
-# ----------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
 
-# --------------------------- parameter --------------------------------- #
+# --------------------------- parameter ------------------------------------- #
 
 isPlot = True
 isSavetxt = True
@@ -75,148 +80,37 @@ safetyNum = 100
 # Num. of assimilation
 ptime = len(timings)
 
+ssYears = []
 # --------------------------------------------------------------------------- #
 
-# =============================================================================
-#         Start Particle Filter
-# =============================================================================
-
-
-#　尤度 + safety & penalty -----------------------------------------------------
-def norm_likelihood_safetypenalty(y,x,s2=100,standYs=0,time=0):
-    gauss,years = np.zeros(nCell+1),np.zeros(nCell) # for penalty
-
-    y_nk = np.array([standYs[ntI]])
-    y_tnk = np.array([standYs[tntI]])
-    y_tk = np.array([standYs[ttI]])
-    
-    # not eq. in tonakai
-    if y_tk[0] == 0:
-        # ※同化年数±100年に地震があった場合はpenalty
-        penaltyInd = np.where((x[ttI]>y_tnk-safetyNum)&(x[ttI]<y_tnk+safetyNum))[0].tolist()
-
-        # not penalty
-        if penaltyInd == []:
-            pass
-        else:
-            xpenalty = x[ttI][penaltyInd]
-            #pdb.set_trace()
-            # ※加算方式
-            gauss_pl = np.max(1/(np.sqrt(2*np.pi*s2)) * np.exp(-((y_tnk-xpenalty)/10)**2/(2*s2)))
-            # ペナルティ分引くため
-            gauss[-1] = -gauss_pl
-
-    # any eq.
-    if not y_nk[0] == 0:
-        # nearist index of gt year [1,]
-        bestInd = np.abs(np.asarray(x[ntI]) - y_nk).argmin()
-        bestX = x[ntI][bestInd]
-        
-        gauss_nk = 1/(np.sqrt(2*np.pi*s2)) * np.exp(-((y_nk-bestX)/10)**2/(2*s2))
-        
-        # in 100 year -> safety
-        if np.abs(bestX-y_nk) < safetyNum:
-            gauss[ntI] = gauss_nk
-        elif penaltyNum <= np.abs(bestX-y_nk):
-            gauss[ntI] = -gauss_nk
-        #pdb.set_trace()    
-        years[ntI] = bestX
-
-    if not y_tnk[0] == 0:
-        
-        bestInd = np.abs(np.asarray(x[tntI]) - y_tnk).argmin()
-        bestX = x[tntI][bestInd]
-        
-        gauss_tnk = 1/(np.sqrt(2*np.pi*s2)) * np.exp(-((y_tnk-bestX)/10)**2/(2*s2))
-        
-        if np.abs(bestX-y_tnk) < safetyNum:
-            gauss[tntI] = gauss_tnk
-        elif penaltyNum <= np.abs(bestX-y_tnk):
-            gauss[tntI] = -gauss_tnk
-        
-        years[tntI] = bestX
-
-    if not y_tk[0] == 0:
-        
-        bestInd = np.abs(np.asarray(x[ttI]) - y_tk).argmin()
-        bestX = x[ttI][bestInd]
-        
-        gauss_tk = 1/(np.sqrt(2*np.pi*s2)) * np.exp(-((y_tk-bestX)/10)**2/(2*s2))
-        
-        if np.abs(bestX-y_tk) < safetyNum:
-            gauss[ttI] = gauss_tk
-        elif penaltyNum <= np.abs(bestX-y_tk):
-            gauss[ttI] = -gauss_tk
-        
-        years[ttI] = bestX
-
-    #pdb.set_trace()
-    # sum of gauss, [1,]
-    sumgauss = np.cumsum(gauss)[-1]
-    
-    return gauss, sumgauss, years
-# -----------------------------------------------------------------------------
-
-# 逆関数 -----------------------------------------------------------------------
-def InvF(WC,idex,u):
-    """
-    Args
-        WC: ex) array([1,2,3]) -> array([1,3,6])
-    """
-    if np.any(WC<u) == False:
-        return 0
-    k = np.max(idex[WC<u])
-    #pdb.set_trace()
-    return k+1
-# -----------------------------------------------------------------------------
-
-# 層化サンプリング -----------------------------------------------------------------
-def resampling(initU,weights):
-    # weights of index
-    idx = np.asanyarray(range(nP))
-    thres = [1/nP*i+initU for i in range(nP)]
-    wc = np.cumsum(weights)
-    k = np.asanyarray([InvF(wc,idx,val) for val in thres])
-    #pdb.set_trace()
-    return k
-# -----------------------------------------------------------------------------
-
-# 重み付き平均 ------------------------------------------------------------------
-def FilterValue(x,wNorm):
-    return np.mean(wNorm * x)
-# -----------------------------------------------------------------------------
-
-# -----------------------------------------------------------------------------
+# --------------------------------------------------------------------------- #
 def simulate(y,x,t=0,pTime=0,ssYears=0,nP=0):
-    """
-    [Args]
-        features: システムモデル値xt. th[1400,perticles,3], V[1400,perticles,3], b[perticles,3]
-        y: 観測モデル値yt. [地震発生年数,]
-        x: 地震年数(1400年). [(地震発生年数zero padding済み),perticles]
-        sy: start of assimilation for perticles
-    """
-    #pdb.set_trace()
+
+    print(f"---- 【{t}】 times ----\n")
+    
     # 1. 初期化 ----------------------------------------------------------------
     # 状態ベクトル theta,v,year　※1セルの時おかしいかも
     # リサンプリング後の特徴量ベクトル
     # all weight
     maxW = np.zeros((nP))
     # weight in each cell + penalty
-    w = np.zeros((nP,nCell+1))
+    gw = np.zeros((nP,nCell+1))
+    # weight for eq. times
+    pw = np.zeros((nP,nCell+1))
     wNorm = np.zeros((nP))
-
     # -------------------------------------------------------------------------
-    pdb.set_trace()
+    #pdb.set_trace()
     # -------------------------------------------------------------------------
     flag = False
     for i in np.arange(nP): # アンサンブル分まわす
-        # =====================================================================
-        #         尤度計算
-        # =====================================================================
         # zero-paddingしたpredを予測した年数だけにする [地震発生年数(可変),]
         yhat_nk = (x[x[:,i,ntI]>0,i,ntI]).astype(int)
         yhat_tnk = (x[x[:,i,tntI]>0,i,tntI]).astype(int)
         yhat_tk = (x[x[:,i,ttI]>0,i,ttI]).astype(int)
+        #pdb.set_trace()
+        yhat_nk = np.array([s for s in yhat_nk.tolist() if s != 0])
+        yhat_tnk = np.array([s for s in yhat_tnk.tolist() if s != 0])
+        yhat_tk = np.array([s for s in yhat_tk.tolist() if s != 0])
         
         # 1400年のスケールに合わせる
         yhat_nk = yhat_nk - ssYears[i]
@@ -228,22 +122,25 @@ def simulate(y,x,t=0,pTime=0,ssYears=0,nP=0):
         # 2.c & 2.d 各粒子の尤度と重み -------------------------------------------
         standYs = [y[ntI][t],y[tntI][t],y[ttI][t]]
     
-        weight, maxweight, years = norm_likelihood_safetypenalty(y,yhat,standYs=standYs,time=t)
+        gweight, gmaxweight, years = simulatePF.norm_likelihood.norm_likelihood_safetypenalty(y,yhat,standYs=standYs,time=t)
+        pweight = simulatePF.norm_likelihood.norm_likelihood_times(y,yhat,standYs=standYs)
         
-        w[i] = weight
-        maxW[i] = maxweight
-    
+        gw[i] = gweight
+        pw[i] = pweight
+        
+        maxW[i] = gmaxweight + pweight
+        
         if not flag:
             yearInds = years
             flag = True
         else:
             # [perticle,3]
             yearInds = np.vstack([yearInds,years])
-    
+        
+        #----------------------------------------------------------------------
+        
     # 規格化 -------------------------------------------------------------------
     # scalling maximum(M),minimum(m)
-    # ※　0割してもいい？
-    #M = 1/(np.sqrt(2*np.pi*10)) * np.exp(-((standYs[tntI]-standYs[tntI])/10)**2/(2*10))
     xmax = np.max(maxW)
     xmin = np.min(maxW)
     
@@ -251,31 +148,23 @@ def simulate(y,x,t=0,pTime=0,ssYears=0,nP=0):
     M = xmax + m
     
     # normalization
-    scaledW =  ((maxW - xmin)*(M - m) / (xmax - xmin)) + m    
+    scaledW =  ((maxW - xmin)*(M - m) / (xmax - xmin)) + m
+    
     wNorm = scaledW/np.sum(scaledW)
-    # -------------------------------------------------------------------------
-
-    # save year & likelihood txt ----------------------------------------------
-    if isSavetxt:
-        np.savetxt(os.path.join(savetxtPath,"lh",f"sum_lh_{t}.txt"),scaledW,fmt="%4f")
-        np.savetxt(os.path.join(savetxtPath,"lh",f"lh_{t}.txt"),w)
-        
-    # -------------------------------------------------------------------------
-    #pdb.set_trace()
-    # =========================================================================
-    #         リサンプリング
-    # =========================================================================
+    #--------------------------------------------------------------------------
+    
+    # リサンプリング ---------------------------------------------------------------
     initU = np.random.uniform(0,1/nP)
-
-    k = resampling(initU,wNorm)
-    
-    print(f"---- 【{t}】 times ----\n")
-    # 発生年数 plot ------------------------------------------------------------
-    if isPlot:
-        myPlot.NumberLine(standYs,yearInds,label=f"best_years_{t}")
-    # -------------------------------------------------------------------------
-    
+    k = simulatePF.resampling(initU,wNorm,nP=nP)
+    #--------------------------------------------------------------------------
+     
+    if isSavetxt:   
+        np.savetxt(os.path.join(savetxtPath,"lh",f"lh_p_{t}.txt"),pw)
+        np.savetxt(os.path.join(savetxtPath,"lh",f"lh_g_{t}.txt"),gw)
+        np.savetxt(os.path.join(savetxtPath,"lh",f"sum_lh_{t}.txt"),maxW,fmt="%4f")
+    #pdb.set_trace()
     return k
+# --------------------------------------------------------------------------- #
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -312,7 +201,7 @@ if __name__ == "__main__":
             # dirpath for each logs
             logsPath = f"{tfID}_{iS}"
             # --------------------------------------------------------------- #
-        
+            #pdb.set_trace()
             filePath = os.path.join(dirPath,logsPath,fileName)
 
             # ------ file 読み込み, 最初は初期アンサンブル読み取り (logs\\*) ------- #
@@ -323,7 +212,7 @@ if __name__ == "__main__":
             # --------------------------------------------------------------- #
             # Num. of perticles
             nP = len(files)
-
+            #pdb.set_trace()
             # ======================== 粒子 作成 ============================= #
             flag,flag1,flag2 = False,False,False
             for fID in np.arange(nP):
@@ -353,12 +242,15 @@ if __name__ == "__main__":
                     # 年数
                     pJs = pJ[:,np.newaxis]
                     #　最適な1400年の開始年数
-                    ssYears = sYear
+                    sYears = sYear
                     flag1 = True
                 else:
                     pJs = np.hstack([pJs,pJ[:,np.newaxis]])
-                    ssYears = np.hstack([ssYears,sYear])
+                    sYears = np.hstack([sYears,sYear])
                 # -------------------------------------------------------------
+            if iS == 0:
+                #pdb.set_trace()
+                ssYears = sYears
             # -------------------------- Call PF ---------------------------- #
             print("---- Start PF !! ----\n")
             # updateID: resampled index
@@ -371,5 +263,14 @@ if __name__ == "__main__":
             updatefiles = [files[ind] for ind in k.tolist()]
             
             for file in updatefiles:
+                
+                # 次に作成するファイル名
+                nextdir = f"190_{iS+1}"
+                # 作成したいファイルある -> True
+                isdir = os.path.exists(nextdir)
+                # ないとき
+                if not isdir:
+                    os.path.makedir(os.path.join(dirPath,nextdir))
+                    
                 # Move log file (perticle) to new directory 
-                shutil.copy(os.path.join(dirPath,f"{logsPath}",os.path.basename(file)),os.path.join(dirPath,f"190_{iS+1}",os.path.basename(file)))
+                shutil.copy(os.path.join(dirPath,f"{logsPath}",os.path.basename(file)),os.path.join(dirPath,nextdir,os.path.basename(file)))
