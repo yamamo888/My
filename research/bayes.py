@@ -12,6 +12,8 @@ import matplotlib.pylab as plt
 from bayes_opt import BayesianOptimization
 
 import DC as myData
+import makingDataPF as myDataPF
+import PlotPF as myPlot
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -26,13 +28,15 @@ trID = int(sys.argv[3])
 # -----------------------------------------------------------------------------
 
 # path ------------------------------------------------------------------------
-logsPath = "logs"
+dirPath = "deltaU_bayes"
 #featuresPath = "features"
 featuresPath = "nankairirekifeature"
+logsPath = "logs"
+savedirPath = "BO"
+savedlogsPath = "bayes"
 paramCSV = "bayesParam.csv"
 batFile = "PyToCBayes.bat"
-dirPath = "deltaU_bayes"
-savedirPath = "BO"
+filePath = "*txt"
 # -----------------------------------------------------------------------------
 
 # paramters -------------------------------------------------------------------
@@ -40,6 +44,8 @@ savedirPath = "BO"
 tfID = 190
 slip = 1
 aYear = 1400
+ntI,tntI,ttI = 0,1,2
+nCell = 3
 
 # range of under & over in parameter
 nkmin,nkmax = 0.0110,0.0170
@@ -50,7 +56,7 @@ tkmin,tkmax = 0.0110,0.0170
 pbounds = {"b1":(nkmin,nkmax),"b2":(tnkmin,tnkmax),"b3":(tkmin,tkmax)}
 # -----------------------------------------------------------------------------
 
- # reading nankai rireki ------------------------------------------------------
+# reading nankai rireki -------------------------------------------------------
 with open(os.path.join(featuresPath,"nankairireki.pkl"), "rb") as fp:
         nkfiles = pickle.load(fp)
 gt = nkfiles[tfID,:,:]
@@ -248,7 +254,37 @@ for line in sort_res:
     else:
         targets = np.vstack([targets,target])
         params = np.vstack([params,param])
-    
+
+# optimized rate
 np.savetxt(os.path.join(savedirPath,f"BO_target_{mode}_{itrNum}_{trID}.txt"),targets,fmt="%6f")
+# parameter b
 np.savetxt(os.path.join(savedirPath,f"BO_paramb_{mode}_{itrNum}_{trID}.txt"),params,fmt=f"%6f")
+# for bat file
+np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{itrNum}_{trID}.txt"),params*1000000,fmt=f"%d",delimiter=",")
 # -----------------------------------------------------------------------------
+
+# Make rireki -----------------------------------------------------------------
+logsfullPath = os.path.join(logsPath,savedlogsPath,filePath)
+logsfile = glob.glob(logsfullPath)
+
+flag = False
+index = []
+for iS in np.arange(len(logsfile)):
+    
+    file = os.path.basename(logsfile[iS])
+    print(file)
+    # Num. of file for sort index
+    fID = int(file.split("_")[-1].split(".")[0])
+   
+    U, th, V, B = myDataPF.loadABLV(logsPath,savedlogsPath,file)
+    B = np.concatenate([B[2,np.newaxis],B[4,np.newaxis],B[5,np.newaxis]],0)
+    yU, yth, yV, pJ_all = myDataPF.convV2YearlyData(U,th,V,nYear=10000,cnt=0)
+    yU, yth, yV, pJ_all, maxSim, sYear = myDataPF.MSErrorNankai(gt,yU,yth,yV,pJ_all,nCell=nCell)
+    
+    predV = [pJ_all[ntI]-int(U[0,1]),pJ_all[tntI]-int(U[0,1]),pJ_all[ttI]-int(U[0,1])]
+    gtV = [np.where(gt[:,ntI]>0)[0],np.where(gt[:,tntI]>0)[0],np.where(gt[:,ttI]>0)[0]]
+    
+    # plot & mae eq. of predict & gt
+    maxSim = myPlot.Rireki(gtV,predV,path="bayes",label=f"{iS}_{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}",isResearch=True)
+# -----------------------------------------------------------------------------
+
