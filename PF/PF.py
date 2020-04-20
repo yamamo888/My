@@ -16,7 +16,7 @@ from scipy.stats import poisson
 from natsort import natsorted
 
 import setenv
-import simulatePF
+import simulatePF as sp
 import updateX
 import makingDataPF as myData
 import PlotPF as myPlot
@@ -28,13 +28,13 @@ import PlotPF as myPlot
 #option = setenv.setenv(args)
 #pdb.set_trace()
 # -------------------------- command argument ------------------------------- #
-# 3: safety & penalty likelihood, 4: scalling likelihood
 mode = int(sys.argv[1])
 # --------------------------------------------------------------------------- #
 
 # ----------------------------- Path ---------------------------------------- #
 # In first ensamble file & logs file
-dirPath = "logs"
+logsPath = "logs"
+imgPath = "images"
 # gt V
 featuresPath = "nankairirekifeature"
 firstEnName = "first*"
@@ -92,34 +92,34 @@ if __name__ == "__main__":
         print("-----------------------------------")
         print("------ {} historical eq data ------".format(tfID))
 
-        # ------------------------ path ------------------------------------- #
         # dirpath for each logs
-        logsPath = "{}".format(tfID)
-        # ------------------------------------------------------------------- #
-
+        dirPath = f"{tfID}"
+        # full path for each logs
+        filePath = os.path.join(logsPath,dirPath,fileName)
+        # path exist or not exist
+        myData.isDirectory(os.path.join(logsPath,dirPath))
+        myData.isDirectory(os.path.join('parFile',dirPath))
+    
         # ----------------- 真の南海トラフ巨大地震履歴 V------------------------- #
         with open(os.path.join(featuresPath,"nankairireki.pkl"), "rb") as fp:
             nkfiles = pickle.load(fp)
 
         # 発生年数取得 & slip velocity (all 30)
         gtV = nkfiles[tfID,:,:]
-        filePath = os.path.join(dirPath,logsPath,fileName)
-
-        # no.4まで学習(津波地震ややこしいから含まない) [11,] [84,287,496or499,761,898,|1005,1107,1254,1344,1346]
-        gtJ = np.unique(np.where(gtV>0)[0])
+      
+        # 重複なしの真値地震
+        #gtJ = np.unique(np.where(gtV>0)[0])
         gtJ_nk = np.where(gtV[:,ntI]>0)[0] # [84,287,499,761,898,1005,1107,1254,1346]
         gtJ_tnk = np.where(gtV[:,tntI]>0)[0] # [84,287,496,761,898,1005,1107,1254,1344]
-        gtJ_tk = [84,287,496,761,898,0,1107,1254,0] # 津波と昭和地震 -> 0
+        gtJ_tk = np.array([84,287,496,761,898,0,1107,1254,0]) # 津波と昭和地震 -> 0
         #gtJ_tk = np.where(gtV[:,ttI]>0)[0] # [84,287,496,761,898,1107,1254]
         gtJs = [gtJ_nk,gtJ_tnk,gtJ_tk]
         # ------------------------------------------------------------------- #
-        #pdb.set_trace()
         
         for iS in np.arange(ptime): # gt times
-
             print(f"*** gt eq.: {gtJs[ntI][iS]} {gtJs[tntI][iS]} {gtJs[ttI][iS]} ***")
 
-            # ------ file 読み込み, 最初は初期アンサンブル読み取り (logs\\*) ------- #
+            # reading logs file, 最初は初期アンサンブル読み取り (logs\\*)
             allfiles = glob.glob(filePath)
             files = []
             if iS == 0: # first time
@@ -129,44 +129,45 @@ if __name__ == "__main__":
                 logfiles = [s for s in allfiles if "log_{}_".format(iS-1) in s]
                 for lf in natsorted(logfiles):
                     files.append(lf)
-            # --------------------------------------------------------------- #            
+            
             # Num. of perticles
             nP = len(files)            
             # ======================== 粒子 作成 ============================= #
             flag,flag1,flag2 = False,False,False
             for fID in np.arange(nP):
-
-                # file 読み込み ------------------------------------------------
+           
+                # reading file
                 print('reading',files[fID])
                 file = os.path.basename(files[fID])
-                # -------------------------------------------------------------
-
-                # 特徴量読み込み ------------------------------------------------
-                # loading U,theta,V,B [number of data,10]
-                U,th,V,B = myData.loadABLV(dirPath,logsPath,file)
+                
+                # reading features (X_t) U,theta,V,B [number of data,10]
+                U,th,V,B = myData.loadABLV(logsPath,dirPath,file)
 
                 if iS == 0:
-                    # 類似度比較 最小誤差年取得 ---------------------------------
-                    # th,V [1400,8] これは1番初めだけ 
+                    # 類似度比較 最小誤差年取得
+                    # yU, yth, yV [1400,8]
                     # sYear: 2000年以降(次のファイルの開始年数)
                     # pJ: 地震が起きた年(2000年=0), [8000,8]
                     yU, yth, yV, pJ_all = myData.convV2YearlyData(U,th,V,nYear,cnt=iS)
-                    yU, yth, yV, pJ_all, maxSim, sYear = myData.MSErrorNankai(gtV,yU,yth,yV,pJ_all,nCell=nCell)
+                    yU, yth, yV, pJ_all, _, sYear = myData.MSErrorNankai(gtV,yU,yth,yV,pJ_all,nCell=nCell)
+                    
                     
                 if iS > 0:
+                    # yU, yth, yV [1400,8]
                     yU, yth, yV, pJ_all = myData.convV2YearlyData(U,th,V,nYear,cnt=iS,stYear=int(ssYears[fID]))
 
                 # concatするために長さそろえる
                 nkJ = np.pad(pJ_all[0],(0,300-pJ_all[0].shape[0]),"constant",constant_values=0)
                 tnkJ = np.pad(pJ_all[1],(0,300-pJ_all[1].shape[0]),"constant",constant_values=0)
                 tkJ = np.pad(pJ_all[2],(0,300-pJ_all[2].shape[0]),"constant",constant_values=0)
-                # [100,3(cell)]
+                # eq. years [100,3(cell)]
                 pJ = np.concatenate((nkJ[:,np.newaxis],tnkJ[:,np.newaxis],tkJ[:,np.newaxis]),1)
+                # 類似度
+                maxSim = myData.MAEyear(gtJs,pJ_all)
                 # -------------------------------------------------------------
                 #pdb.set_trace()
-                # 状態ベクトル ---------------------------------------------------
                 if not flag1:
-                    # [1400,8,粒子]
+                    # features X_t [1400,8,perticles]
                     yth_all = yth[:,:,np.newaxis]
                     yV_all = yV[:,:,np.newaxis]
                     yU_all = yU[:,:,np.newaxis]
@@ -174,6 +175,8 @@ if __name__ == "__main__":
                     # 年数
                     pJs = pJ[:,np.newaxis]
                     sYears = sYear
+                    # 類似度
+                    maxSims = maxSim
                     flag1 = True
                 else:
                     yth_all = np.concatenate([yth_all,yth[:,:,np.newaxis]],2)
@@ -183,9 +186,11 @@ if __name__ == "__main__":
 
                     pJs = np.hstack([pJs,pJ[:,np.newaxis]])
                     sYears = np.vstack([sYears,sYear])
+                    
+                    maxSims = np.vstack([maxSims,maxSim])
                 # -------------------------------------------------------------
             #pdb.set_trace()
-            # [1400,perticle,3(cell)]
+            # 必要なセルの特徴量抽出 [1400,perticle,3(cell)]
             Bs = np.concatenate((B_all[:,nI,np.newaxis],B_all[:,tnI,np.newaxis],B_all[:,tI,np.newaxis]),1)
             yths = np.concatenate((yth_all[:,nI,:,np.newaxis],yth_all[:,tnI,:,np.newaxis],yth_all[:,tI,:,np.newaxis]),2)
             yVs = np.concatenate((yV_all[:,nI,:,np.newaxis],yV_all[:,tnI,:,np.newaxis],yV_all[:,tI,:,np.newaxis]),2)
@@ -195,19 +200,32 @@ if __name__ == "__main__":
 
             if iS == 0:
                 ssYears = sYears
+            # Plot 一番類似度の高い履歴
+            bestind = np.argmin(maxSims)
+            # 一番高い類似度
+            bestSim = maxSims[bestind]
+            bestB = Bs[bestind]
+            bestpJs = pJs[:,bestind,:]
+            bestpJ = [np.array(bestpJs[:,cell][bestpJs[:,cell]>0]) for cell in np.arange(3)]
+            
+            if iS > 0:
+                bestpJ = bestpJ - ssYears[bestind] - state_Year
+            
+            # saved rireki path
+            rirekipath = os.path.join(imgPath,f'exrireki_{mode}')
+            myData.isDirectory(rirekipath)
+            myPlot.Rireki(gtJs,bestpJ,path=rirekipath,label=f"{iS}_{bestind}_{np.round(bestB[ntI],6)}_{np.round(bestB[tntI],6)}_{np.round(bestB[ttI],6)}",title=f'{bestSim[0]}')
+            
             # =============================================================== #
             #pdb.set_trace()
-            # -------------------------- Call PF ---------------------------- #
             print("---- Start PF !! ----\n")
             # resampled: [Th/V,perticles,3(cell)]
             # kInds: best year
             # ssYears: update start of assimulation years
             # updateID: resampled index
-            resampled, bestyears, ssYears, updateID = simulatePF.simulate(Xt,gtJs,pJs,ssYears,mode=mode,t=iS,pTime=ptime,sy=ssYears,nP=nP,nCell=nCell,isSavetxt=isSavetxt,isPlot=isPlot)
-            # --------------------------------------------------------------- #
-            pdb.set_trace()
-            # リサンプリングした値を代入 ----------------------------------------------
-            # 8セル分のth,vにresampleした値を代入(次の初期値の準備)
+            resampled, bestyears, ssYears, updateID = sp.simulate(Xt,gtJs,pJs,ssYears,mode=mode,t=iS,pTime=ptime,sy=ssYears,nP=nP,nCell=nCell,isSavetxt=isSavetxt,isPlot=isPlot)
+            #pdb.set_trace()
+            # 8セル分のth,vにresampleした値を代入(次の初期値の準備) ------------------
             for i in np.arange(nP): # perticle分
                 
                 # U,theta,V,yth_all [1400,8(cell),perticle] -> [8,] -> [perticles,8]
