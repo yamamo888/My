@@ -2,25 +2,18 @@
 
 import os
 import glob
+import pdb
 
 import numpy as np
-
 import matplotlib.pylab as plt
 import matplotlib.pyplot as plt2
 import matplotlib.animation as animation
 from mpl_toolkits.mplot3d import Axes3D
 from PIL import Image
-
 import pylab
 import seaborn as sns
 
-import pdb
-
-# path ------------------------------------------------------------------------
-imgPath = "images"
-numLinePath = "numlines"
-lhPath = "lhs"
-# -----------------------------------------------------------------------------
+import makingDataPF as myData
 
 # parameter -------------------------------------------------------------------
 cellname = ["nk","tnk","tk"]
@@ -28,7 +21,7 @@ ntI,tntI,ttI = 0,1,2
 # -----------------------------------------------------------------------------
 
 # 数直線 -----------------------------------------------------------------------
-def NumberLine(gt,pred,label="auto"):
+def NumberLine(gt,pred,path,label="auto"):
     """
     発生年数がどうなってるかを確認したくって
     Args
@@ -63,14 +56,14 @@ def NumberLine(gt,pred,label="auto"):
         plt2.scatter(x,y[0],c='coral') # 真値
         plt2.title(f"min:{int(np.min(xhat))} max:{int(np.max(xhat))}")
         # -----------------------------------------------------------------
-        plt2.savefig(os.path.join(imgPath,numLinePath,f"{label}_{cellname[cell]}.png"),bbox_inches="tight")
-        #plt2.savefig(os.path.join(imgPath,numLinePath,f"{label}.png"))
+        myData.isDirectory(path)
+        plt2.savefig(os.path.join(path,f"{label}_{cellname[cell]}.png"),bbox_inches="tight")
         
         plt2.close()
 # -----------------------------------------------------------------------------
 
 # ヒストグラム --------------------------------------------------------------------
-def HistLikelihood(weights,label="auto",color="black"):
+def HistLikelihood(weights,path,label="auto",color="black"):
     #pdb.set_trace()
     
     # mean & var for label
@@ -83,7 +76,8 @@ def HistLikelihood(weights,label="auto",color="black"):
     #plt.xlim([0,0.12])
     #plt.ylim([0,175])
     plt.suptitle(f"mean:{lhMean}\n var:{lhVar}")
-    plt.savefig(os.path.join(imgPath,lhPath,f"{label}.png"))
+    myData.isDirectory(path)
+    plt.savefig(os.path.join(path,f"{label}.png"))
     plt.close()
 
 # -----------------------------------------------------------------------------
@@ -107,7 +101,8 @@ def scatter3D(x,y,z,rangeP,path="none",title="none",label="none"):
 
     ax.set_title(f"{title}")
     
-    plt.savefig(os.path.join(imgPath,path,f"{label}.png"))
+    myData.isDirectory(path)  
+    plt.savefig(os.path.join(path,f"{label}.png"))
     plt.close()
 # -----------------------------------------------------------------------------
     
@@ -138,7 +133,8 @@ def scatter3D_heatmap(x,y,z,var,rangeP,path="none",title="none",label="none"):
 
     ax.set_title(f"{title}")
     
-    plt.savefig(os.path.join(imgPath,path,f"{label}.png"))
+    myData.isDirectory(path)  
+    plt.savefig(os.path.join(path,f"{label}.png"))
     plt.close()
 # -----------------------------------------------------------------------------
     
@@ -175,28 +171,14 @@ def gif2Animation(gifPath,label="none"):
 def Rireki(gt,pred,path='none',title="none",label="none",isShare=False,isSeparate=True,isResearch=False):
     """
     Args
-        gt: gt slip [1400,3]
+        gt: gt eq. (best year). [1400,3] 
     """
     
     if isResearch:
+        # degree of similatery
+        dists = myData.MAEyear(gt,pred)
         
-        dists = []
-        # del 0 year
-        pred_nk = np.array([s for s in pred[ntI].tolist() if s != 0])
-        pred_tnk = np.array([s for s in pred[tntI].tolist() if s != 0])
-        pred_tk = np.array([s for s in pred[ttI].tolist() if s != 0])
-        
-        
-        for gy,py in zip([gt[ntI],gt[tntI],gt[ttI]],[pred_nk,pred_tnk,pred_tk]):
-            
-            # predict year & gt year
-            pys = py.repeat(gy.shape[0],0).reshape(-1,gy.shape[0])
-            gys = gy.repeat(py.shape[0],0).reshape(-1,py.shape[0])
-            # abs error
-            dist = np.min(np.abs(gys-pys.T),1)
-            dists = np.append(dists,np.sum(dist))
-        
-        title = int(sum(dists))
+        title = dists
         
     sns.set_style("dark")
     # share gt & pred
@@ -205,7 +187,7 @@ def Rireki(gt,pred,path='none',title="none",label="none",isShare=False,isSeparat
         for figInd in np.arange(len(figInds)):
             figInds[figInd].plot(np.arange(pred.shape[0]), pred[:,figInd],color="skyblue")
             figInds[figInd].plot(np.arange(gt.shape[0]), gt[:,figInd],color="coral")
-    
+    #pdb.set_trace()
     if isSeparate:
         colors = ["coral","skyblue","coral","skyblue","coral","skyblue"]
         
@@ -217,13 +199,15 @@ def Rireki(gt,pred,path='none',title="none",label="none",isShare=False,isSeparat
         pred_tnk = [s for s in pred[tntI].tolist() if s != 0]
         pred_tk = [s for s in pred[ttI].tolist() if s != 0]
         
+        gt_tk = [s for s in gt[ttI].tolist() if s != 0]
+        
         predV[pred_nk,ntI] = 5
         predV[pred_tnk,tntI] = 5
         predV[pred_tk,ttI] = 5
         
         gtV[gt[ntI].tolist(),ntI] = 5
         gtV[gt[tntI].tolist(),tntI] = 5
-        gtV[gt[ttI].tolist(),ttI] = 5
+        gtV[gt_tk,ttI] = 5
         #pdb.set_trace()
         
         # [1400,3]
@@ -237,7 +221,9 @@ def Rireki(gt,pred,path='none',title="none",label="none",isShare=False,isSeparat
             axes[row].plot(np.arange(1400), data, color=color)
     
     plt.suptitle(f"{title}", fontsize=8)
-    plt.savefig(os.path.join(imgPath,path,f"{label}.png"))
+    
+    myData.isDirectory(path)  
+    plt.savefig(os.path.join(path,f"{label}.png"))
     plt.close()
     
     if isResearch:

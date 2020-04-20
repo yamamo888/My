@@ -19,7 +19,6 @@ from natsort import natsorted
 import PlotPF as myPlot
 
 # ---- params ---- #
-
 # eq. year in logs     
 yrInd = 1
 yInd = 0
@@ -37,7 +36,46 @@ stateYear = 2000
 aYear = 1400
 # ---------------- #
 
-#データの読み込み
+# ファイル存在確認 ----------------------------------------------------------------
+def isDirectory(fpath):
+    #pdb.set_trace()
+    # 'path' exist -> True
+    isdir = os.path.exists(fpath)
+    # -> False
+    if not isdir:
+        os.makedirs(fpath)
+#------------------------------------------------------------------------------
+
+# 発生年数誤差出力 --------------------------------------------------------------      
+def MAEyear(gt,pred):
+    """
+    Args
+        gt: ground truth eq.year (tk in 0)
+        pred: predicted eq.year
+    """
+    try:
+        dists = []
+        # del 0 year
+        pred_nk = np.array([s for s in pred[ntI].tolist() if s != 0])
+        pred_tnk = np.array([s for s in pred[tntI].tolist() if s != 0])
+        pred_tk = np.array([s for s in pred[ttI].tolist() if s != 0])
+        
+        gt_tk = np.array([s for s in gt[ttI] if s != 0])
+        
+        for gy,py in zip([gt[ntI],gt[tntI],gt_tk],[pred_nk,pred_tnk,pred_tk]):
+            # predict year & gt year
+            pys = py.repeat(gy.shape[0],0).reshape(-1,gy.shape[0])
+            gys = gy.repeat(py.shape[0],0).reshape(-1,py.shape[0])
+            # abs error
+            dist = np.min(np.abs(gys-pys.T),1)
+            dists = np.append(dists,np.sum(dist))
+            
+        return int(sum(dists))
+    except ValueError:
+        return -1
+#------------------------------------------------------------------------------
+
+# データの読み込み ----------------------------------------------------------------
 def loadABLV(dirPath,logPath,fName):
     """
     1.初期アンサンブル作成(iS==0のとき)
@@ -80,9 +118,10 @@ def loadABLV(dirPath,logPath,fName):
             U,th,V = np.vstack([U,tmpU]),np.vstack([th,tmpth]),np.vstack([V,tmpV])
 
     return U,th,V,B
+#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def convV2YearlyData(U,th,V,nYear=10000,cnt=0,stYear=0):
+def convV2YearlyData(U,th,V,nYear=10000,cnt=0,stYear=0,isLast=False):
     """
     Args:
         nYear: number of year (by simulation) -> 10000
@@ -118,7 +157,7 @@ def convV2YearlyData(U,th,V,nYear=10000,cnt=0,stYear=0):
         tnkYear = np.where(deltaU[stateYear:,4]>slip)[0]
         tkYear = np.where(deltaU[stateYear:,5]>slip)[0]
         yYear = [nkYear,tnkYear,tkYear]
-   
+        
         return yU[stateYear:,:], yth[stateYear:,:], yV[stateYear:,:], yYear
     
     # 途中から始める仕様になってるので、
@@ -129,8 +168,13 @@ def convV2YearlyData(U,th,V,nYear=10000,cnt=0,stYear=0):
         tkYear = np.where(deltaU[:,5]>slip)[0]
         yYear = [nkYear,tnkYear,tkYear]
         
-        return yU[stYear+stateYear:stYear+stateYear+aYear,:], yth[stYear+stateYear:stYear+stateYear+aYear,:], yV[stYear+stateYear:stYear+stateYear+aYear,:], yYear
-   
+        if isLast:
+            # rireki plot    
+            return deltaU[stYear+stateYear:stYear+stateYear+aYear,:], yth[stYear+stateYear:stYear+stateYear+aYear,:], yV[stYear+stateYear:stYear+stateYear+aYear,:], yYear
+        else:
+            return yU[stYear+stateYear:stYear+stateYear+aYear,:], yth[stYear+stateYear:stYear+stateYear+aYear,:], yV[stYear+stateYear:stYear+stateYear+aYear,:], yYear
+#------------------------------------------------------------------------------        
+
 #------------------------------------------------------------------------------
 def GaussErrorNankai(gt,yU,yth,yV,pY,nCell=0):
     """
@@ -208,7 +252,7 @@ def GaussErrorNankai(gt,yU,yth,yV,pY,nCell=0):
 
 # -----------------------------------------------------------------------------
 def MSErrorNankai(gt,yU,yth,yV,pY,nCell=0):
-    
+    #pdb.set_trace()
     # ground truth eq.
     gYear_nk = np.where(gt[:,0] > slip)[0]
     gYear_tnk = np.where(gt[:,1] > slip)[0]
