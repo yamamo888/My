@@ -71,16 +71,14 @@ def simulate(features,y,x,ssYears,mode=0,t=0,pTime=0,sy=0,nP=0,nCell=3,isSavetxt
     VVec = np.zeros((nP,nCell))
     # リサンプリング後の特徴量ベクトル
     xResampled = np.zeros((nParam,nP,nCell))
-    # all weight
-    maxW = np.zeros((nP))
+    # all norm-likelihood
     maxgW = np.zeros((nP))
     maxpW = np.zeros((nP))
-    
     # weight for eq. year in each cell + penalty
     gw = np.zeros((nP,nCell+1))
     # weight for eq. times
     pw = np.zeros((nP,nCell+1))
-    
+    # weight
     wNorm = np.zeros((nP))
     # -------------------------------------------------------------------------
     #pdb.set_trace()
@@ -108,44 +106,10 @@ def simulate(features,y,x,ssYears,mode=0,t=0,pTime=0,sy=0,nP=0,nCell=3,isSavetxt
         # 尤度は地震発生年数、重みとかけるのは状態ベクトル
         # 2.c & 2.d 各粒子の尤度と重み -------------------------------------------
         standYs = [y[ntI][t],y[tntI][t],y[ttI][t]]
-
-        #if mode == 'sp' or mode == 'b_sp' or mode == 'b_sp_nl':
-        if mode == 4 or mode == 5:
-            # eq. year error
-            weight, maxweight, years = norm_likelihood.norm_likelihood_safetypenalty(y,yhat,standYs=standYs,time=t)
-            
-            gw[i] = weight
-            maxW[i] = maxweight
-        # if mode == 'sp_time' or mode == 'b_sp_time_nl':
-        if mode == 6 or mode == 7 or mode == 9 or mode == 10:
-            gweight, gmaxweight, years = norm_likelihood.norm_likelihood_safetypenalty(y,yhat,standYs=standYs,time=t)
-            pweight = norm_likelihood.norm_likelihood_times(y,yhat,standYs=standYs)
-            
-            gw[i] = gweight
-            pw[i] = pweight
-            
-            maxW[i] = gmaxweight + pweight
-        
-        # if mode == 'sp_alltime'
-        if mode == 8:
-            gweight, gmaxweight, years = norm_likelihood.norm_likelihood_safetypenalty(y,yhat,standYs=standYs,time=t)
-            # all eq. time
-            pweight = norm_likelihood.norm_likelihood_alltimes(y,yhat)
-        
-            gw[i] = gweight
-            pw[i] = pweight
-            
-            maxW[i] = gmaxweight + pweight
-        
-        # if mode == 'b_time'
-        if mode == 11:
-            weight = norm_likelihood.norm_likelihood_times(y,yhat,standYs=standYs)
-            maxW[i] = weight
-            years = np.array(standYs)
-        
+       
         # nearist -----
-        # if mode == 'b_near'
-        if mode == 12:
+        # if mode == 'simple' or mode == 'b_near'
+        if mode == 10 or mode == 12:
             weight, maxweight, years = norm_likelihood.norm_likelihood_nearest(y,yhat,standYs=standYs,time=t)
         
             gw[i] = weight
@@ -175,8 +139,7 @@ def simulate(features,y,x,ssYears,mode=0,t=0,pTime=0,sy=0,nP=0,nCell=3,isSavetxt
             pw[i] = pweight
             
             maxgW[i] = gmaxweight
-            maxpW[i] = pweight
-            
+            maxpW[i] = pweight 
         # ---------------------------------------------------------------------
         #pdb.set_trace()
         for indY,indC in zip(years,[ntI,tntI,ttI]):
@@ -199,32 +162,9 @@ def simulate(features,y,x,ssYears,mode=0,t=0,pTime=0,sy=0,nP=0,nCell=3,isSavetxt
             yearInds = np.vstack([yearInds,years])
     #pdb.set_trace()
     # 規格化 -------------------------------------------------------------------
-    if mode == 3 or mode == 9 or mode == 10 or mode == 11:
-        # [perticles,]
-        # maeやと最小年数誤差が一番小さくなってしまうから
-        wNorm = maxW/np.sum(maxW)
-      
-    # if mode == 'sp_alltime' or mode == 'sp_time' or mode == 'b_sp_nl' or mode == 'b_sp_time_nl':
-    elif mode == 4 or mode == 5 or mode == 6 or mode == 7 or mode == 8:
-        # scalling maximum(M),minimum(m)
-        xmax = np.max(maxW)
-        xmin = np.min(maxW)
-        
-        #m = 1/(np.sqrt(2*np.pi*100)) * np.exp(-((standYs[tntI]-gt_Year)/10)**2/(2*100))
-        m1 = 1/(np.sqrt(2*np.pi*100)) * np.exp(-((standYs[tntI]-gt_Year)/10)**2/(2*100))
-        m2 = 1/(np.sqrt(2*np.pi*100)) * np.exp(-((standYs[tntI]-0)/10)**2/(2*100))
-        #pdb.set_trace()
-        m = np.min([m1,m2])
-        M = xmax + m
-        
-        # normalization
-        scaledW =  ((maxW - xmin)*(M - m) / (xmax - xmin)) + m
-        
-        wNorm = scaledW/np.sum(scaledW)
-    
     # nearist ----
     # only eq.years
-    elif mode == 12 or mode == 13 or mode == 21:
+    if mode == 10 or mode == 12 or mode == 13 or mode == 21:
         # 全セルがぴったりの時
         if any(maxgW==0):
             zeroind = np.where(maxgW==0)[0].tolist()
@@ -255,27 +195,26 @@ def simulate(features,y,x,ssYears,mode=0,t=0,pTime=0,sy=0,nP=0,nCell=3,isSavetxt
     # ※3セル同じ組み合わせのbが選ばれる
     # index for resampling
     k = resampling(initU,wNorm,nP=nP)
-    # if mode == 'sp' or mode == 'sp_time' or mode == 'sp_time_notscall'
-    if mode == 4 or mode == 7 or mode == 10:
-        
+    # simple
+    if mode == 10:
         # system noise --------------------------------------------------------
         # ※元の値と足してもマイナスになるかも
         # array[cell,perticles] V & theta parameterがすべて同じ組み合わせになるのを防ぐため
         Thnoise = np.array([np.random.normal(0,0.01*np.mean(ThVec[:,cell]),nP) for cell in np.arange(nCell)])
         Vnoise = np.array([np.random.normal(0,0.01*np.mean(VVec[:,cell]),nP) for cell in np.arange(nCell)])
-        #bnoise = np.array([np.random.normal(0,0.01*np.mean(features[bInd][:,cell]),nP) for cell in np.arange(nCell)])
+        bnoise = np.array([np.random.normal(0,0.01*np.mean(features[bInd][:,cell]),nP) for cell in np.arange(nCell)])
         # ---------------------------------------------------------------------
     
         xResampled[thInd] = ThVec[k] + np.abs(Thnoise).T
         xResampled[vInd] = VVec[k] + np.abs(Vnoise).T
-        xResampled[bInd] = features[bInd][k]
         # Add noise
-        #xResampled[bInd] = features[bInd][k] + np.abs(bnoise).T
+        xResampled[bInd] = features[bInd][k] + np.abs(bnoise).T
         
         updatesy = sy[k]
     
+    # 尤度工夫 var. ------------------------------------------------------------
     # if mode == 'sp_alltime' or mode == 'b_sp_nl' or mode == 'b_sp_time_nl':
-    if mode == 6 or mode == 8 or mode == 9 or mode == 11 or mode == 12 or mode == 13 or mode == 21 or mode == 22:
+    if mode == 12 or mode == 13 or mode == 21 or mode == 22:
         #pdb.set_trace()
         # index for mean theta,V,b
         indmu = np.argmax(wNorm)
@@ -312,25 +251,11 @@ def simulate(features,y,x,ssYears,mode=0,t=0,pTime=0,sy=0,nP=0,nCell=3,isSavetxt
     
     # save year & likelihood txt ----------------------------------------------
     if isSavetxt:
-        """
-        # if mode == 'sp' or mode == 'b_sp' or mode == 'b_sp_nl'
-        if mode == 4 or mode == 5 or mode == 6 or mode == 7 or mode == 8:
-            np.savetxt(os.path.join(savetxtPath,"lh",f"sum_lh_{t}.txt"),scaledW,fmt="%4f")
-        else:    
-            np.savetxt(os.path.join(savetxtPath,"lh",f"sum_lh_{t}.txt"),maxW,fmt="%4f")
-        # if mode == 'sp_alltime' or mode == 'sp_time_np' or mode == 'b_sp_time_nl'
-        if mode == 7 or mode == 8 or mode == 9 or mode == 10:            
-            np.savetxt(os.path.join(savetxtPath,"lh",f"lh_p_{t}.txt"),pw)
-            np.savetxt(os.path.join(savetxtPath,"lh",f"lh_g_{t}.txt"),gw)
-        elif mode == 11:
-            np.savetxt(os.path.join(savetxtPath,"lh",f"sum_lh_{t}.txt"),maxW,fmt="%4f")
-        else:
-            np.savetxt(os.path.join(savetxtPath,"lh",f"lh_{t}.txt"),gw)
-        """
+     
         # nearist ----
         lhpath = os.path.join(savetxtPath,f"lh_{mode}")
         myData.isDirectory(lhpath)
-        if mode == 12 or mode == 13 or mode == 21:
+        if mode == 10 or mode == 12 or mode == 13 or mode == 21:
             np.savetxt(os.path.join(lhpath,f"lh_{t}.txt"),gw)
             np.savetxt(os.path.join(lhpath,f"sum_lh_{t}.txt"),maxgW)
         else:
