@@ -32,7 +32,6 @@ isAnima = False
 logsPath = "logs"
 imgPath = "images"
 savetxtPath = "savetxt"
-paramPath = "parFile"
 firstPath = "nk"
 outputPath = f"190_{mode}"
 featuresPath = "nankairirekifeature"
@@ -57,7 +56,9 @@ nCell = 3
 # Num. of assimulation times
 iS = 9
 # Num. of perticles
-nP = 501
+#nP = 501
+nP = 100
+
 # --------------
 
 # likelihood hist plot --------------------------------------------------------  
@@ -266,46 +267,60 @@ if isLast:
     """
     print("Last research....")
     
-    # logs 8 var.
-    lastlogsPath = os.path.join(logsPath,outputPath,txtPath)
-    lastlogs = glob.glob(lastlogsPath)
-    
-    flag = False
-    index = []
-    for iS in np.arange(len(lastlogs)):
-       file = os.path.basename(lastlogs[iS])
-       print(file)
-       # Num. of file for sort index
-       fID = int(file.split("_")[-1].split(".")[0])
-       
-       U, th, V, B = myData.loadABLV(logsPath,outputPath,file)
-       B = np.concatenate([B[2,np.newaxis],B[4,np.newaxis],B[5,np.newaxis]],0)
-       stYear = int(U[0,1]) - 2000
-       deltaU, _, _, pJ_all = myData.convV2YearlyData(U,th,V,nYear=10000,cnt=1,stYear=stYear,isLast=True)
-       
-       # predict eq.
-       deltaU = np.concatenate([deltaU[:,2,np.newaxis],deltaU[:,4,np.newaxis],deltaU[:,5,np.newaxis]],1)
-       pred = [pJ_all[ntI]-int(U[0,1]),pJ_all[tntI]-int(U[0,1]),pJ_all[ttI]-int(U[0,1])]
-       gt = [np.where(gtV[:,ntI]>0)[0],np.where(gtV[:,tntI]>0)[0],np.where(gtV[:,ttI]>0)[0]]
-       
-       # plot & mae eq. of predict & gt
-       rpath = os.path.join(imgPath,f'rireki_{mode}')   
-       maxSim = myPlot.Rireki(gt,pred,path=rpath,label=f"{iS}_{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}",isResearch=True)
-
-       index = np.append(index,fID)
-       if not flag:
-           maxSims = maxSim
-           flag = True
-       else:
-           maxSims = np.hstack([maxSims,maxSim])
-    
-    sortInd = np.argsort(maxSims)
-    sort_maxSims = maxSims[sortInd]
-    sortfID = index[sortInd]
-    
-    # save sort mae & index
-    np.savetxt(os.path.join(savetxtPath,'mae',f"maxSims_{mode}.txt"),sort_maxSims,fmt=f"%d")
-    np.savetxt(os.path.join(savetxtPath,'mae',f"index_{mode}.txt"),sortInd,fmt=f"%d")       
+    for ide in np.arange(9):
+        
+        # logs 8 var.
+        lastlogsPath = os.path.join(logsPath,outputPath,f'log_{ide}_*')
+        lastlogs = glob.glob(lastlogsPath)
+        
+        flag = False
+        index = []
+        for iS in np.arange(len(lastlogs)):
+           file = os.path.basename(lastlogs[iS])
+           print(file)
+           # Num. of file for sort index
+           fID = int(file.split("_")[-1].split(".")[0])
+           
+           U, th, V, B = myData.loadABLV(logsPath,outputPath,file)
+           B = np.concatenate([B[2,np.newaxis],B[4,np.newaxis],B[5,np.newaxis]],0)
+           stYear = int(U[0,1]) - 2000
+           deltaU, _, _, pJ_all = myData.convV2YearlyData(U,th,V,nYear=10000,cnt=1,stYear=stYear,isLast=True)
+           
+           # predict eq. [1400,3]
+           deltaU = np.concatenate([deltaU[:,2,np.newaxis],deltaU[:,4,np.newaxis],deltaU[:,5,np.newaxis]],1)
+           pred = [pJ_all[ntI]-int(U[0,1]),pJ_all[tntI]-int(U[0,1]),pJ_all[ttI]-int(U[0,1])]
+           gt = [np.where(gtV[:,ntI]>0)[0],np.where(gtV[:,tntI]>0)[0],np.where(gtV[:,ttI]>0)[0]]
+           pdb.set_trace()
+           if id == 8:
+               # plot & mae eq. of predict & gt
+               rpath = os.path.join(imgPath,f'rireki_{mode}')   
+               maxSim = myPlot.Rireki(gt,pred,path=rpath,label=f"{iS}_{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}",isResearch=True)
+           else:
+               maxSim = myData.MAEyear(gt,pred)
+               #pdb.set_trace()
+            
+           index = np.append(index,fID)
+           
+           if not flag:
+               maxSims = maxSim
+               flag = True
+           else:
+               maxSims = np.hstack([maxSims,maxSim])
+        
+        sortInd = np.argsort(maxSims)
+        sort_maxSims = maxSims[sortInd]
+        sortfID = index[sortInd]
+        statis = []
+        # statistics or maxSims
+        meanDS = np.mean(maxSims)
+        minDS,maxDS = np.min(maxSims),np.max(maxSims)
+        statis = np.append(statis,[meanDS,minDS,maxDS])
+        # save sort mae & index
+        maepath = os.path.join(savetxtPath,f'mae_{mode}')
+        myData.isDirectory(maepath)
+        np.savetxt(os.path.join(maepath,f"maxSims_{ide}.txt"),sort_maxSims,fmt=f"%d")
+        np.savetxt(os.path.join(maepath,f"index_{ide}.txt"),sortInd,fmt=f"%d")       
+        np.savetxt(os.path.join(maepath,f'statis_{ide}.txt'),statis,fmt=f"%d")
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------    
