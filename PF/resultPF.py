@@ -21,9 +21,10 @@ mode = int(sys.argv[1])
 
 
 # bool --------
-isLH = False
-isBVTh = False
+isLH = True
+isBVTh = True
 isLast = True
+isRirekierror = True
 isnotupdateLast = False # for notupdataPF
 isAnima = False
 # -------------
@@ -56,8 +57,8 @@ nCell = 3
 # Num. of assimulation times
 iS = 9
 # Num. of perticles
-#nP = 501
-nP = 100
+nP = 501
+#nP = 100
 
 # --------------
 
@@ -290,8 +291,8 @@ if isLast:
            deltaU = np.concatenate([deltaU[:,2,np.newaxis],deltaU[:,4,np.newaxis],deltaU[:,5,np.newaxis]],1)
            pred = [pJ_all[ntI]-int(U[0,1]),pJ_all[tntI]-int(U[0,1]),pJ_all[ttI]-int(U[0,1])]
            gt = [np.where(gtV[:,ntI]>0)[0],np.where(gtV[:,tntI]>0)[0],np.where(gtV[:,ttI]>0)[0]]
-           pdb.set_trace()
-           if id == 8:
+           #pdb.set_trace()
+           if ide == 8:
                # plot & mae eq. of predict & gt
                rpath = os.path.join(imgPath,f'rireki_{mode}')   
                maxSim = myPlot.Rireki(gt,pred,path=rpath,label=f"{iS}_{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}",isResearch=True)
@@ -322,6 +323,30 @@ if isLast:
         np.savetxt(os.path.join(maepath,f"index_{ide}.txt"),sortInd,fmt=f"%d")       
         np.savetxt(os.path.join(maepath,f'statis_{ide}.txt'),statis,fmt=f"%d")
 # -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+if isRirekierror:
+    
+    # saved maxSims file path
+    boxpath = os.path.join(savetxtPath,f'mae_{mode}','maxSims_*')
+    boxfullpath = glob.glob(boxpath)
+    
+    flag = False
+    for path in boxfullpath:
+        # loading maxsim
+        maxsim = np.loadtxt(path)
+        
+        if not flag:
+            maxsims = maxsim
+            flag = True
+        else:
+            # [id,perticles]
+            maxsims = np.vstack([maxsims,maxsim])
+    
+    # Save
+    boxpath = os.path.join(imgPath,f'box_{mode}')
+    myData.isDirectory(boxpath)
+    myPlot.BoxPlot(maxsims.T,path=boxpath,label=f'box_{mode}')
 
 # -----------------------------------------------------------------------------    
 if isnotupdateLast:

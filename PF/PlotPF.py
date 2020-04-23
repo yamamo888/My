@@ -137,7 +137,31 @@ def scatter3D_heatmap(x,y,z,var,rangeP,path="none",title="none",label="none"):
     plt.savefig(os.path.join(path,f"{label}.png"))
     plt.close()
 # -----------------------------------------------------------------------------
+
+# 箱ひげ -----------------------------------------------------------------------
+def BoxPlot(x,path='none',title='none',label='none'):
+    """
+    x: numpy [perticles,id]
+    """
     
+    sns.set_style("dark")
+
+    # numpy -> list 
+    x_tuple = tuple(x[:,i].tolist() for i in np.arange(x.shape[1]))
+    
+    idx = []
+    for i in np.arange(x.shape[-1]): # data [peticles]
+        idx = np.append(idx,str(i+1))
+    
+    fig,ax = plt.subplots()
+    ax.boxplot(x_tuple,sym='d',patch_artist=True,boxprops=dict(facecolor='lightblue',color='gray'),medianprops=dict(color='gray'))
+    ax.set_xticklabels(idx)
+        
+    myData.isDirectory(path)  
+    plt.savefig(os.path.join(path,f"{label}.png"))
+    plt.close()
+# -----------------------------------------------------------------------------
+         
 # アニメーション -------------------------------------------------------------------
 def gif2Animation(gifPath,label="none"):
     #pdb.set_trace()
