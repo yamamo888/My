@@ -48,12 +48,14 @@ ntI,tntI,ttI = 0,1,2
 nCell = 3
 # num.of epoch
 nEpoch = 10
-
+# range b
+mt = 1000000
 # default
 # range of under & over in parameter
 nkmin,nkmax = 0.014449,0.015499
 tnkmin,tnkmax = 0.012,0.014949
-tkmin,tkmax = 0.012,0.0135
+#tkmin,tkmax = 0.012,0.0135
+tkmin,tkmax = 0.013450,0.013450
 
 defaultpdB = [[nkmin,nkmax],[tnkmin,tnkmax],[tkmin,tkmax]]
 # -----------------------------------------------------------------------------
@@ -84,12 +86,24 @@ def readFiles():
     return files
 # -----------------------------------------------------------------------------
 
+# moving files ----------------------------------------------------------------
+def moveFiles(cpath,newpath):
+    '''
+    cpath: current directory path
+    newpath: distination directory path
+    '''
+    if os.path.exists(os.path.join(newpath,os.path.basename(cpath))):
+        os.remove(cpath)
+    else:
+        shutil.move(cpath,newpath)
+# -----------------------------------------------------------------------------
+
 # making logs -----------------------------------------------------------------
 def makeLog(b1,b2,b3):
     #pdb.set_trace()
     # save param b ------------------------------------------------------------
     params = np.concatenate((b1[np.newaxis],b2[np.newaxis],b3[np.newaxis]),0)[:,np.newaxis]
-    np.savetxt(paramCSV,params.T*1000000,delimiter=",",fmt="%.0f")
+    np.savetxt(paramCSV,params.T*mt,delimiter=",",fmt="%.0f")
     # -------------------------------------------------------------------------
     
     # call bat ----------------------------------------------------------------
@@ -114,7 +128,7 @@ def func(b1,b2,b3):
     
     # simulation
     makeLog(b1,b2,b3)
-
+    
     # reading gt & logs
     logfile = readFiles()[0]
     
@@ -129,12 +143,12 @@ def func(b1,b2,b3):
     # Move readed logfile
     oldpath = os.path.join(logfile)
     newpath = os.path.join(logsPath,savedlogPath)
-    shutil.move(oldpath,newpath)
-
+    moveFiles(oldpath,newpath)
+  
     return maxSim
 # -----------------------------------------------------------------------------
-
-
+"""
+# -----------------------------------------------------------------------------
 for epoch in np.arange(nEpoch):
     
     # Set 
@@ -143,10 +157,12 @@ for epoch in np.arange(nEpoch):
     else:
         pdBs = np.loadtxt(os.path.join(savedirPath,f"BO_paramb_{epoch-1}_{itrNum}_{trID}.txt"))
         
-        best1B = pdBs[-1]
-        best2B = pdBs[-2]
+        minpdBs = pdBs[-1]/mt
+        maxpdBs = pdBs[-2]/mt
         
-        minpdBs,maxpdBs = np.min(best1B,0),np.max(best2B,0)
+        print('range min:',minpdBs)
+        print('range max:',maxpdBs)
+        
         pdB = [[minpdBs[ntI],maxpdBs[ntI]],[minpdBs[tntI],maxpdBs[tntI]],[minpdBs[ttI],maxpdBs[ttI]]]
     
     
@@ -167,7 +183,7 @@ for epoch in np.arange(nEpoch):
     # sort based on 'target'(maxSim)
     sort_res = sorted(res, key=lambda x: x['target'])
     # -------------------------------------------------------------------------
-    
+    #pdb.set_trace()
     # Save params -------------------------------------------------------------
     flag = False
     for line in sort_res:
@@ -178,24 +194,76 @@ for epoch in np.arange(nEpoch):
         
         if not flag:
             targets = target
-            params = param
+            params = param * mt
             flag = True
         else:
             targets = np.vstack([targets,target])
-            params = np.vstack([params,param])
-    
+            params = np.vstack([params,param * mt])
     # optimized rate
     np.savetxt(os.path.join(savedirPath,f"BO_target_{epoch}_{itrNum}_{trID}.txt"),targets)
     # parameter b
-    np.savetxt(os.path.join(savedirPath,f"BO_paramb_{epoch}_{itrNum}_{trID}.txt"),params,fmt=f"%8f")
+    np.savetxt(os.path.join(savedirPath,f"BO_paramb_{epoch}_{itrNum}_{trID}.txt"),params,fmt=f"%d")
     # -------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+"""
+"""
+# Make best csv ---------------------------------------------------------------
+# Get best paramter b
+targetfullPath = os.path.join(savedirPath,'BO_target_*')
+targetfiles = glob.glob(targetfullPath)
+
+bfullPath = os.path.join(savedirPath,'BO_paramb_*')
+bfiles = glob.glob(bfullPath)
+
+flag = False
+for targetfile,bfile in zip(targetfiles,bfiles):
+    target = np.loadtxt(targetfile)
+    paramb = np.loadtxt(bfile)
     
-    
+    if not flag:
+        targets = target
+        bs = paramb
+        flag = True
+    else:
+        #pdb.set_trace()
+        targets = np.hstack([targets,target])
+        bs = np.vstack([bs,paramb])
+
+# del multiple parameter b
+parambs = [bs[0]]
+index = [0]
+for ind,line in enumerate(bs):
+    if not all(line == parambs[-1]):
+        parambs.append(line)
+        index.append(ind)
+
+# del multiple targets
+maxsims = targets[index]
+
+# list -> numpy
+parambs = np.array(parambs)
+
+# min mse index
+best100ind = np.argsort(maxsims)[::-1][:100]
+best100target = targets[best100ind]
+best100b = bs[best100ind.tolist()]
+
+np.savetxt(os.path.join(savedirPath,f'best100_target.txt'),best100target)
+# for bat
+np.savetxt(os.path.join(savedirPath,f'best100_b.csv'),best100b,delimiter=',',fmt='%d')
+# -----------------------------------------------------------------------------
+
+# after featureV.bat
+
 """
 # Make rireki -----------------------------------------------------------------
-logsfullPath = os.path.join(logsPath,savedlogsPath,filePath)
+logsfullPath = os.path.join(logsPath,f'sortbayes_{trID}',filePath)
 logsfile = glob.glob(logsfullPath)
 
+with open(os.path.join(featuresPath,"nankairireki.pkl"), "rb") as fp:
+    nkfiles = pickle.load(fp)
+gt = nkfiles[190,:,:]
+  
 flag = False
 index = []
 for iS in np.arange(len(logsfile)):
@@ -205,15 +273,29 @@ for iS in np.arange(len(logsfile)):
     # Num. of file for sort index
     fID = int(file.split("_")[-1].split(".")[0])
    
-    U, th, V, B = myDataPF.loadABLV(logsPath,savedlogsPath,file)
+    U, th, V, B = myDataPF.loadABLV(logsPath,f'sortbayes_{trID}',file)
     B = np.concatenate([B[2,np.newaxis],B[4,np.newaxis],B[5,np.newaxis]],0)
-    yU, yth, yV, pJ_all = myDataPF.convV2YearlyData(U,th,V,nYear=10000,cnt=0)
-    yU, yth, yV, pJ_all, maxSim, sYear = myDataPF.MSErrorNankai(gt,yU,yth,yV,pJ_all,nCell=nCell)
+    deltaU, yth, yV, pJ_all = myDataPF.convV2YearlyData(U,th,V,nYear=10000,cnt=0,isLast=True)
+    deltaU = np.concatenate((deltaU[:,2,np.newaxis],deltaU[:,4,np.newaxis],deltaU[:,5,np.newaxis]),1)
+    maxSim, pred = myData.MinErrorNankai(deltaU,mode=3,isPlot=True)
     
+    pJ_all = [np.where(pred[:,ntI]>1)[0],np.where(pred[:,tntI]>1)[0],np.where(pred[:,ttI]>1)[0]]
     predV = [pJ_all[ntI]-int(U[0,1]),pJ_all[tntI]-int(U[0,1]),pJ_all[ttI]-int(U[0,1])]
     gtV = [np.where(gt[:,ntI]>0)[0],np.where(gt[:,tntI]>0)[0],np.where(gt[:,ttI]>0)[0]]
     
     # plot & mae eq. of predict & gt
-    maxSim = myPlot.Rireki(gtV,predV,path="bayes",label=f"{iS}_{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}",isResearch=True)
+    myPlot.Rireki(gtV,predV,path=f"bayes_{trID}",label=f"{iS}_{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}",title=f'{int(maxSim)}')
+
+    if not flag:
+        maxSims = maxSim
+        flag = True
+    else:
+        maxSims = np.hstack([maxSims,maxSim])
+    
+sort_maxSims = np.sort(maxSims)
+index = np.argsort(maxSims)
+
+np.savetxt(os.path.join(f"bayes_{trID}",'maxsim.txt'),sort_maxSims,fmt='%d')
+np.savetxt(os.path.join(f"bayes_{trID}",'index.txt'),index,fmt='%d')
 # -----------------------------------------------------------------------------
-"""
+

@@ -50,6 +50,12 @@ th = 1
 ntI,tntI,ttI = 0,1,2
 # ---------------- #
 
+# reading nankai rireki -------------------------------------------------------
+with open(os.path.join(featurePath,"nankairireki.pkl"), "rb") as fp:
+        nkfiles = pickle.load(fp)
+gt = nkfiles[190,:,:]
+# -----------------------------------------------------------------------------
+   
 # -----------------------------------------------------------------------------
 # makingData.pyとはちょっと違う
 def loadABLV(logFullPath):
@@ -84,7 +90,6 @@ def loadABLV(logFullPath):
 
 # -----------------------------------------------------------------------------
 def convV2YearlyData(V,isPlot=False):
-    
     # 初めの観測した年
     sYear = np.floor(V[0,yInd])
     yV = np.zeros([nYear,nCell])
@@ -92,13 +97,14 @@ def convV2YearlyData(V,isPlot=False):
     for year in np.arange(sYear,nYear):
         # 観測データがある場合
         if np.sum(np.floor(V[:,yInd])==year):
-            # 観測データがあるときはそのまま代入
-            yV[int(year)] = V[np.floor(V[:,yInd])==year,vInds[0]:]
+            # 観測データがあるときはそのまま代入 (U,theta,V出力された用)
+            yV[int(year)] = V[np.floor(V[:,yInd])==year,vInds[0]:][0,:]
         
         # 観測データがない場合
         else:
             # その1つ前の観測データを入れる
             yV[int(year)] = yV[int(year)-1,:]
+    
     # 累積速度から、速度データにする
     deltaV = yV[yInd:]-yV[:-yInd]
     # 一番最初のデータをappendして、10000年にする
@@ -148,7 +154,7 @@ def convV2IntervalData(V):
 # -----------------------------------------------------------------------------
     
 # 全間隔 ----------------------------------------------------------------------
-def MinErrorNankai(gt,pred):
+def MinErrorNankai(pred,mode=2,isPlot=False):
     
     # ----
     # 真値の地震発生年数
@@ -156,7 +162,7 @@ def MinErrorNankai(gt,pred):
     gYear_tnk = np.where(gt[:,1] > slip)[0]
     gYear_tk = np.where(gt[:,2] > slip)[0]
     # ----
-    
+    #pdb.set_trace()
     # 閾値 & 二乗誤差 順番
     if mode == 3:
         flag = False
@@ -182,9 +188,9 @@ def MinErrorNankai(gt,pred):
             if pYear_tk.shape[0] < gNum_tk:
                 pYear_tk = np.hstack([pYear_tk, np.tile(pYear_tk[-1], gNum_tk-pYear_tk.shape[0])])
             # [9,]
-            ndist_nk = gauss(gYear_nk,pYear_nk)
-            ndist_tnk = gauss(gYear_tnk,pYear_tnk)
-            ndist_tk = gauss(gYear_tk,pYear_tk)
+            ndist_nk = gauss(gYear_nk,pYear_nk,mode=3)
+            ndist_tnk = gauss(gYear_tnk,pYear_tnk,mode=3)
+            ndist_tk = gauss(gYear_tk,pYear_tk,mode=3)
             
             # 真値に合わせて二乗誤差
             yearError_nk = np.sum(ndist_nk)
@@ -192,7 +198,7 @@ def MinErrorNankai(gt,pred):
             yearError_tk = np.sum(ndist_tk)
             
             yearError = yearError_nk + yearError_tnk + yearError_tk
-              
+            
             if not flag:
                 yearErrors = yearError
                 flag = True
@@ -275,11 +281,16 @@ def MinErrorNankai(gt,pred):
 
     # 最小誤差確率　
     maxSim = yearErrors[sInd]
-    return maxSim, pred[sInd:sInd+aYear]
+   
+    if isPlot:
+        return maxSim, pred[sInd:sInd+aYear]
+    else:
+        return maxSim
+        
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
-def gauss(gtY,predY,sigma=100):
+def gauss(gtY,predY,sigma=100,mode=3):
     
     # gauss
     if mode == 0:
@@ -297,11 +308,12 @@ def gauss(gtY,predY,sigma=100):
         gtYs = gtY.repeat(predY.shape[0],0).reshape(-1,predY.shape[0])
     
         gauss = (gtYs - predYs.T)**2
-    
-    # mse
+        
+    # mse or mae
     elif mode == 3:
         
-        gauss = (gtY - predY)**2
+        #gauss = (gtY - predY)**2
+        gauss = np.abs(gtY - predY)
     
     return gauss    
 # -----------------------------------------------------------------------------
@@ -315,11 +327,11 @@ if __name__ == "__main__":
 
     # ---- bool ---- #
     # 3.
-    isplotbestPath = False
+    isplotbestPath = True
     # 2. best 100 txt
     ismakingbestPath = False
     # 1. all research
-    ismakingminPath = True
+    ismakingminPath = False
     isPlot = False
     # -------------- #
     
@@ -332,7 +344,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------------------
     if isplotbestPath:    
         # ---------------------------------------------------------------------
-        logfilePath = os.path.join(dsdirPath,"best100_2","*txt")
+        logfilePath = os.path.join(dsdirPath,"bestMSE","*txt")
         
         logfiles = glob.glob(logfilePath)
         # ---------------------------------------------------------------------
@@ -390,7 +402,7 @@ if __name__ == "__main__":
         bestPath = Path[bestInds]
         bestDS = DS[bestInds]
         # ---------------------------------------------------------------------
-        pdb.set_trace()
+        #pdb.set_trace()
         # save best path & ds -------------------------------------------------
         with open(os.path.join(dsdirPath,"bestPath100.txt"),"w") as f:
             f.write("\n".join(bestPath))
