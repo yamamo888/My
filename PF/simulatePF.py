@@ -108,38 +108,46 @@ def simulate(features,y,x,ssYears,mode=0,t=0,pTime=0,sy=0,nP=0,nCell=3,isSavetxt
         standYs = [y[ntI][t],y[tntI][t],y[ttI][t]]
        
         # nearist -----
-        # if mode == 'simple' or mode == 'b_near'
-        if mode == 10 or mode == 12:
+        # if mode == 'near' or mode == 'simple' or mode == 'b_near'
+        if mode == 0:
             weight, maxweight, years = norm_likelihood.norm_likelihood_nearest(y,yhat,standYs=standYs,time=t)
         
             gw[i] = weight
             maxgW[i] = maxweight
-        
-        # if mode == 'b_p_near'
-        if mode == 13:
-            weight, maxweight, years = norm_likelihood.norm_likelihood_nearest_penalty(y,yhat,standYs=standYs,time=t)
-        
-            gw[i] = weight
-            maxgW[i] = maxweight
-        
-        # if mode == 'b_sp_near_scale'
-        if mode == 21:
-            weight, maxweight, years = norm_likelihood.norm_likelihood_nearest_safetypenalty(y,yhat,standYs=standYs,time=t)
-                 
-            gw[i] = weight
-            maxgW[i] = maxweight
-        
-        # if mode == 'b_sp_time_near'
-        if mode == 22:
+         
+        # if mode == 'sp_time_near' or mode == 'b_sp_time_near'
+        elif mode == 3 or mode == 2:
             gweight, gmaxweight, years = norm_likelihood.norm_likelihood_nearest_safetypenalty(y,yhat,standYs=standYs,time=t)
-            #pweight = norm_likelihood.norm_likelihood_times(y,yhat,standYs=standYs)
             pweight = norm_likelihood.norm_likelihood_alltimes(y,yhat)
         
             gw[i] = gweight
             pw[i] = pweight
             
             maxgW[i] = gmaxweight
-            maxpW[i] = pweight 
+            maxpW[i] = pweight
+        
+        elif mode == 4:
+            weight, maxweight, years = norm_likelihood.norm_likelihood_eachnearest(y,yhat,standYs=standYs,time=t)
+        
+            gw[i] = weight
+            maxgW[i] = maxweight
+        
+        elif mode == 5 or mode == 6:
+            weight, maxweight, years = norm_likelihood.norm_likelihood_eachnearest_penalty(y,yhat,standYs=standYs,time=t)
+        
+            gw[i] = weight
+            maxgW[i] = maxweight
+        
+        elif mode == 7:
+            pweight = norm_likelihood.norm_likelihood_alltimes(y,yhat)
+            gweight, gmaxweight, years = norm_likelihood.norm_likelihood_eachnearest_penalty(y,yhat,standYs=standYs,time=t)
+        
+            gw[i] = gweight
+            pw[i] = pweight
+        
+            maxgW[i] = gmaxweight
+            maxpW[i] = pweight
+        
         # ---------------------------------------------------------------------
         #pdb.set_trace()
         for indY,indC in zip(years,[ntI,tntI,ttI]):
@@ -162,29 +170,27 @@ def simulate(features,y,x,ssYears,mode=0,t=0,pTime=0,sy=0,nP=0,nCell=3,isSavetxt
             yearInds = np.vstack([yearInds,years])
     #pdb.set_trace()
     # 規格化 -------------------------------------------------------------------
-    # nearist ----
     # only eq.years
-    if mode == 10 or mode == 12 or mode == 13 or mode == 21:
+    if mode == 0 or mode == 4 or mode == 5 or mode == 6:
         # 全セルがぴったりの時
         if any(maxgW==0):
             zeroind = np.where(maxgW==0)[0].tolist()
-            maxgW[zeroind] = -1
+            maxgW[zeroind] = 1
         
-        tmpgW = 1/-maxgW
+        tmpgW = 1/maxgW
         wNorm = tmpgW/np.sum(tmpgW)
         
     # eq.years & eq.times
-    elif mode == 22:    
+    elif mode == 3 or mode == 2 or mode == 7:    
         if any(maxgW==0):
             zeroind = np.where(maxgW==0)[0].tolist()
-            maxgW[zeroind] = -1
+            maxgW[zeroind] = 1
         
-        tmpgW = 1/-maxgW
+        tmpgW = 1/maxgW
         
         maxW = tmpgW + maxpW 
         wNorm = maxW/np.sum(maxW)
     
-    print(wNorm)
     # -------------------------------------------------------------------------
     #pdb.set_trace()
     # =========================================================================
@@ -195,8 +201,9 @@ def simulate(features,y,x,ssYears,mode=0,t=0,pTime=0,sy=0,nP=0,nCell=3,isSavetxt
     # ※3セル同じ組み合わせのbが選ばれる
     # index for resampling
     k = resampling(initU,wNorm,nP=nP)
-    # simple
-    if mode == 10:
+ 
+    # simple var. ----
+    if mode == 0:
         # system noise --------------------------------------------------------
         # ※元の値と足してもマイナスになるかも
         # array[cell,perticles] V & theta parameterがすべて同じ組み合わせになるのを防ぐため
@@ -212,14 +219,14 @@ def simulate(features,y,x,ssYears,mode=0,t=0,pTime=0,sy=0,nP=0,nCell=3,isSavetxt
         
         updatesy = sy[k]
     
-    # 尤度工夫 var. ------------------------------------------------------------
+    # 尤度工夫 var. ----
     # if mode == 'sp_alltime' or mode == 'b_sp_nl' or mode == 'b_sp_time_nl':
-    if mode == 12 or mode == 13 or mode == 21 or mode == 22:
-        #pdb.set_trace()
+    elif mode == 3 or mode == 4 or mode == 5 or mode == 7:
         # index for mean theta,V,b
-        indmu = np.argmax(wNorm)
+        muind = np.argmax(wNorm)
         # highest of norm likelihood (index) for mean & sigma
-        muB = features[bInd][indmu] * 1000000
+        muB = features[bInd][muind] * 1000000
+        # variable & co-variable matrix (xy,yz,zx)
         Bin = 10
         sigmaB = [[0,Bin,Bin],[Bin,0,Bin],[Bin,Bin,0]]
         
@@ -235,9 +242,24 @@ def simulate(features,y,x,ssYears,mode=0,t=0,pTime=0,sy=0,nP=0,nCell=3,isSavetxt
         xResampled[thInd] = ThVec[k] + np.abs(Thnoise).T
         xResampled[vInd] = VVec[k] + np.abs(Vnoise).T
         xResampled[bInd] = np.abs(bnoise)*0.000001
-        xResampled[bInd][0] = features[bInd][indmu]
+        xResampled[bInd][0] = features[bInd][muind]
         # 尤度が一番高いperticleの年数に合わせる
-        updatesy = np.array(sy[indmu].tolist()*nP)[:,np.newaxis]
+        updatesy = np.array(sy[muind].tolist()*nP)[:,np.newaxis]
+    
+    # not update b var. ----
+    elif mode == 2 or mode == 6:
+        # system noise --------------------------------------------------------
+        # ※元の値と足してもマイナスになるかも
+        # array[cell,perticles] V & theta parameterがすべて同じ組み合わせになるのを防ぐため
+        Thnoise = np.array([np.random.normal(0,0.01*np.mean(ThVec[:,cell]),nP) for cell in np.arange(nCell)])
+        Vnoise = np.array([np.random.normal(0,0.01*np.mean(VVec[:,cell]),nP) for cell in np.arange(nCell)])
+        # ---------------------------------------------------------------------
+    
+        xResampled[thInd] = ThVec[k] + np.abs(Thnoise).T
+        xResampled[vInd] = VVec[k] + np.abs(Vnoise).T
+        xResampled[bInd] = features[bInd][k]
+        
+        updatesy = sy[k]
     
     #pdb.set_trace()
     
@@ -255,7 +277,7 @@ def simulate(features,y,x,ssYears,mode=0,t=0,pTime=0,sy=0,nP=0,nCell=3,isSavetxt
         # nearist ----
         lhpath = os.path.join(savetxtPath,f"lh_{mode}")
         myData.isDirectory(lhpath)
-        if mode == 10 or mode == 12 or mode == 13 or mode == 21:
+        if mode == 0 or mode == 4 or mode == 5 or mode == 6:
             np.savetxt(os.path.join(lhpath,f"lh_{t}.txt"),gw)
             np.savetxt(os.path.join(lhpath,f"sum_lh_{t}.txt"),maxgW)
         else:

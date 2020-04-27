@@ -46,6 +46,43 @@ def isDirectory(fpath):
         os.makedirs(fpath)
 #------------------------------------------------------------------------------
 
+# 発生年数誤差出力 (相互誤差) --------------------------------------------------------------      
+def eachMAEyear(gt,pred):
+    try:
+        dists = []
+        
+        gt_tk = np.array([s for s in gt[ttI] if s != 0])
+        
+        gNum_nk = gt[ntI].shape[0]
+        gNum_tnk = gt[tntI].shape[0]
+        gNum_tk = gt[ttI].shape[0]
+      
+        # del 0 year
+        pred_nk = np.array([s for s in pred[ntI].tolist() if s != 0])[:gNum_nk]
+        pred_tnk = np.array([s for s in pred[tntI].tolist() if s != 0])[:gNum_tnk]
+        pred_tk = np.array([s for s in pred[ttI].tolist() if s != 0])[:gNum_tk]
+        
+        if pred_nk.shape[0] < gNum_nk:
+            pred_nk = np.hstack([pred_nk, np.tile(pred_nk[-1], gNum_nk-pred_nk.shape[0])])
+        if pred_tnk.shape[0] < gNum_tnk:
+            pred_tnk = np.hstack([pred_tnk, np.tile(pred_tnk[-1], gNum_tnk-pred_tnk.shape[0])])
+        if pred_tk.shape[0] < gNum_tk:
+            pred_tk = np.hstack([pred_tk, np.tile(pred_tk[-1], gNum_tk-pred_tk.shape[0])])
+       
+        for gy,py in zip([gt[ntI],gt[tntI],gt_tk],[pred_nk,pred_tnk,pred_tk]):
+            # predict year & gt year
+            pys = py.repeat(gy.shape[0],0).reshape(-1,gy.shape[0])
+            gys = gy.repeat(py.shape[0],0).reshape(-1,py.shape[0])
+            # abs error
+            dist = np.min(np.abs(gys-pys.T),1)
+            dists = np.append(dists,np.sum(dist))
+        
+        return int(sum(dists))
+    
+    except ValueError:
+        return -1
+#------------------------------------------------------------------------------
+
 # 発生年数誤差出力 --------------------------------------------------------------      
 def MAEyear(gt,pred):
     """
@@ -149,7 +186,7 @@ def convV2YearlyData(U,th,V,nYear=10000,cnt=0,stYear=0,isLast=False):
             yV[int(year)] = float(0) 
     
     deltaU = np.vstack([yU[0,:], yU[1:] - yU[:-1]])
-    
+    #pdb.set_trace()
     # シミュレーションが安定した2000年以降を用いる
     if cnt == 0:
         # ※ Uの発生年数
@@ -251,6 +288,74 @@ def GaussErrorNankai(gt,yU,yth,yV,pY,nCell=0):
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
+def eachMSErrorNankai(gt,yU,yth,yV,pY,nCell=0):
+    #pdb.set_trace()
+    # ground truth eq.
+    gYear_nk = np.where(gt[:,0] > slip)[0]
+    gYear_tnk = np.where(gt[:,1] > slip)[0]
+    gYear_tk = np.where(gt[:,2] > slip)[0]
+    
+    # predicted eq.
+    pred = np.zeros((8000,nCell))
+    pred[pY[ntI],ntI] = 30
+    pred[pY[tntI],tntI] = 30
+    pred[pY[ttI],ttI] = 30
+    
+    flag = False
+    # Slide each one year 
+    for sYear in np.arange(8000-aYear): 
+        eYear = sYear + aYear
+        
+        # Num. of gt eq
+        gNum_nk = gYear_nk.shape[0]
+        gNum_tnk = gYear_tnk.shape[0]
+        gNum_tk = gYear_tk.shape[0]
+        
+        # 閾値以上の予測した地震年数
+        pYear_nk = np.where(pred[sYear:eYear,0] > th)[0][:gNum_nk]
+        pYear_tnk = np.where(pred[sYear:eYear,1] > th)[0][:gNum_tnk]
+        pYear_tk = np.where(pred[sYear:eYear,2] > th)[0][:gNum_tk]
+        
+        # gtよりpredの地震回数が少ない場合
+        if pYear_nk.shape[0] < gNum_nk:
+            pYear_nk = np.hstack([pYear_nk, np.tile(pYear_nk[-1], gNum_nk-pYear_nk.shape[0])])
+        if pYear_tnk.shape[0] < gNum_tnk:
+            pYear_tnk = np.hstack([pYear_tnk, np.tile(pYear_tnk[-1], gNum_tnk-pYear_tnk.shape[0])])
+        if pYear_tk.shape[0] < gNum_tk:
+            pYear_tk = np.hstack([pYear_tk, np.tile(pYear_tk[-1], gNum_tk-pYear_tk.shape[0])])
+        # [9,]
+        ndist_nk = calcDist(gYear_nk,pYear_nk.T,error=1)
+        ndist_tnk = calcDist(gYear_tnk,pYear_tnk.T,error=1)
+        ndist_tk = calcDist(gYear_tk,pYear_tk.T,error=1)
+        
+        # 真値に合わせて二乗誤差
+        yearError_nk = np.sum(np.min(ndist_nk,1))
+        yearError_tnk = np.sum(np.min(ndist_tnk,1))
+        yearError_tk = np.sum(np.min(ndist_tk,1))
+        
+        yearError = yearError_nk + yearError_tnk + yearError_tk
+        
+        if not flag:
+            yearErrors = yearError
+            flag = True
+        else:
+            yearErrors = np.hstack([yearErrors,yearError])
+           
+    # 最小誤差開始修了年数(1400年)取得
+    sInd = np.argmin(yearErrors)
+    eInd = sInd + aYear
+    
+    nkYear = pY[ntI][(pY[ntI]>sInd)&(pY[ntI]<eInd)]-sInd
+    tnkYear = pY[tntI][(pY[tntI]>sInd)&(pY[tntI]<eInd)]-sInd
+    tkYear = pY[ttI][(pY[ttI]>sInd)&(pY[ttI]<eInd)]-sInd
+    predYear = [nkYear,tnkYear,tkYear]
+    
+    maxSim = yearErrors[sInd]
+    
+    return yU[sInd:eInd,:], yth[sInd:eInd,:], yV[sInd:eInd,:], predYear, maxSim, sInd
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
 def MSErrorNankai(gt,yU,yth,yV,pY,nCell=0):
     #pdb.set_trace()
     # ground truth eq.
@@ -319,7 +424,7 @@ def calcDist(gtY,predY,sigma=100,error=0):
         predYs = predY.repeat(gtY.shape[0],0).reshape(-1,gtY.shape[0])
         gtYs = gtY.repeat(predY.shape[0],0).reshape(-1,predY.shape[0])
     
-        dist = (gtYs - predYs.T)**2
+        dist = np.abs(gtYs - predYs.T)
     
     elif error == 2:
         predYs = predY.repeat(gtY.shape[0],0).reshape(-1,gtY.shape[0])

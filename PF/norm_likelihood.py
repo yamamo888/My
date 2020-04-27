@@ -14,10 +14,137 @@ nCell = 3
 ntI,tntI,ttI = 0,1,2
 penaltyNum = 100
 safetyNum = 100
+# num.of eq.times
+nnk,ntk = 9,7
 # -----------------------------------------------------------------------------
 
+# 尤度 + 最近傍 (相互地震発生年数)  ---------------------------------------------
+def norm_likelihood_eachnearest(y,x,s2=100,standYs=0,time=0):
+    gauss,years = np.zeros(nCell+1),np.zeros(nCell) # for penalty
 
-# 尤度 + 最近傍 (地震発生年数)  --------------------------------
+    y_nk = np.array([standYs[ntI]])
+    y_tnk = np.array([standYs[tntI]])
+    y_tk = np.array([standYs[ttI]])
+    
+    x_nk = x[ntI][:nnk]
+    x_tnk = x[tntI][:nnk]
+    x_tk = x[ttI][:ntk]
+    
+    if x_nk.shape[0] < nnk:
+        x_nk = np.hstack([x_nk, np.tile(x_nk[-1], nnk-x_nk.shape[0])])
+    if x_tnk.shape[0] < nnk:
+        x_tnk = np.hstack([x_tnk, np.tile(x_tnk[-1], nnk-x_tnk.shape[0])])
+    if x_tk.shape[0] < ntk:
+        x_tk = np.hstack([x_tk, np.tile(x_tk[-1], ntk-x_tk.shape[0])])
+  
+    #pdb.set_trace()
+    # any eq.
+    if not y_nk[0] == 0:
+        bestX = x_nk[time]
+        # mse       
+        error_nk = (y_nk-bestX)**2
+        
+        gauss[ntI] = error_nk
+        years[ntI] = bestX
+
+    if not y_tnk[0] == 0:
+        
+        bestX = x_tnk[time]
+        
+        error_tnk = (y_tnk-bestX)**2
+        
+        gauss[tntI] = error_tnk
+        years[tntI] = bestX
+
+    if not y_tk[0] == 0:
+        
+        if time > 4:
+            time = time - 1
+            
+        bestX = x_tk[time]
+        
+        error_tk = (y_tk-bestX)**2
+        
+        gauss[ttI] = error_tk
+        years[ttI] = bestX
+    
+    sumgauss = np.cumsum(gauss)[-1]
+    
+    return gauss, sumgauss, years
+# -----------------------------------------------------------------------------
+    
+# 尤度 + 最近傍 (相互地震発生年数)  ---------------------------------------------
+def norm_likelihood_eachnearest_penalty(y,x,s2=100,standYs=0,time=0):
+    gauss,years = np.zeros(nCell+1),np.zeros(nCell) # for penalty
+
+    y_nk = np.array([standYs[ntI]])
+    y_tnk = np.array([standYs[tntI]])
+    y_tk = np.array([standYs[ttI]])
+    
+    x_nk = x[ntI][:nnk]
+    x_tnk = x[tntI][:nnk]
+    x_tk = x[ttI][:ntk]
+    
+    if x_nk.shape[0] < nnk:
+        x_nk = np.hstack([x_nk, np.tile(x_nk[-1], nnk-x_nk.shape[0])])
+    if x_tnk.shape[0] < nnk:
+        x_tnk = np.hstack([x_tnk, np.tile(x_tnk[-1], nnk-x_tnk.shape[0])])
+    if x_tk.shape[0] < nnk:
+        x_tk = np.hstack([x_tk, np.tile(x_tk[-1], ntk-x_tk.shape[0])])
+  
+    
+     # not eq. in tonakai
+    if y_tk[0] == 0:
+        # ※同化年数±100年に地震があった場合はpenalty
+        penaltyInd = np.where((x_tk>y_tnk-safetyNum)&(x_tk<y_tnk+safetyNum))[0].tolist()
+        
+        if penaltyInd == []:
+            pass
+        else:
+            pind = penaltyInd[0]
+            xpenalty = x_tk[pind]
+            # nearist penalty year [1,]
+            penalty_tnk = (y_tnk-xpenalty)**2
+            # ペナルティ分引くため
+            gauss[-1] = penalty_tnk
+   
+    #pdb.set_trace()
+    # any eq.
+    if not y_nk[0] == 0:
+        bestX = x_nk[time]
+        # mse       
+        error_nk = (y_nk-bestX)**2
+        
+        gauss[ntI] = error_nk
+        years[ntI] = bestX
+
+    if not y_tnk[0] == 0:
+        
+        bestX = x_tnk[time]
+        
+        error_tnk = (y_tnk-bestX)**2
+        
+        gauss[tntI] = error_tnk
+        years[tntI] = bestX
+
+    if not y_tk[0] == 0:
+        
+        if time > 4:
+            time = time - 1
+            
+        bestX = x_tk[time]
+        
+        error_tk = (y_tk-bestX)**2
+        
+        gauss[ttI] = error_tk
+        years[ttI] = bestX
+    
+    sumgauss = np.cumsum(gauss)[-1]
+    
+    return gauss, sumgauss, years
+# -----------------------------------------------------------------------------
+
+# 尤度 + 最近傍 (地震発生年数)  -------------------------------------------------
 def norm_likelihood_nearest(y,x,s2=100,standYs=0,time=0):
     gauss,years = np.zeros(nCell+1),np.zeros(nCell) # for penalty
 
@@ -31,7 +158,7 @@ def norm_likelihood_nearest(y,x,s2=100,standYs=0,time=0):
         bestInd = np.abs(np.asarray(x[ntI]) - y_nk).argmin()
         bestX = x[ntI][bestInd]
         # mse       
-        error_nk = -(y_nk-bestX)**2
+        error_nk = (y_nk-bestX)**2
         
         gauss[ntI] = error_nk
         years[ntI] = bestX
@@ -41,7 +168,7 @@ def norm_likelihood_nearest(y,x,s2=100,standYs=0,time=0):
         bestInd = np.abs(np.asarray(x[tntI]) - y_tnk).argmin()
         bestX = x[tntI][bestInd]
         
-        error_tnk = -(y_tnk-bestX)**2
+        error_tnk = (y_tnk-bestX)**2
         
         gauss[tntI] = error_tnk
         years[tntI] = bestX
@@ -51,14 +178,11 @@ def norm_likelihood_nearest(y,x,s2=100,standYs=0,time=0):
         bestInd = np.abs(np.asarray(x[ttI]) - y_tk).argmin()
         bestX = x[ttI][bestInd]
         
-        error_tk = -(y_tk-bestX)**2
+        error_tk = (y_tk-bestX)**2
         
         gauss[ttI] = error_tk
         years[ttI] = bestX
     
-    #gauss_ = gauss[gauss != 0]
-    # sum of gauss, [1,]
-    #sumgauss = np.cumsum(1/gauss_)[-1]
     sumgauss = np.cumsum(gauss)[-1]
     
     return gauss, sumgauss, years
@@ -84,7 +208,7 @@ def norm_likelihood_nearest_penalty(y,x,s2=100,standYs=0,time=0):
             # nearist penalty year [1,]
             penalty_tnk = np.max((y_tnk-xpenalty)**2)
             # ペナルティ分引くため
-            gauss[-1] = -penalty_tnk
+            gauss[-1] = penalty_tnk
         
     # any eq.
     if not y_nk[0] == 0:
@@ -92,7 +216,7 @@ def norm_likelihood_nearest_penalty(y,x,s2=100,standYs=0,time=0):
         bestInd = np.abs(np.asarray(x[ntI]) - y_nk).argmin()
         bestX = x[ntI][bestInd]
         # mse 
-        error_nk = -(y_nk-bestX)**2
+        error_nk = (y_nk-bestX)**2
        
         gauss[ntI] = error_nk
         years[ntI] = bestX
@@ -102,7 +226,7 @@ def norm_likelihood_nearest_penalty(y,x,s2=100,standYs=0,time=0):
         bestInd = np.abs(np.asarray(x[tntI]) - y_tnk).argmin()
         bestX = x[tntI][bestInd]
         
-        error_tnk = -(y_tnk-bestX)**2
+        error_tnk = (y_tnk-bestX)**2
         
         gauss[tntI] = error_tnk
         years[tntI] = bestX
@@ -112,14 +236,11 @@ def norm_likelihood_nearest_penalty(y,x,s2=100,standYs=0,time=0):
         bestInd = np.abs(np.asarray(x[ttI]) - y_tk).argmin()
         bestX = x[ttI][bestInd]
         
-        error_tk = -(y_tk-bestX)**2
+        error_tk = (y_tk-bestX)**2
         
         gauss[ttI] = error_tk
         years[ttI] = bestX
     
-    #gauss_ = gauss[gauss != 0]
-    # sum of gauss, [1,]
-    #sumgauss = np.cumsum(1/gauss_)[-1]
     sumgauss = np.cumsum(gauss)[-1]
     
     return gauss, sumgauss, years
@@ -128,7 +249,7 @@ def norm_likelihood_nearest_penalty(y,x,s2=100,standYs=0,time=0):
 
 # 尤度 + safety & penalty 最近傍 (地震発生年数)  --------------------------------
 def norm_likelihood_nearest_safetypenalty(y,x,s2=100,standYs=0,time=0):
-    gauss,years = np.zeros(nCell),np.zeros(nCell) # for penalty
+    gauss,years = np.zeros(nCell+1),np.zeros(nCell) # for penalty
 
     y_nk = np.array([standYs[ntI]])
     y_tnk = np.array([standYs[tntI]])
@@ -146,7 +267,7 @@ def norm_likelihood_nearest_safetypenalty(y,x,s2=100,standYs=0,time=0):
             # nearist penalty year [1,]
             penalty_tnk = np.max((y_tnk-xpenalty)**2)
             # ペナルティ分引くため
-            gauss[-1] = -penalty_tnk
+            gauss[-1] = penalty_tnk
         
     # any eq.
     if not y_nk[0] == 0:
@@ -160,9 +281,9 @@ def norm_likelihood_nearest_safetypenalty(y,x,s2=100,standYs=0,time=0):
         best2X = delbestX[best2ind]
         
         # mse for no.1   
-        error_nk = -(y_nk-bestX)**2
+        error_nk = (y_nk-bestX)**2
         # mae for no.2
-        penalty_nk = -(y_nk-best2X)**2
+        penalty_nk = (y_nk-best2X)**2
     
         if np.abs(best2X-y_nk) <= penaltyNum:
             # error no.1 + no.2
@@ -184,9 +305,9 @@ def norm_likelihood_nearest_safetypenalty(y,x,s2=100,standYs=0,time=0):
         best2X = delbestX[best2ind]
         
         # mse for no.1   
-        error_tnk = -(y_tnk-bestX)**2
+        error_tnk = (y_tnk-bestX)**2
         # mae for no.2
-        penalty_tnk = -(y_tnk-best2X)**2
+        penalty_tnk = (y_tnk-best2X)**2
     
         if np.abs(best2X-y_tnk) <= penaltyNum:
             # error no.1 + no.2
@@ -208,9 +329,9 @@ def norm_likelihood_nearest_safetypenalty(y,x,s2=100,standYs=0,time=0):
         best2X = delbestX[best2ind]
         
         # mse for no.1   
-        error_tk = -(y_tk-bestX)**2
+        error_tk = (y_tk-bestX)**2
         # mae for no.2
-        penalty_tk = -(y_tk-best2X)**2
+        penalty_tk = (y_tk-best2X)**2
     
         if np.abs(best2X-y_tk) <= penaltyNum:
             # error no.1 + no.2
@@ -220,13 +341,9 @@ def norm_likelihood_nearest_safetypenalty(y,x,s2=100,standYs=0,time=0):
             gauss[ttI] = error_tk
         
         years[ttI] = bestX
-    
-    #gauss_ = gauss[gauss != 0]
-    # sum of gauss, [1,]
-    #sumgauss = np.cumsum(1/gauss_)[-1]
-    
+
     sumgauss = np.cumsum(gauss)[-1]
-    #pdb.set_trace()
+    
     return gauss, sumgauss, years
 # -----------------------------------------------------------------------------
 
@@ -244,9 +361,15 @@ def norm_likelihood_alltimes(y,x):
     xt_tnk = x[tntI].shape[0]
     xt_tk = x[ttI].shape[0]
     x_times = xt_nk + xt_tnk + xt_tk
-    
+
     # poisson for eq. times
     poissons = poisson.pmf(x_times,y_times)
+    
+    #poisson_nk = poisson.pmf(xt_nk,yt_nk)
+    #poisson_tnk = poisson.pmf(xt_tnk,yt_tnk)
+    #poisson_tk = poisson.pmf(xt_tk,yt_tk)
+    
+    #poissons = poisson_nk + poisson_tnk + poisson_tk
     
     return poissons
 # -----------------------------------------------------------------------------
