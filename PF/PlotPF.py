@@ -115,6 +115,8 @@ def scatter3D_heatmap(x,y,z,var,rangeP,path="none",title="none",label="none"):
     #pdb.set_trace()
     
     sns.set_style("dark")
+    
+    #var = np.hstack([var[0],var[1]])
 
     # normalize variable(var) into 0 to 1
     nlVar = list((var - min(var)) / (max(var) - min(var)))
@@ -125,8 +127,24 @@ def scatter3D_heatmap(x,y,z,var,rangeP,path="none",title="none",label="none"):
     fig = plt.figure()
     ax = Axes3D(fig)
     
+    #pdb.set_trace()
     ax.scatter(x,y,z,c=colors,marker="o",alpha=0.5)
+    #ax.scatter(x[0],y[0],z[0],c=colors[:x[0].shape[0]],marker=".",alpha=0.5)
+    #ax.scatter(x[1],y[1],z[1],s=10,c=colors[x[0].shape[0]:],marker="x",alpha=0.5)
+    """
+    xmin = np.min([np.min(x[0]),np.min(x[1])])
+    xmax = np.max([np.max(x[0]),np.max(x[1])])
     
+    ymin = np.min([np.min(y[0]),np.min(y[1])])
+    ymax = np.max([np.max(y[0]),np.max(y[1])])
+    
+    zmin = np.min([np.min(z[0]),np.min(z[1])])
+    zmax = np.max([np.max(z[0]),np.max(z[1])])
+    
+    ax.set_xlim(xmin,xmax)
+    ax.set_ylim(ymin,ymax)
+    ax.set_zlim(zmin,zmax)
+    """
     ax.set_xlim(rangeP[0][ntI],rangeP[1][ntI])
     ax.set_ylim(rangeP[0][tntI],rangeP[1][tntI])
     ax.set_zlim(rangeP[0][ttI],rangeP[1][ttI])
