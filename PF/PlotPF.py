@@ -192,16 +192,19 @@ def gif2Animation(gifPath,label="none"):
 # -----------------------------------------------------------------------------
 
 # 地震履歴 ---------------------------------------------------------------------
-def Rireki(gt,pred,path='none',title="none",label="none",isShare=False,isSeparate=True,isResearch=False):
+def Rireki(gt,pred,path='none',title="none",label="none",isShare=False,isSeparate=True,isResearch=False,iseach=False):
     """
     Args
         gt: gt eq. (best year). [1400,3] 
     """
     
     if isResearch:
-        # degree of similatery
-        dists = myData.MAEyear(gt,pred)
-        
+        if iseach:
+            dists = myData.eachMAEyear(gt,pred)
+        else:
+            # degree of similatery
+            dists = myData.MAEyear(gt,pred)
+            
         title = dists
         
     sns.set_style("dark")
@@ -211,6 +214,7 @@ def Rireki(gt,pred,path='none',title="none",label="none",isShare=False,isSeparat
         for figInd in np.arange(len(figInds)):
             figInds[figInd].plot(np.arange(pred.shape[0]), pred[:,figInd],color="skyblue")
             figInds[figInd].plot(np.arange(gt.shape[0]), gt[:,figInd],color="coral")
+        
     #pdb.set_trace()
     if isSeparate:
         colors = ["coral","skyblue","coral","skyblue","coral","skyblue"]
