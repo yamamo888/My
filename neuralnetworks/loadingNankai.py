@@ -1,15 +1,14 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Sep 20 23:59:09 2019
-
-@author: yu
-"""
+#-*- coding: utf-8 -*-
 
 import os
 import pdb
 import pickle
 
 import numpy as np
+
+import matplotlib as mpl
+mpl.use('Agg')
+import matplotlib.pyplot as plt
 
 class NankaiData:
     def __init__(self,nCell=5,nClass=10,nWindow=10):
@@ -29,7 +28,9 @@ class NankaiData:
         # ------------------------------- path ----------------------------------------
         self.features = "features"
         self.nankaipkls = "nankaipickles"
-        self.nankairireki = "nankairirekiFFT"
+        self.nankaifeature = "nankairirekiFFT"
+        self.nankairireki = "nankairireki.pkl"
+        self.rirekiFullPath = os.path.join(self.features,self.nankairireki)
         # -----------------------------------------------------------------------------
     
     #-----------------------------------------------------------------------------#      
@@ -37,12 +38,14 @@ class NankaiData:
         
         # name of train pickles
         trainNames = ["b2b3b4b5b6_train{}{}".format(num,self.nClass) for num in np.arange(1,8)]
-        pdb.set_trace()
         # name of test pickles
         testNames = ["b2b3b4b5b6_test1{}".format(self.nClass)]
+         
+        #dataNames = ["b2b3b4b5b6_train{}{}".format(num,self.nClass) for num in np.arange(1,9)]
+        #pdb.set_trace()
         
         
-		# reading train data from pickle
+        # reading train data from pickle
         with open(os.path.join(self.features,self.nankaipkls,trainNames[nameInds[0]]),'rb') as fp:
             self.x11Train = pickle.load(fp)
             self.y11TrainLabel = pickle.load(fp)
@@ -100,12 +103,34 @@ class NankaiData:
         
         #[number of data,]
         self.xTest = self.xTest[:,1:6,:]
-        self.xTest = np.reshape(self.xTest,[-1,self.nCell*self.nWindow])
+        """ 
+        with open(os.path.join("features","rirekifeatures",f"{190}.pkl"),"rb") as fp:
+            pred = pickle.load(fp) 
+        
+        pred = np.concatenate((pred[0][:,np.newaxis],pred[0][:,np.newaxis],pred[1][:,np.newaxis],pred[1][:,np.newaxis],pred[2][:,np.newaxis]),1)
+
+        gt = self.x13Train[:,1:6,:]
+        
+        #pdb.set_trace() 
+        minID = np.argsort(np.sum(np.reshape(abs(pred-np.transpose(gt,[0,2,1])),[-1,50]),1))[:15]
+
+        #pdb.set_trace() 
+        for num in np.arange(15):
+
+            #pdb.set_trace() 
+            fig, figInds = plt.subplots(nrows=5,sharex=True)
+            for figInd in np.arange(len(figInds)):
+                figInds[figInd].plot(self.x13Train[minID[num],figInd,:])
+            plt.savefig(os.path.join("images","near",f"{np.round(self.y13Train[num],6)}_{np.round(self.y33Train[num],6)}_{np.round(self.y53Train[num],6)}.png"))
+            plt.close()
+        
+        pdb.set_trace() 
+        """
+        self.xTest = np.reshape(self.xTest,[-1,self.nCell*self.nWindow]).astype(np.float32)
         # test y
         self.yTest = np.concatenate((self.y11Test[:,np.newaxis],self.y31Test[:,np.newaxis],self.y51Test[:,np.newaxis]),1)
         # test label y
         self.yTestLabel = np.concatenate((self.y11TestLabel[:,:,np.newaxis],self.y31TestLabel[:,:,np.newaxis],self.y51TestLabel[:,:,np.newaxis]),2)
-        
         # number of train data
         self.nTrain =  int(self.x11Train.shape[0] + self.x12Train.shape[0] + self.x13Train.shape[0])
         # random train index
@@ -118,19 +143,29 @@ class NankaiData:
         # nankaifeatue.pkl -> 190.pkl
         flag = False
         for fID in np.arange(256):
-
-            nankairirekiPath = os.path.join(self.features,self.nankairireki,"{}_2.pkl".format(fID))
-        
+            # pkl path
+            #nankairirekiPath = os.path.join(self.features,self.nankaifeature,"{}_2.pkl".format(fID))
+            nankairirekiPath = os.path.join(self.features,"rirekifeatures","{}.pkl".format(fID))
+            
             with open(nankairirekiPath,"rb") as fp:
-                x = pickle.load(fp)
+                data = pickle.load(fp)
+            """
+            fig, figInds = plt.subplots(nrows=3,sharex=True)
+            for figInd in np.arange(len(figInds)):
+                figInds[figInd].plot(data[figInd,:])
+            plt.savefig(f"{fID}.png")
+            plt.close()
+            """ 
+            x = np.reshape(np.concatenate([data[0][np.newaxis],data[0][np.newaxis],data[1][np.newaxis],data[1][np.newaxis],data[2][np.newaxis]]),[-1,])
 
             if not flag:
-                evalX = x
+                evalX = x[np.newaxis]
                 flag = True
             else:
-                evalX = np.vstack([evalX,x])
+                evalX = np.vstack([evalX,x[np.newaxis]])
 
-        self.evalX = evalX
+        self.xEval = evalX
+        #pdb.set_trace()
     #-----------------------------------------------------------------------------#
     def nextBatch(self,batchSize):
         
@@ -154,7 +189,7 @@ class NankaiData:
         trlabel3 = np.concatenate((self.y51TrainLabel,self.y52TrainLabel,self.y53TrainLabel),0)
         # [number of data, number of class(self.nClass), cell(=3)] 
         batchlabelY = np.concatenate((trlabel1[sInd:eInd,:,np.newaxis],trlabel2[sInd:eInd,:,np.newaxis],trlabel3[sInd:eInd,:,np.newaxis]),2)
-        
+        #pdb.set_trace()
         if eInd + batchSize > self.nTrain:
             self.batchCnt = 0
         else:
@@ -162,3 +197,8 @@ class NankaiData:
 
         return batchX, batchY, batchlabelY
     #-----------------------------------------------------------------------------#
+
+
+myData = NankaiData(nCell=5,nClass=10,nWindow=10)
+myData.loadTrainTestData(nameInds=[0,1,2,3,4])
+#b1,b2,b3 = myData.nextBatch(batchSize=1000)
