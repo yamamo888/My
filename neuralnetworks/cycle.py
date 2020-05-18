@@ -25,6 +25,8 @@ class Cycle:
         self.ntI = 0
         self.tntI = 1
         self.ttI = 2
+        self.allCell = 8
+        
         
         self.saveparamPath = os.path.join(parampath, f'{trialID}')
         self.savelogPath = os.path.join(logpath, f'{trialID}')
@@ -54,12 +56,20 @@ class Cycle:
     # ----
     
     # ----
-    def loadV(self, logFullPath):
+    def loadBV(self, logFullPath):
         
         yInd = 0        
-        
+        b = np.zeros(self.allCell)
+    
         data = open(logFullPath).readlines()
         
+        # B ----
+        for i in np.arange(1,self.allCell+1):
+            # cell番号に合わせてdata読み取り
+            tmp = np.array(data[i].strip().split(",")).astype(np.float32)
+            b[i-1] = tmp[1]
+        
+        # V ----
         isRTOL = [True if data[i].count('value of RTOL')==1 else False for i in np.arange(len(data))]
         vInd = np.where(isRTOL)[0][0]+1
     
@@ -68,10 +78,13 @@ class Cycle:
             tmpV = np.array(data[uI].strip().split(",")[yInd:]).astype(np.float32)
             
             if not flag:
-                V = tmpV
+                v = tmpV
                 flag = True
             else:
-                V = np.vstack([V,tmpV])
+                v = np.vstack([v,tmpV])
+                
+        self.B = b
+        self.V = v
         pdb.set_trace()
     # ----
     
@@ -81,10 +94,9 @@ class Cycle:
         yrInd = 1
         stateYear = 2000        
         vInds = [2,3,4,5,6,7,8,9]
-        allCell = 8
-        nYear=10000
+        nYear = 10000
         
-        yV = np.zeros([nYear, allCell])
+        yV = np.zeros([nYear, self.allCell])
         
         sYear = np.floor(self.V[0,yrInd])
         for year in np.arange(sYear,nYear):
@@ -104,6 +116,10 @@ class Cycle:
         tnkYear = np.where(deltaU[stateYear:,vInds[2]] > self.slip)[0]
         tkYear = np.where(deltaU[stateYear:,vInds[3]] > self.slip)[0]
         self.predyear = [nkYear,tnkYear,tkYear]
+        
+    
+        pdb.set_trace()
+        
     # ----
     
     # ---- 
@@ -112,7 +128,6 @@ class Cycle:
         
         aYear = 1400
         nCell = 3
-        th = 1
         
         # ground truth eq.
         gYear_nk = np.where(gt[:,0] > self.slip)[0]
@@ -136,9 +151,9 @@ class Cycle:
             gNum_tk = gYear_tk.shape[0]
             
             # 閾値以上の予測した地震年数
-            pYear_nk = np.where(pred[sYear:eYear,0] > th)[0][:gNum_nk]
-            pYear_tnk = np.where(pred[sYear:eYear,1] > th)[0][:gNum_tnk]
-            pYear_tk = np.where(pred[sYear:eYear,2] > th)[0][:gNum_tk]
+            pYear_nk = np.where(pred[sYear:eYear,0] > self.slip)[0][:gNum_nk]
+            pYear_tnk = np.where(pred[sYear:eYear,1] > self.slip)[0][:gNum_tnk]
+            pYear_tk = np.where(pred[sYear:eYear,2] > self.slip)[0][:gNum_tk]
             
             # gtよりpredの地震回数が少ない場合
             if pYear_nk.shape[0] < gNum_nk:
@@ -172,7 +187,12 @@ class Cycle:
         nkYear = self.predyear[self.ntI][(self.predyear[self.ntI] > sInd) & (self.predyear[self.ntI] < eInd)] - sInd
         tnkYear = self.predyear[self.tntI][(self.predyear[self.tntI] > sInd) & (self.predyear[self.tntI] < eInd)] - sInd
         tkYear = self.predyear[self.ttI][(self.predyear[self.ttI] > sInd) & (self.predyear[self.ttI] < eInd)] - sInd
-        predYear = [nkYear,tnkYear,tkYear]
+        
+        nkJ = np.pad(nkYear, (0, 150 - nkYear.shape[0]), "constant", constant_values=0)
+        tnkJ = np.pad(tnkYear, (0, 150 - tnkYear.shape[0]), "constant", constant_values=0)
+        tkJ = np.pad(tkYear, (0, 150 - tkYear.shape[0]), "constant", constant_values=0)
+        # eq. years [100,3(cell)]
+        self.pJ = np.concatenate((nkJ[:,np.newaxis],tnkJ[:,np.newaxis],tkJ[:,np.newaxis]),1)
         
         self.maxSim = yearErrors[sInd]
     # ----
