@@ -16,7 +16,7 @@ mpl.use('Agg')
 import matplotlib.pylab as plt
 
 import data
-
+import plot
 
 class ParamNN:
     def __init__(self, keepProbTrain=1.0, lr=1e-3, dInput=50, dOutput=3,
@@ -37,16 +37,23 @@ class ParamNN:
         self.dOutput = dOutput
         # ----
         
-        pdb.set_trace()
+        #pdb.set_trace()
       
         # Placeholder ----
         self.x = tf.placeholder(tf.float32,shape=[None, self.dInput])
         self.y = tf.placeholder(tf.float32,shape=[None, self.dOutput])
         # ----
         
+        # neural network ----
         self.pred = self.Regress(self.x, keepProb=keepProbTrain)
-        self.loss = tf.reduce_mean(tf.square(self.y - self.pred))
+        self.pred_test = self.Regress(self.x, keepProb=keepProbTrain, reuse=True)
+        # ----
         
+        # loss ----
+        self.loss = tf.reduce_mean(tf.square(self.y - self.pred))
+        self.loss_test = tf.reduce_mean(tf.square(self.y - self.pred_test))
+        # ----
+
         Vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope='Regress') 
         self.opt = tf.train.AdamOptimizer(lr).minimize(self.loss,var_list=Vars)
         
@@ -54,9 +61,10 @@ class ParamNN:
         self.sess = tf.Session(config=config)
         self.sess.run(tf.global_variables_initializer())
         
-        # save model
+        # save model ----
         saver = tf.train.Saver()
-        saver.save(self.sess, os.path.join('model','paramNN'))
+        saver.save(self.sess, os.path.join('model', 'pNN', 'first'))
+        # ----
                 
     
     # ----
@@ -83,7 +91,7 @@ class ParamNN:
     # ----
     def Regress(self, x_r, keepProb=1.0, reuse=False, isCycle=False):
         
-        pdb.set_trace()
+        #pdb.set_trace()
         
         nHidden=128
         
@@ -122,9 +130,12 @@ class ParamNN:
     def train(self, nItr=1000, nBatch=100):
       
         filePeriod = 100
+        testPeriod = 100
             
         # Start training
         flag = False
+        trL,teL = np.zeros(int(nItr/testPeriod)),np.zeros(int(nItr/testPeriod))
+
         for i in range(nItr):
             
             # Get mini-batch
@@ -138,11 +149,31 @@ class ParamNN:
                 self.myData.loadTrainTestData(nameInds=nameInds)
             
             # parameter loss
-            _, trainPred, trainLoss = self.sess.run([self.opt, self.pred, self.ploss], feed_dict)
+            _, trainPred, trainLoss = self.sess.run([self.opt, self.pred, self.loss], feed_dict)
             
-            # print
-            if i % 1000 == 0:
-                print('itr: %d, trainLoss:%f' % (i, trainLoss))
+            # Test
+            if i % testPeriod == 0:
+
+                self.test()
+
+                print('itr: %d, trainLoss:%f, testLoss:%f' % (i, trainLoss, self.testLoss))
+                
+                trL[int(i/testPeriod)] = trainLoss
+                teL[int(i/testPeriod)] = self.testLoss
+
+        losses = [trL,teL]
+        params = [self.yTest,self.testPred]
+
+        return losses, params
+    # ----
+    
+    # ----
+    def test(self):
+        
+        # 1. pred fric paramters
+        feed_dict={self.x:self.xTest, self.y:self.yTest}
+        self.testPred, self.testLoss = self.sess.run([self.pred_test, self.loss_test], feed_dict)
+        
     # ----
 
 
@@ -173,8 +204,18 @@ if __name__ == "__main__":
     # Training ----
     model = ParamNN(keepProbTrain=keepProbTrain, lr=lr, dInput=dInput, dOutput=dOutput,
                     nCell=nCell, nWindow=nWindow)
-    model.train(nItr=nItr, nBatch=nBatch)
+    losses, params = model.train(nItr=nItr, nBatch=nBatch)
     # ----
+
+    # Plot ----
+    myPlot = plot.Plot()
+    myPlot.Loss(losses, labels=['train','test'])
+    # ----
+
+    # Save ----
+    with open(os.path.join(modelPath,'pNN','testY_exactpred.pkl'), 'wb') as fp:
+        pickle.dump(params[0], fp)
+        pickle.dump(params[1], fp)
     
     
     

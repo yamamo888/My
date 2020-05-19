@@ -30,6 +30,7 @@ class NankaiData:
         self.tI = 5
         
         self.logPath = logpath
+        self.featurePath = 'features'
     
     # ----
     def makeCycleData(self):
@@ -124,12 +125,12 @@ class NankaiData:
                             paramB = np.vstack([paramB, yb])
 
 
-        with open(os.path.join(self.features,'cycle','train_cycleVXY.pkl'),'wb') as fp:
+        with open(os.path.join(self.featurePath,'cycle','train_cycleVXY.pkl'),'wb') as fp:
             pickle.dump(cycle_xTrain, fp)
             pickle.dump(paramB, fp)
             pickle.dump(yearMSE, fp)
             
-        with open(os.path.join(self.features,'cycle','test_cycleVXY.pkl'),'wb') as fp:
+        with open(os.path.join(self.featurePath,'cycle','test_cycleVXY.pkl'),'wb') as fp:
             pickle.dump(cycle_xTest, fp)
             pickle.dump(te_paramB, fp)
             pickle.dump(te_yearMSE, fp)
@@ -146,7 +147,7 @@ class NankaiData:
         flag = False
         for di in nameInds:
             # reading train data from pickle
-            with open(os.path.join(self.features,self.nankaipkls,trainNames[di]),'rb') as fp:
+            with open(os.path.join(self.featurePath, 'traintest' ,trainNames[di]),'rb') as fp:
                 self.xTrain = pickle.load(fp)
                 _ = pickle.load(fp)
                 _ = pickle.load(fp)
@@ -182,7 +183,7 @@ class NankaiData:
             
 
         # test data
-        with open(os.path.join(self.features,self.nankaipkls,testNames[0]),'rb') as fp:
+        with open(os.path.join(self.featurePath, 'traintest' ,testNames[0]),'rb') as fp:
             self.xTest = pickle.load(fp)
             _ = pickle.load(fp)
             _ = pickle.load(fp)
@@ -197,7 +198,7 @@ class NankaiData:
 
         X = self.xTest[:,1:6,:]
         xTest = np.reshape(X, [-1,self.nCell*self.nWindow]).astype(np.float32)
-        yTest = np.concatenate((self.y21Test[:,np.newaxis],self.y41Test[:,np.newaxis],self.y51Test[:,np.newaxis]),1)
+        yTest = np.concatenate((self.y2Test[:,np.newaxis],self.y4Test[:,np.newaxis],self.y5Test[:,np.newaxis]),1)
         
         return xTest, yTest
     # ----
@@ -205,7 +206,7 @@ class NankaiData:
     # Load train & test dataset for cycle loss ----
     def loadCycleTrainTestData(self):
         
-        with open(os.path.join(self.logPath,'cycle','train_cycleVXY.pkl'), 'rb') as fp:
+        with open(os.path.join(self.logPath,'cycle','train_allcycleVXY.pkl'), 'rb') as fp:
             self.xCycleTrain = pickle.load(fp)
             self.yCyclebTrain = pickle.load(fp)
             self.yCycleTrain = pickle.load(fp)
@@ -215,7 +216,7 @@ class NankaiData:
         # random train index
         self.batchRandInd = np.random.permutation(self.nTrain)
         
-        with open(os.path.join(self.logPath,'cycle','test_cycleVXY.pkl'), 'rb') as fp:
+        with open(os.path.join(self.logPath,'cycle','test_allcycleVXY.pkl'), 'rb') as fp:
             xCycleTest = pickle.load(fp)
             yCyclebTest = pickle.load(fp)
             yCycleTest = pickle.load(fp)
@@ -230,13 +231,13 @@ class NankaiData:
         
         # X (FFT feature) ----
         fID = 190
-        fftpath = os.path.join(self.features,"eval","{}.pkl".format(fID))
+        fftpath = os.path.join(self.featurePath,"eval","{}.pkl".format(fID))
         with open(fftpath,"rb") as fp:
             data = pickle.load(fp)
         xEval = np.reshape(np.concatenate([data[0][np.newaxis],data[0][np.newaxis],data[1][np.newaxis],data[1][np.newaxis],data[2][np.newaxis]]),[-1,]) # [50,]
         
         # eq.year for Cycle loss ----        
-        rirekipath = os.path.join(self.features,"eval","nankairireki.pkl")
+        rirekipath = os.path.join(self.featurePath,"eval","nankairireki.pkl")
         with open(rirekipath ,'rb') as fp:
             data = pickle.load(fp)
         xrireki = data[fID,:,:]
@@ -260,7 +261,7 @@ class NankaiData:
             
         else:
             batchX = self.xTrain[sInd:eInd]
-            batchY = self.YTrain[sInd:eInd]
+            batchY = self.yTrain[sInd:eInd]
             
             batchXY = [batchX, batchY]
      

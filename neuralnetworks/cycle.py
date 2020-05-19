@@ -17,7 +17,7 @@ import matplotlib.pylab as plt
 
 
 class Cycle:
-    def __init__(self, logpath='none', parampath='none', trialID=0):
+    def __init__(self, logpath='logs', parampath='params', trialID=0):
         
         # slip velocity
         self.slip = 0
@@ -26,7 +26,6 @@ class Cycle:
         self.tntI = 1
         self.ttI = 2
         self.allCell = 8
-        
         
         self.saveparamPath = os.path.join(parampath, f'{trialID}')
         self.savelogPath = os.path.join(logpath, f'{trialID}')
@@ -57,10 +56,10 @@ class Cycle:
     
     # ----
     def loadBV(self, logFullPath):
-        
+         
         yInd = 0        
         b = np.zeros(self.allCell)
-    
+        
         data = open(logFullPath).readlines()
         
         # B ----
@@ -71,7 +70,11 @@ class Cycle:
         
         # V ----
         isRTOL = [True if data[i].count('value of RTOL')==1 else False for i in np.arange(len(data))]
-        vInd = np.where(isRTOL)[0][0]+1
+        
+        try:
+            vInd = np.where(isRTOL)[0][0]+1
+        except IndexError:
+            pdb.set_trace()
     
         flag = False
         for uI in np.arange(vInd,len(data)):
@@ -82,10 +85,9 @@ class Cycle:
                 flag = True
             else:
                 v = np.vstack([v,tmpV])
-                
         self.B = b
         self.V = v
-        pdb.set_trace()
+        return self.B, self.V
     # ----
     
     # ----
@@ -116,24 +118,22 @@ class Cycle:
         tnkYear = np.where(deltaU[stateYear:,vInds[2]] > self.slip)[0]
         tkYear = np.where(deltaU[stateYear:,vInds[3]] > self.slip)[0]
         self.predyear = [nkYear,tnkYear,tkYear]
-        
-    
-        pdb.set_trace()
-        
     # ----
     
     # ---- 
     def calcYearMSE(self, gt):
-        #pdb.set_trace()
-        
+        '''
+        gt: exact eq.year, list[numpy]
+        '''
+
         aYear = 1400
         nCell = 3
         th = 1
         
         # ground truth eq.
-        gYear_nk = np.where(gt[:,0] > self.slip)[0]
-        gYear_tnk = np.where(gt[:,1] > self.slip)[0]
-        gYear_tk = np.where(gt[:,2] > self.slip)[0]
+        gYear_nk = gt[self.ntI]
+        gYear_tnk = gt[self.ntI]
+        gYear_tk = gt[self.ntI]
         
         # predicted eq.
         pred = np.zeros((8000,nCell))
@@ -151,7 +151,7 @@ class Cycle:
             gNum_tnk = gYear_tnk.shape[0]
             gNum_tk = gYear_tk.shape[0]
             
-            # 閾値以上の予測した地震年数
+            # eq.year > 1
             pYear_nk = np.where(pred[sYear:eYear,0] > th)[0][:gNum_nk]
             pYear_tnk = np.where(pred[sYear:eYear,1] > th)[0][:gNum_tnk]
             pYear_tk = np.where(pred[sYear:eYear,2] > th)[0][:gNum_tk]
@@ -164,15 +164,14 @@ class Cycle:
             if pYear_tk.shape[0] < gNum_tk:
                 pYear_tk = np.hstack([pYear_tk, np.tile(pYear_tk[-1], gNum_tk-pYear_tk.shape[0])])
             
+            # sum(abs(exact eq.year - pred eq.year))
             ndist_nk = np.abs(gYear_nk - pYear_nk)
             ndist_tnk = np.abs(gYear_tnk - pYear_tnk)
             ndist_tk = np.abs(gYear_tk - pYear_tk)
             
-            # 真値に合わせて二乗誤差
-            yearError_nk = np.sum(np.min(ndist_nk,1))
-            yearError_tnk = np.sum(np.min(ndist_tnk,1))
-            yearError_tk = np.sum(np.min(ndist_tk,1))
-            
+            yearError_nk = np.sum(ndist_nk)
+            yearError_tnk = np.sum(ndist_tnk)
+            yearError_tk = np.sum(ndist_tk)
             yearError = yearError_nk + yearError_tnk + yearError_tk
             
             if not flag:
@@ -181,22 +180,22 @@ class Cycle:
             else:
                 yearErrors = np.hstack([yearErrors,yearError])
                
-        # 最小誤差開始修了年数(1400年)取得
+        # minimum mse eq.year
         sInd = np.argmin(yearErrors)
         eInd = sInd + aYear
+        self.maxSim = yearErrors[sInd]
         
+        # minimum eq.year 
         nkYear = self.predyear[self.ntI][(self.predyear[self.ntI] > sInd) & (self.predyear[self.ntI] < eInd)] - sInd
         tnkYear = self.predyear[self.tntI][(self.predyear[self.tntI] > sInd) & (self.predyear[self.tntI] < eInd)] - sInd
         tkYear = self.predyear[self.ttI][(self.predyear[self.ttI] > sInd) & (self.predyear[self.ttI] < eInd)] - sInd
-        
-        nkJ = np.pad(nkYear, (0, 150 - nkYear.shape[0]), "constant", constant_values=0)
-        tnkJ = np.pad(tnkYear, (0, 150 - tnkYear.shape[0]), "constant", constant_values=0)
-        tkJ = np.pad(tkYear, (0, 150 - tkYear.shape[0]), "constant", constant_values=0)
-        # eq. years [100,3(cell)]
-        self.pJ = np.concatenate((nkJ[:,np.newaxis],tnkJ[:,np.newaxis],tkJ[:,np.newaxis]),1)
-        
-        self.maxSim = yearErrors[sInd]
-    
+        nkJ = np.pad(nkYear, (0, 500 - nkYear.shape[0]), 'constant', constant_values=0)
+        tnkJ = np.pad(tnkYear, (0, 500 - tnkYear.shape[0]), 'constant', constant_values=0)
+        tkJ = np.pad(tkYear, (0, 500 - tkYear.shape[0]), 'constant', constant_values=0)
+        self.pJ = np.concatenate([nkJ[:,np.newaxis], tnkJ[:,np.newaxis], tkJ[:,np.newaxis]],1) #[150,3]
+
+        return self.pJ, self.maxSim
+
     # ----
     
     # ----
@@ -219,12 +218,10 @@ class Cycle:
             
             if not flag:
                 MSE = mse.maxSim
-                eqY = mse.pJ
                 flag = True
             else:
-                MSE = np.vstack([MSE, mse.maxSim])
-                eqY = np.vstack([eqY, mse.pJ])
+                MSE = np.vstack([mse, MSE])
         
-        return 1/MSE, eqY
+        return MSE
     # ----
          
