@@ -128,6 +128,7 @@ class Cycle:
         
         aYear = 1400
         nCell = 3
+        th = 1
         
         # ground truth eq.
         gYear_nk = np.where(gt[:,0] > self.slip)[0]
@@ -151,9 +152,9 @@ class Cycle:
             gNum_tk = gYear_tk.shape[0]
             
             # 閾値以上の予測した地震年数
-            pYear_nk = np.where(pred[sYear:eYear,0] > self.slip)[0][:gNum_nk]
-            pYear_tnk = np.where(pred[sYear:eYear,1] > self.slip)[0][:gNum_tnk]
-            pYear_tk = np.where(pred[sYear:eYear,2] > self.slip)[0][:gNum_tk]
+            pYear_nk = np.where(pred[sYear:eYear,0] > th)[0][:gNum_nk]
+            pYear_tnk = np.where(pred[sYear:eYear,1] > th)[0][:gNum_tnk]
+            pYear_tk = np.where(pred[sYear:eYear,2] > th)[0][:gNum_tk]
             
             # gtよりpredの地震回数が少ない場合
             if pYear_nk.shape[0] < gNum_nk:
@@ -195,6 +196,7 @@ class Cycle:
         self.pJ = np.concatenate((nkJ[:,np.newaxis],tnkJ[:,np.newaxis],tkJ[:,np.newaxis]),1)
         
         self.maxSim = yearErrors[sInd]
+    
     # ----
     
     # ----
@@ -217,10 +219,12 @@ class Cycle:
             
             if not flag:
                 MSE = mse.maxSim
+                eqY = mse.pJ
                 flag = True
             else:
-                MSE = np.vstack([mse, MSE])
+                MSE = np.vstack([MSE, mse.maxSim])
+                eqY = np.vstack([eqY, mse.pJ])
         
-        return MSE
+        return 1/MSE, eqY
     # ----
          

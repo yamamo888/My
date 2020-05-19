@@ -1,9 +1,9 @@
 #-*- coding: utf-8 -*-
 
 import os
+import glob
 import pdb
 import pickle
-import glob
 
 import numpy as np
 
@@ -14,9 +14,8 @@ import matplotlib.pyplot as plt
 import cycle
 
 class NankaiData:
-    def __init__(self,nCell=5,nClass=10,nWindow=10):
-        #----------------------------- paramters --------------------------------------
-		
+    def __init__(self, logpath='none', nCell=5, nClass=10, nWindow=10):
+	
         # number of input cell
         self.nCell = nCell
         # number of class
@@ -30,14 +29,9 @@ class NankaiData:
         self.tnI = 4
         self.tI = 5
         
-        
-        # -----------------------------------------------------------------------------
-
-        # ------------------------------- path ----------------------------------------
-        self.features = "features"
-        self.nankaipkls = "nankaipickles"
-        # -----------------------------------------------------------------------------
+        self.logPath = logpath
     
+    # ----
     def makeCycleData(self):
         flag = False 
         for ind in np.arange(8):
@@ -139,73 +133,99 @@ class NankaiData:
             pickle.dump(cycle_xTest, fp)
             pickle.dump(te_paramB, fp)
             pickle.dump(te_yearMSE, fp)
+    # ----
+
+    # Load train & test dataset ----
+    def loadTrainTestData(self, nameInds=[0]):
         
-    #-----------------------------------------------------------------------------#      
-    def loadTrainTestData(self,nameInds=[0,1,2,3,4]):
-        
-        # name of train pickles
+        # name of train & test pickles
         trainNames = ["b2b3b4b5b6_train{}{}".format(num,self.nClass) for num in np.arange(1,9)]
-        # name of test pickles
         testNames = ["b2b3b4b5b6_test1{}".format(self.nClass)]
         
-        # reading train data from pickle
-        with open(os.path.join(self.features,self.nankaipkls,trainNames[nameInds[0]]),'rb') as fp:
-            self.x11Train = pickle.load(fp)
-            self.y11TrainLabel = pickle.load(fp)
-            self.y21TrainLabel = pickle.load(fp)
-            self.y31TrainLabel = pickle.load(fp)
-            self.y41TrainLabel = pickle.load(fp)
-            self.y51TrainLabel = pickle.load(fp)
-            self.y11Train = pickle.load(fp)
-            self.y21Train = pickle.load(fp)
-            self.y31Train = pickle.load(fp)
-            self.y41Train = pickle.load(fp)
-            self.y51Train = pickle.load(fp)
+        # train
+        flag = False
+        for di in nameInds:
+            # reading train data from pickle
+            with open(os.path.join(self.features,self.nankaipkls,trainNames[di]),'rb') as fp:
+                self.xTrain = pickle.load(fp)
+                _ = pickle.load(fp)
+                _ = pickle.load(fp)
+                _ = pickle.load(fp)
+                _ = pickle.load(fp)
+                _ = pickle.load(fp)
+                self.y1Train = pickle.load(fp)
+                self.y2Train = pickle.load(fp)
+                self.y3Train = pickle.load(fp)
+                self.y4Train = pickle.load(fp)
+                self.y5Train = pickle.load(fp)
+            
+            if not flag:
+                X = self.xTrain
+                Y1 = self.y2Train
+                Y2 = self.y4Train
+                Y3 = self.y5Train
+                flag = True
+            else:
+                X = np.vstack([X,self.xTrain])
+                Y1 = np.hstack([Y1,self.y2Train])
+                Y2 = np.hstack([Y2,self.y4Train])
+                Y3 = np.hstack([Y3,self.y5Train])
+        
+        X = X[:,1:6,:]
+        self.xTrain = np.reshape(X, [-1,self.nCell*self.nWindow]).astype(np.float32)
+        self.yTrain = np.concatenate((Y1[:,np.newaxis],Y2[:,np.newaxis],Y3[:,np.newaxis]),1)
+        
+        # num.of train
+        self.nTrain =  int(self.yTrain.shape[0])
+        # random train index
+        self.batchRandInd = np.random.permutation(self.nTrain)
+            
 
         # test data
         with open(os.path.join(self.features,self.nankaipkls,testNames[0]),'rb') as fp:
             self.xTest = pickle.load(fp)
-            self.y11TestLabel = pickle.load(fp)
-            self.y21TestLabel = pickle.load(fp)
-            self.y31TestLabel = pickle.load(fp)
-            self.y41TestLabel = pickle.load(fp)
-            self.y51TestLabel = pickle.load(fp)
-            self.y11Test = pickle.load(fp)
-            self.y21Test = pickle.load(fp)
-            self.y31Test = pickle.load(fp)
-            self.y41Test = pickle.load(fp)
-            self.y51Test = pickle.load(fp)
+            _ = pickle.load(fp)
+            _ = pickle.load(fp)
+            _ = pickle.load(fp)
+            _ = pickle.load(fp)
+            _ = pickle.load(fp)
+            self.y1Test = pickle.load(fp)
+            self.y2Test = pickle.load(fp)
+            self.y3Test = pickle.load(fp)
+            self.y4Test = pickle.load(fp)
+            self.y5Test = pickle.load(fp)
 
+        X = self.xTest[:,1:6,:]
+        xTest = np.reshape(X, [-1,self.nCell*self.nWindow]).astype(np.float32)
+        yTest = np.concatenate((self.y21Test[:,np.newaxis],self.y41Test[:,np.newaxis],self.y51Test[:,np.newaxis]),1)
         
-        #[number of data,]
-        self.xTest = self.xTest[:,1:6,:]
-        self.xTest = np.reshape(self.xTest,[-1,self.nCell*self.nWindow]).astype(np.float32)
-        # test y
-        self.yTest = np.concatenate((self.y21Test[:,np.newaxis],self.y41Test[:,np.newaxis],self.y51Test[:,np.newaxis]),1)
-        """
-        # [number of data, cell(=5,nankai2 & tonakai2 & tokai1), dimention of features(=10)]
-        trX = np.concatenate((self.x11Train[:,1:6,:],self.x12Train[:,1:6,:],self.x13Train[:,1:6,:]),0) 
-        # mini-batch, [number of data, cell(=5)*dimention of features(=10)]
-        self.batchX = np.reshape(trX[sInd:eInd],[-1,self.nCell*self.nWindow])
-        # test all targets
-        trY1 = np.concatenate((self.y21Train,self.y22Train,self.y23Train),0)
-        trY2 = np.concatenate((self.y41Train,self.y42Train,self.y43Train),0)
-        trY3 = np.concatenate((self.y51Train,self.y52Train,self.y53Train),0)
-        # [number of data(mini-batch), cell(=3)] 
-        self.batchY = np.concatenate((trY1[sInd:eInd,np.newaxis],trY2[sInd:eInd,np.newaxis],trY3[sInd:eInd,np.newaxis]),1)
-        """
-        # test label y
-        #self.yTestLabel = np.concatenate((self.y11TestLabel[:,:,np.newaxis],self.y31TestLabel[:,:,np.newaxis],self.y51TestLabel[:,:,np.newaxis]),2)
-        # number of train data
-        #self.nTrain =  int(self.x11Train.shape[0] + self.x12Train.shape[0] + self.x13Train.shape[0])
+        return xTest, yTest
+    # ----
+    
+    # Load train & test dataset for cycle loss ----
+    def loadCycleTrainTestData(self):
+        
+        with open(os.path.join(self.logPath,'cycle','train_cycleVXY.pkl'), 'rb') as fp:
+            self.xCycleTrain = pickle.load(fp)
+            self.yCyclebTrain = pickle.load(fp)
+            self.yCycleTrain = pickle.load(fp)
+        
+        # num.of train
+        self.nTrain =  int(self.yCycleTrain.shape[0])
         # random train index
-        #self.batchRandInd = np.random.permutation(self.nTrain)
-        #pdb.set_trace()
-        # self.yCycleTest
+        self.batchRandInd = np.random.permutation(self.nTrain)
         
-    #-----------------------------------------------------------------------------#    
+        with open(os.path.join(self.logPath,'cycle','test_cycleVXY.pkl'), 'rb') as fp:
+            xCycleTest = pickle.load(fp)
+            yCyclebTest = pickle.load(fp)
+            yCycleTest = pickle.load(fp)
+            
+        return xCycleTest, yCyclebTest, yCycleTest
+    # ----
+    
+    # Load exact rireki ----
     def loadNankaiRireki(self):
-        
+    
         # nankaifeatue.pkl -> 190.pkl
         
         # X (FFT feature) ----
@@ -213,42 +233,43 @@ class NankaiData:
         fftpath = os.path.join(self.features,"eval","{}.pkl".format(fID))
         with open(fftpath,"rb") as fp:
             data = pickle.load(fp)
-        xfft = np.reshape(np.concatenate([data[0][np.newaxis],data[0][np.newaxis],data[1][np.newaxis],data[1][np.newaxis],data[2][np.newaxis]]),[-1,])
+        xEval = np.reshape(np.concatenate([data[0][np.newaxis],data[0][np.newaxis],data[1][np.newaxis],data[1][np.newaxis],data[2][np.newaxis]]),[-1,]) # [50,]
         
         # eq.year for Cycle loss ----        
         rirekipath = os.path.join(self.features,"eval","nankairireki.pkl")
         with open(rirekipath ,'rb') as fp:
             data = pickle.load(fp)
         xrireki = data[fID,:,:]
-        xyear = [np.where(xrireki[:,0]>0)[0], np.where(xrireki[:,1]>0)[0], np.where(xrireki[:,2]>0)[0]]
-
-        self.xEval = xfft # [50,]
-        self.xCycleEval = xyear # [[eq.year in nk], [eq.year in tnk], [eq.year in tk]]
+        yCycleEval = [np.where(xrireki[:,0]>0)[0], np.where(xrireki[:,1]>0)[0], np.where(xrireki[:,2]>0)[0]] # [[eq.year in nk], [eq.year in tnk], [eq.year in tk]]
         
-    #-----------------------------------------------------------------------------#
-    def nextBatch(self, nBatch=100):
+        return xEval, yCycleEval
+    # ----
+        
+    # Make mini-batch dataset ----        
+    def nextBatch(self, nBatch=100, isCycle=False):
         
         sInd = nBatch * self.batchCnt
         eInd = sInd + nBatch
-       
         
-        self.batchX = self.X[sInd:eInd,:]
-        self.batchY = self.Y[sInd:eInd,:]
- 
-        pdb.set_trace()
-        #trCycleY1
-        #trCycleY2
-        #trCycleY3
-        
-        # self.batchCycleY
-        
-        if eInd + batchSize > self.nTrain:
+        if isCycle:
+            batchX = self.xCycleTrain[sInd:eInd]
+            batchY = self.yCyclebTrain[sInd:eInd]
+            batchCycleY = self.yCycleTrain[sInd:eInd]
+            
+            batchXY = [batchX, batchY, batchCycleY]
+            
+        else:
+            batchX = self.xTrain[sInd:eInd]
+            batchY = self.YTrain[sInd:eInd]
+            
+            batchXY = [batchX, batchY]
+     
+        if eInd + nBatch > self.nTrain:
             self.batchCnt = 0
         else:
             self.batchCnt += 1
-
-    #-----------------------------------------------------------------------------#
-
-#myData = NankaiData(nCell=5,nClass=10,nWindow=10)
-#myData.makeCycleData()
+        
+        return batchXY
+    # ----
+    
 

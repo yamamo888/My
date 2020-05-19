@@ -19,16 +19,17 @@ import data
 
 
 class ParamNN:
-    def __init__(self, keepProbTrain=1.0, lr=1e-3, dInput=50, dOutput=3):
+    def __init__(self, keepProbTrain=1.0, lr=1e-3, dInput=50, dOutput=3,
+                 nCell=5, nWindow=10):
         
-        # select nankai data(3/5) 
-        self.nametrInds = [0,1,2,3,4,5,6]
+        # Select train data *pkl
+        self.nametrInds = [0,1,2,3,4,5,6,7]
         # random sample loading train data
         nameInds = random.sample(self.nametrInds,3)
         
         # Dataset ----
-        self.myData = data.NankaiData()
-        self.myData.loadTrainTestData(nameInds=nameInds)
+        self.myData = data.NankaiData(nCell=nCell, nWindow=nWindow)
+        self.xTest, self.yTest = self.myData.loadTrainTestData(nameInds=nameInds)
         # ----
         
         # parameter ----
@@ -124,9 +125,9 @@ class ParamNN:
         for i in range(nItr):
             
             # Get mini-batch
-            self.myData.nextBatch(nBatch)
+            batchXY = self.myData.nextBatch(nBatch=nBatch)
             
-            feed_dict = {self.x:self.batchX, self.y:self.batchY}
+            feed_dict = {self.x:batchXY[0], self.y:batchXY[1]}
          
             # Change nankai date
             if i % filePeriod == 0:
@@ -134,7 +135,11 @@ class ParamNN:
                 self.myData.loadTrainTestData(nameInds=nameInds)
             
             # parameter loss
-            _, trainPred, trainRegLoss = self.sess.run([self.opt, self.pred, self.ploss], feed_dict)
+            _, trainPred, trainLoss = self.sess.run([self.opt, self.pred, self.ploss], feed_dict)
+            
+            # print
+            if i % 1000 == 0:
+                print('itr: %d, trainLoss:%f' % (i, trainLoss))
     # ----
 
 
@@ -163,7 +168,8 @@ if __name__ == "__main__":
     # ----
     
     # Training ----
-    model = ParamNN(keepProbTrain=keepProbTrain, lr=lr, dInput=dInput, dOutput=dOutput)
+    model = ParamNN(keepProbTrain=keepProbTrain, lr=lr, dInput=dInput, dOutput=dOutput,
+                    nCell=nCell, nWindow=nWindow)
     model.train(nItr=nItr, nBatch=nBatch)
     # ----
     
