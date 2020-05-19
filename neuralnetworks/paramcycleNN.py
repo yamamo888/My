@@ -25,21 +25,22 @@ class ParamCycleNN:
         # path ----
         self.modelPath = 'model'
         self.figurePath = 'figure'
-        self.logsPath = 'logs'
-        self.paramsPath = 'params'
+        self.logPath = 'logs'
+        self.paramPath = 'params'
         # ----
         
         # parameter ----
         self.dInput = dInput
         self.dOutput = dOutput
         self.trialID = trialID
+        self.isCycle = True
         # ----
   
         # ----
         # paramNN
         self.paramNN = paramNN.ParamNN(keepProbTrain=keepProbTrain, lr=lr, dInput=self.dInput, dOutput=self.dOutput)
         # cycle
-        self.cycle = cycle.Cycle(logpath=self.logsPath, parampath=self.paramsPath, trialID=self.trialID)
+        self.cycle = cycle.Cycle(logpath=self.logPath, parampath=self.paramPath, trialID=self.trialID)
         
         # Train & Test data for cycle
         self.xCycleTest, self.yCyclebTest, self.yCycleTest = self.myData.loadCycleTrainTestData()
@@ -54,9 +55,9 @@ class ParamCycleNN:
         # ----
         
         # neural network ----
-        self.ppred = self.paramNN.Regress(self.x)
-        self.ppred_test = self.paramNN.Regress(self.x, reuse=True)
-        self.ppred_eval = self.paramNN.Regress(self.x, reuse=True)
+        self.ppred = self.pcRegress(self.x, isCycle=self.isCycle)
+        self.ppred_test = self.pcRegress(self.x, reuse=True, isCycle=self.isCycle)
+        self.ppred_eval = self.pcRegress(self.x, reuse=True, isCycle=self.isCycle)
         # ----
         
         # loss ----
@@ -70,15 +71,33 @@ class ParamCycleNN:
         # ----
         
         # optimizer ----
-        Vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope='Regress') 
+        Vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope='pcRegress') 
         self.opt = tf.train.AdamOptimizer(lr).minimize(self.pcloss,var_list=Vars)
         
         config = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.1,allow_growth=True)) 
         self.sess = tf.Session(config=config)
         self.sess.run(tf.global_variables_initializer())
         # ----
+    
+    # ----
+    def pcRegress(self, x, reuse=True, keepProb=1.0):   
+          with tf.variable_scope('pcRegress') as scope:  
+            if reuse:
+                scope.reuse_variables()
+          
+          nHidden=128
+          
+          h = self.paramNN.Regress(self.x, isCycle=self.isCycle)
         
-        
+          # 4th layer
+          w4_reg = self.weight_variable('w4_reg',[nHidden, self.dOutput])
+          bias4_reg = self.bias_variable('bias4_reg',[self.dOutput])
+            
+          y = self.paramNN.fc(h,w4_reg,bias4_reg,keepProb)
+            
+          return y
+    # ----
+                
     # ----
     def train(self, nItr=10000, nBatch=100):
         
@@ -88,7 +107,7 @@ class ParamCycleNN:
         trPL = np.zeros(int(nItr/testPeriod))
         for itr in np.arange(nItr):
             
-            batchXY = self.myData.nextBatch(nBatch=nBatch, isCycle=True)
+            batchXY = self.myData.nextBatch(nBatch=nBatch, isCycle=self.isCycle)
             
             # 1. pred fric paramters
             pfeed_dict = {self.x:batchXY[0], self.y:self.batchXY[1]}

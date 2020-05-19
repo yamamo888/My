@@ -81,13 +81,13 @@ class ParamNN:
          return fc
     # ----
     # ----
-    def Regress(self, x_r, reuse=False, keepProb=1.0, trainables=True):
+    def Regress(self, x_r, keepProb=1.0, reuse=False, isCycle=False):
         
         pdb.set_trace()
         
         nHidden=128
         
-        with tf.variable_scope("Regress") as scope:  
+        with tf.variable_scope('Regress') as scope:  
             if reuse:
                 scope.reuse_variables()
     
@@ -112,7 +112,10 @@ class ParamNN:
             
             y = self.fc(h3,w4_reg,bias4_reg,keepProb)
             
-            return y
+            if isCycle:
+                return h3
+            else:
+                return y
     # ----
         
     # ----
