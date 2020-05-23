@@ -23,24 +23,58 @@ class Plot:
           self.trialID = trialID
       
       # Plot loss ----
-      def Loss(self, data, labels='none'):
+      def pcLoss(self, data, labels):
           #pdb.set_trace()
           
           sns.set_style('dark')
-
-          plt.plot(data[0], linewidth=5, label=labels[0])
-          plt.plot(data[1], linewidth=5, label=labels[1])
+          # train
+          plt.plot(data[0], linewidth=2, label=labels[0])
+          plt.plot(data[1], linewidth=2, label=labels[1])
+          plt.plot(data[2], linewidth=2, label=labels[2])
           
-          plt.title('trLoss: %f\n teLoss: %f' % (data[0][-1], data[1][-1]))
+          # test
+          plt.plot(data[3], linewidth=2, label=labels[3])
+          plt.plot(data[4], linewidth=2, label=labels[4])
+          plt.plot(data[5], linewidth=2, label=labels[5])
+          
+          plt.title('trPLoss,trCLoss,trPCLoss: %f %f %f\n teLoss,teCLoss,tePCLoss: %f %f %f' 
+                    % (data[0][-1], data[1][-1], data[2][-1], data[3][-1], data[4][-1], data[5][-1]))
+          
           plt.xlabel('iteration')
           plt.ylabel('# of data')
           plt.legend()
 
-
-          losspath = os.path.join(self.figurePath, 'loss', f'{self.trialID}')
+          losspath = os.path.join(self.figurePath, 'loss', f'{self.trialID}.png')
           plt.savefig(losspath)
           plt.close()
       # ----
+      
+      # Plot exact-pred scatter ----
+      def epScatter(self, params, labels):
+          '''
+          params[-1] : test exaxt paramb
+          '''
+          
+          sns.set_style('dark')
+          
+          for predparams, label in zip([params[0],params[1]], labels):
+              # cycle loss pred
+              fig, figInds = plt.subplots(ncols=3, sharex=True, sharey=True)
+              plt.xlabel('Predict')
+              plt.ylabel('Exact')
+                  
+              for figInd in np.arange(len(figInds)):
+                  figInds[figInd].scatter(params[2][:,figInd], predparams[:,figInd], c='black')
+                  
+                    
+
+              fig.suptitle(f'{label}')
+              
+              pcpath = os.path.join(self.figurePath, 'gtpred', f'{self.trialID}_{label}.png')
+              plt.savefig(pcpath)
+              plt.close()  
+      # ----
+      
       
       # Plot rireki ----
       def Rireki(self, gt, pred):
