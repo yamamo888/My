@@ -106,7 +106,6 @@ class ParamNN:
             h2 = self.fc_relu(h1,w2_reg,bias2_reg,rate)
             
             # 3rd layer 
-            bias4_reg = self.bias_variable('bias4_reg',[self.dOutput])
             w3_reg = self.weight_variable('w3_reg',[nHidden, nHidden], trainable=trainable)
             bias3_reg = self.bias_variable('bias3_reg',[nHidden], trainable=trainable)
             h3 = self.fc_relu(h2,w3_reg,bias3_reg,rate)
