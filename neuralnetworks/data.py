@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import cycle
 
 class NankaiData:
-    def __init__(self, logpath='none', nCell=5, nClass=10, nWindow=10):
+    def __init__(self, logpath='logs', nCell=5, nClass=10, nWindow=10):
 	
         # number of input cell
         self.nCell = nCell
@@ -206,7 +206,7 @@ class NankaiData:
     # Load train & test dataset for cycle loss ----
     def loadCycleTrainTestData(self):
         
-        with open(os.path.join(self.logPath,'cycle','train_allcycleVXY.pkl'), 'rb') as fp:
+        with open(os.path.join(self.featurePath,'cycle','train_cycleVXY.pkl'), 'rb') as fp:
             self.xCycleTrain = pickle.load(fp)
             self.yCyclebTrain = pickle.load(fp)
             self.yCycleTrain = pickle.load(fp)
@@ -216,7 +216,7 @@ class NankaiData:
         # random train index
         self.batchRandInd = np.random.permutation(self.nTrain)
         
-        with open(os.path.join(self.logPath,'cycle','test_allcycleVXY.pkl'), 'rb') as fp:
+        with open(os.path.join(self.featurePath,'cycle','test_cycleVXY.pkl'), 'rb') as fp:
             xCycleTest = pickle.load(fp)
             yCyclebTest = pickle.load(fp)
             yCycleTest = pickle.load(fp)
