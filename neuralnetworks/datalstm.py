@@ -31,7 +31,80 @@ class NankaiData:
         self.nTrain2 = len(self.logsfullpath2)
         
         self.isLSTM = True
+    
+    # ----
+    def makeIntervalData(self):
         
+        # Loading logs
+        makeInterval = cycle.Cycle()
+        
+        interval_list = []
+        flag = False
+        filename = ['b2b3b4b5b60-100','b2b3b4b5b6105-200','b2b3b4b5b6205-300','tmp300','b2b3b4b5b6400-450'] 
+
+        flag = False
+        #for fID in ['tmp300','b2b3b4b5b6205-300']:
+        for fID in filename:
+            pdb.set_trace()
+            logspath = glob.glob(os.path.join('logs',f'{fID}','*.txt'))
+            
+            for logpath in logspath:
+                B,_ = makeInterval.loadBV(logpath)
+                B = np.concatenate([B[2,np.newaxis],B[4,np.newaxis],B[5,np.newaxis]],0)
+            
+                makeInterval.convV2YearlyData(isLSTM=self.isLSTM)
+                
+                # output dataset, years:list
+                years, _ = makeInterval.calcYearMSE(self.yEval,isLSTM=self.isLSTM)
+                
+                # if years < len([8,8,6])
+                if len(years[0]) < 8:
+                    years[0] = np.pad(years[0], [0,8-len(years[0])], 'constant')
+                if len(years[1]) < 8:
+                    years[1] = np.pad(years[1], [0,8-len(years[1])], 'constant')
+                if len(years[2]) < 6:
+                    years[2] = np.pad(years[2], [0,6-len(years[2])], 'constant')
+                    
+                # input dataset, intervals:list
+                intervals, seq = makeInterval.calcInterval()
+                
+                interval_list = interval_list.append(intervals)
+                
+                if not flag:
+                    seqs = np.array([seq])
+                    intervalnk1 = intervals[0]
+                    intervalnk2 = intervals[1]
+                    intervaltnk1 = intervals[2]
+                    intervaltnk2 = intervals[3]
+                    intervaltk = intervals[4]
+                    yearnk = years[0]
+                    yeartnk = years[1]
+                    yeartk = years[2]
+                    flag = True
+                else:
+                    pdb.set_trace()
+                    seqs = np.hstack([seqs, np.array([seq])])
+                    intervalnk1 = np.vstack([intervalnk1, intervals[0]])
+                    intervalnk2 = np.vstack([intervalnk2, intervals[1]])
+                    intervaltnk1 = np.vstack([intervaltnk1, intervals[2]])
+                    intervaltnk2 = np.vstack([intervaltnk2, intervals[3]])
+                    intervaltk = np.vstack([intervaltk, intervals[4]])
+                    yearnk = np.vstack([yearnk, years[0]])
+                    yeartnk = np.vstack([yeartnk, years[1]])
+                    yeartk = np.vstack([yeartk, years[2]])
+
+        with open(os.path.join('features','interval','intervalSeqXY.pkl'),'wb') as fp:
+            pickle.dump(seqs, fp)
+            pickle.dump(intervalnk1, fp)
+            pickle.dump(intervalnk2, fp)
+            pickle.dump(intervaltnk1, fp)
+            pickle.dump(intervaltnk2, fp)
+            pickle.dump(intervaltk, fp)
+            pickle.dump(yearnk, fp)
+            pickle.dump(yeartnk, fp)
+            pickle.dump(yeartk, fp) 
+    # ----    
+
     # ----
     def LSTM(self, x, seq, reuse=False):
 
