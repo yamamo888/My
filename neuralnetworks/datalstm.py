@@ -38,17 +38,20 @@ class NankaiData:
         # Loading logs
         makeInterval = cycle.Cycle()
         
+        self.EvalData()       
         interval_list = []
         flag = False
-        filename = ['b2b3b4b5b60-100','b2b3b4b5b6105-200','b2b3b4b5b6205-300','tmp300','b2b3b4b5b6400-450'] 
+        #filename = ['b2b3b4b5b6205-300','tmp300','b2b3b4b5b60-100','b2b3b4b5b6105-200','b2b3b4b5b6400-450'] 
+        filename = ['b2b3b4b5b6105-200'] 
 
         flag = False
         #for fID in ['tmp300','b2b3b4b5b6205-300']:
         for fID in filename:
-            pdb.set_trace()
             logspath = glob.glob(os.path.join('logs',f'{fID}','*.txt'))
-            
+            cnt = 0
             for logpath in logspath:
+                print(f'{fID}:{len(logspath)-cnt}')
+                cnt += 1
                 B,_ = makeInterval.loadBV(logpath)
                 B = np.concatenate([B[2,np.newaxis],B[4,np.newaxis],B[5,np.newaxis]],0)
             
@@ -56,53 +59,33 @@ class NankaiData:
                 
                 # output dataset, years:list
                 years, _ = makeInterval.calcYearMSE(self.yEval,isLSTM=self.isLSTM)
-                
-                # if years < len([8,8,6])
-                if len(years[0]) < 8:
-                    years[0] = np.pad(years[0], [0,8-len(years[0])], 'constant')
-                if len(years[1]) < 8:
-                    years[1] = np.pad(years[1], [0,8-len(years[1])], 'constant')
-                if len(years[2]) < 6:
-                    years[2] = np.pad(years[2], [0,6-len(years[2])], 'constant')
+                # zero-padding array[500,]
+                years = [np.pad(year, [0, 500-len(year)], 'constant') for year in years] 
+                years = np.concatenate([years[0][:,np.newaxis],years[1][:,np.newaxis],years[2][:,np.newaxis]],1)
                     
                 # input dataset, intervals:list
                 intervals, seq = makeInterval.calcInterval()
-                
-                interval_list = interval_list.append(intervals)
-                
+                # list[5]
+                intervals = [np.pad(interval, [0, 500-len(interval)], 'constant') for interval in intervals] 
+                intervals = np.concatenate([intervals[0][:,np.newaxis],intervals[1][:,np.newaxis],intervals[2][:,np.newaxis],intervals[3][:,np.newaxis],intervals[4][:,np.newaxis]],1)
+
                 if not flag:
                     seqs = np.array([seq])
-                    intervalnk1 = intervals[0]
-                    intervalnk2 = intervals[1]
-                    intervaltnk1 = intervals[2]
-                    intervaltnk2 = intervals[3]
-                    intervaltk = intervals[4]
-                    yearnk = years[0]
-                    yeartnk = years[1]
-                    yeartk = years[2]
+                    Intervals = intervals[np.newaxis]
+                    Years = years[np.newaxis]
+                    Bs = B[np.newaxis]
                     flag = True
                 else:
-                    pdb.set_trace()
                     seqs = np.hstack([seqs, np.array([seq])])
-                    intervalnk1 = np.vstack([intervalnk1, intervals[0]])
-                    intervalnk2 = np.vstack([intervalnk2, intervals[1]])
-                    intervaltnk1 = np.vstack([intervaltnk1, intervals[2]])
-                    intervaltnk2 = np.vstack([intervaltnk2, intervals[3]])
-                    intervaltk = np.vstack([intervaltk, intervals[4]])
-                    yearnk = np.vstack([yearnk, years[0]])
-                    yeartnk = np.vstack([yeartnk, years[1]])
-                    yeartk = np.vstack([yeartk, years[2]])
+                    Intervals = np.vstack([Intervals, intervals[np.newaxis]])
+                    Years = np.vstack([Years, years[np.newaxis]])
+                    Bs = np.vstack([Bs, B[np.newaxis]])
 
-        with open(os.path.join('features','interval','intervalSeqXY.pkl'),'wb') as fp:
-            pickle.dump(seqs, fp)
-            pickle.dump(intervalnk1, fp)
-            pickle.dump(intervalnk2, fp)
-            pickle.dump(intervaltnk1, fp)
-            pickle.dump(intervaltnk2, fp)
-            pickle.dump(intervaltk, fp)
-            pickle.dump(yearnk, fp)
-            pickle.dump(yeartnk, fp)
-            pickle.dump(yeartk, fp) 
+            with open(os.path.join('features','interval','intervalSeqXY_{fID}.pkl'),'wb') as fp:
+                pickle.dump(seqs, fp)
+                pickle.dump(Intervals, fp)
+                pickle.dump(Years, fp)
+                pickle.dump(Bs, fp)
     # ----    
 
     # ----
@@ -264,6 +247,6 @@ class NankaiData:
         return batchX, batchY, batchSeq
     # ----
    
-        
+NankaiData().makeIntervalData()       
     
     
