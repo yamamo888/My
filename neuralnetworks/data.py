@@ -63,7 +63,33 @@ class NankaiData:
                 B = np.concatenate([B[self.nI,np.newaxis],B[self.tnI,np.newaxis],B[self.tI,np.newaxis]],0)
                 print(f'{fID}: {len(logspath)-cnt}')
                 cnt += 1
-                
+                match = 0
+                # train
+                for i in np.arange(self.xTrain.shape[0]):
+                    yb = self.yTrain[i]
+                    x = self.xTrain[i]
+                    
+                    if match == 1:
+                        pass
+                    elif match == 0:
+                        pdb.set_trace()
+                        if all(B == yb):
+                            match = 1 
+                            
+                            myCycle.convV2YearlyData()
+                            # eq.year
+                            pJ,_ = myCycle.calcYearMSE(self.xCycleEval)
+
+                            if not flag2:
+                                yearMSE = pJ[np.newaxis]
+                                paramB = yb
+                                X = x
+                                flag2 = True
+                            else:
+                                yearMSE = np.vstack([yearMSE, pJ[np.newaxis]])
+                                paramB = np.vstack([paramB, yb])
+                                X = np.vstack([X,x])
+                                pdb.set_trace()
                 '''
                 # test
                 for j in np.arange(te_randind.shape[0]):
@@ -84,41 +110,6 @@ class NankaiData:
                         else:
                             te_yearMSE = np.vstack([te_yearMSE, pJ[np.newaxis]]) # [num.data,250,3]
                             te_paramB = np.vstack([paramB, yb])''' # [num.data,3]
-                            
-                # train
-                # if == isPart
-                #for i in np.arange(tr_randind.shape[0]):
-                    #yb = cycle_yTrain[i]
-                for i in np.arange(self.xTrain.shape[0]):
-                    yb = self.yTrain[i]
-                    x = self.xTrain[i]
-
-
-                    if match == 1:
-                        pass
-                    elif match == 0:
-
-                        pdb.set_trace()
-                        if all(B == yb):
-                            match = 1 
-                            print('train same')
-                            print(yb)
-                            print(B)
-
-                            myCycle.convV2YearlyData()
-                            pJ,_ = myCycle.calcYearMSE(self.xCycleEval)
-
-                            if not flag2:
-                                yearMSE = pJ[np.newaxis]
-                                paramB = yb
-                                X = x
-                                flag2 = True
-                            else:
-                                yearMSE = np.vstack([yearMSE, pJ[np.newaxis]])
-                                paramB = np.vstack([paramB, yb])
-                                X = np.vstack([X,x])
-                                pdb.set_trace()
-
 
             with open(os.path.join(self.featurePath,'cycle','train_allcycleVXY_{fID}.pkl'),'wb') as fp:
                 pickle.dump(X, fp)
