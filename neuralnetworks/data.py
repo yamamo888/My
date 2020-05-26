@@ -37,24 +37,6 @@ class NankaiData:
         '''
         isPart: select part of data
         '''
-        flag = False 
-        for ind in np.arange(8):
-            self.loadTrainTestData(nameInds=[ind])
-            
-            x = self.x11Train
-            y1,y2,y3 = self.y21Train,self.y41Train,self.y51Train
-          
-            if not flag:
-                X = x
-                Y1,Y2,Y3 = y1,y2,y3
-                flag = True
-            else:
-                X = np.vstack([X,x])
-                Y1,Y2,Y3 = np.hstack([Y1,y1]),np.hstack([Y2,y2]),np.hstack([Y3,y3])
-        
-        yTrain = np.concatenate((Y1[:,np.newaxis],Y2[:,np.newaxis],Y3[:,np.newaxis]),1)
-        X = X[:,1:6,:]
-        xTrain = np.reshape(X, [-1,self.nCell*self.nWindow]).astype(np.float32)
         
         if isPart:
             tr_randind =  np.random.permutation(xTrain.shape[0])[:int(xTrain.shape[0]*0.01)]
@@ -66,20 +48,20 @@ class NankaiData:
             cycle_yTest = self.yTest[te_randind]
 
         myCycle = cycle.Cycle()
-        self.loadNankaiRireki()
+        self.loadNankaiRireki
+        self.loadTrainTestData()
         
         filename = ['b2b3b4b5b60-100','b2b3b4b5b6105-200','b2b3b4b5b6205-300','tmp300','b2b3b4b5b6400-450'] 
 
         flag1,flag2 = False,False
         for fID in filename:
-            pdb.set_trace()
             cnt = 0
             logspath = glob.glob(os.path.join('logs',f'{fID}','*.txt'))
             
             for logpath in logspath:
                 B,_ = myCycle.loadBV(logpath)
                 B = np.concatenate([B[self.nI,np.newaxis],B[self.tnI,np.newaxis],B[self.tI,np.newaxis]],0)
-                print('{fID}: {len(logspath)-cnt}')
+                print(f'{fID}: {len(logspath)-cnt}')
                 cnt += 1
                 
                 '''
@@ -107,30 +89,39 @@ class NankaiData:
                 # if == isPart
                 #for i in np.arange(tr_randind.shape[0]):
                     #yb = cycle_yTrain[i]
-                for i in np.arange(xTrain.shape[0]):
-                    pdb.set_trace()
-                    yb = xTrain[i]
+                for i in np.arange(self.xTrain.shape[0]):
+                    yb = self.yTrain[i]
+                    x = self.xTrain[i]
 
-                    if all(B == yb):
-                        
-                        print('train same')
-                        print(yb)
-                        print(B)
 
-                        myCycle.convV2YearlyData()
-                        pJ,_ = myCycle.calcYearMSE(self.xCycleEval)
+                    if match == 1:
+                        pass
+                    elif match == 0:
 
-                        if not flag2:
-                            yearMSE = pJ[np.newaxis]
-                            paramB = yb
-                            flag2 = True
-                        else:
-                            yearMSE = np.vstack([yearMSE, pJ[np.newaxis]])
-                            paramB = np.vstack([paramB, yb])
+                        pdb.set_trace()
+                        if all(B == yb):
+                            match = 1 
+                            print('train same')
+                            print(yb)
+                            print(B)
+
+                            myCycle.convV2YearlyData()
+                            pJ,_ = myCycle.calcYearMSE(self.xCycleEval)
+
+                            if not flag2:
+                                yearMSE = pJ[np.newaxis]
+                                paramB = yb
+                                X = x
+                                flag2 = True
+                            else:
+                                yearMSE = np.vstack([yearMSE, pJ[np.newaxis]])
+                                paramB = np.vstack([paramB, yb])
+                                X = np.vstack([X,x])
+                                pdb.set_trace()
 
 
             with open(os.path.join(self.featurePath,'cycle','train_allcycleVXY_{fID}.pkl'),'wb') as fp:
-                pickle.dump(cycle_xTrain, fp)
+                pickle.dump(X, fp)
                 pickle.dump(paramB, fp)
                 pickle.dump(yearMSE, fp)
         '''
@@ -150,7 +141,8 @@ class NankaiData:
         
         # train
         flag = False
-        for di in nameInds:
+        #for di in nameInds:
+        for di in np.arange(8):
             # reading train data from pickle
             with open(os.path.join(self.featurePath, 'traintest' ,trainNames[di]),'rb') as fp:
                 self.xTrain = pickle.load(fp)
@@ -172,7 +164,6 @@ class NankaiData:
             else:
                 X = np.vstack([X,self.xTrain])
                 Y1,Y2,Y3 = np.hstack([Y1,self.y2Train]),np.hstack([Y2,self.y4Train]),np.hstack([Y3,self.y5Train])
-        
         X = X[:,1:6,:]
         self.xTrain = np.reshape(X, [-1,self.nCell*self.nWindow]).astype(np.float32)
         self.yTrain = np.concatenate((Y1[:,np.newaxis],Y2[:,np.newaxis],Y3[:,np.newaxis]),1)
@@ -274,4 +265,4 @@ class NankaiData:
         return batchXY
     # ----
     
-
+NankaiData().makeCycleData()
