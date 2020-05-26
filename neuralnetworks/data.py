@@ -32,56 +32,57 @@ class NankaiData:
         self.logPath = logpath
         self.featurePath = 'features'
     
-    # ----
-    def makeCycleData(self):
+    # all & part of xy data ----
+    def makeCycleData(self, isPart=False):
+        '''
+        isPart: select part of data
+        '''
         flag = False 
         for ind in np.arange(8):
             self.loadTrainTestData(nameInds=[ind])
             
             x = self.x11Train
-            y1 = self.y21Train
-            y2 = self.y41Train
-            y3 = self.y51Train
-
+            y1,y2,y3 = self.y21Train,self.y41Train,self.y51Train
+          
             if not flag:
                 X = x
-                Y1 = y1
-                Y2 = y2
-                Y3 = y3
-
+                Y1,Y2,Y3 = y1,y2,y3
                 flag = True
             else:
                 X = np.vstack([X,x])
-                Y1 = np.hstack([Y1,y1])
-                Y2 = np.hstack([Y2,y2])
-                Y3 = np.hstack([Y3,y3])
+                Y1,Y2,Y3 = np.hstack([Y1,y1]),np.hstack([Y2,y2]),np.hstack([Y3,y3])
         
-        #pdb.set_trace()
         yTrain = np.concatenate((Y1[:,np.newaxis],Y2[:,np.newaxis],Y3[:,np.newaxis]),1)
         X = X[:,1:6,:]
         xTrain = np.reshape(X, [-1,self.nCell*self.nWindow]).astype(np.float32)
         
-        tr_randind =  np.random.permutation(xTrain.shape[0])[:int(xTrain.shape[0]*0.01)]
-        te_randind =  np.random.permutation(self.xTest.shape[0])[:int(self.xTest.shape[0]*0.01)]
-        
-        cycle_xTrain = xTrain[tr_randind]
-        cycle_yTrain = yTrain[tr_randind]
-        cycle_xTest = self.xTest[te_randind]
-        cycle_yTest = self.yTest[te_randind]
+        if isPart:
+            tr_randind =  np.random.permutation(xTrain.shape[0])[:int(xTrain.shape[0]*0.01)]
+            te_randind =  np.random.permutation(self.xTest.shape[0])[:int(self.xTest.shape[0]*0.01)]
+            
+            cycle_xTrain = xTrain[tr_randind]
+            cycle_yTrain = yTrain[tr_randind]
+            cycle_xTest = self.xTest[te_randind]
+            cycle_yTest = self.yTest[te_randind]
 
         myCycle = cycle.Cycle()
         self.loadNankaiRireki()
         
-        filename = ['0-100','105-200','205-300','tmp300','400-450'] 
+        filename = ['b2b3b4b5b60-100','b2b3b4b5b6105-200','b2b3b4b5b6205-300','tmp300','b2b3b4b5b6400-450'] 
 
         flag1,flag2 = False,False
-        for fID in ['tmp300','400-450']:
+        for fID in filename:
             pdb.set_trace()
-            logspath = glob.glob(os.path.join('logs',f'b2b3b4b5b6{fID}','*.txt'))
+            cnt = 0
+            logspath = glob.glob(os.path.join('logs',f'{fID}','*.txt'))
+            
             for logpath in logspath:
                 B,_ = myCycle.loadBV(logpath)
                 B = np.concatenate([B[self.nI,np.newaxis],B[self.tnI,np.newaxis],B[self.tI,np.newaxis]],0)
-                print(logpath)
+                print('{fID}: {len(logspath)-cnt}')
+                cnt += 1
+                
+                '''
                 # test
                 for j in np.arange(te_randind.shape[0]):
                     yb = cycle_yTest[j]
@@ -100,12 +101,15 @@ class NankaiData:
                             flag1 = True
                         else:
                             te_yearMSE = np.vstack([te_yearMSE, pJ[np.newaxis]]) # [num.data,250,3]
-                            te_paramB = np.vstack([paramB, yb]) # [num.data,3]
+                            te_paramB = np.vstack([paramB, yb])''' # [num.data,3]
                             
-
                 # train
-                for i in np.arange(tr_randind.shape[0]):
-                    yb = cycle_yTrain[i]
+                # if == isPart
+                #for i in np.arange(tr_randind.shape[0]):
+                    #yb = cycle_yTrain[i]
+                for i in np.arange(xTrain.shape[0]):
+                    pdb.set_trace()
+                    yb = xTrain[i]
 
                     if all(B == yb):
                         
@@ -125,23 +129,24 @@ class NankaiData:
                             paramB = np.vstack([paramB, yb])
 
 
-        with open(os.path.join(self.featurePath,'cycle','train_cycleVXY.pkl'),'wb') as fp:
-            pickle.dump(cycle_xTrain, fp)
-            pickle.dump(paramB, fp)
-            pickle.dump(yearMSE, fp)
-            
+            with open(os.path.join(self.featurePath,'cycle','train_allcycleVXY_{fID}.pkl'),'wb') as fp:
+                pickle.dump(cycle_xTrain, fp)
+                pickle.dump(paramB, fp)
+                pickle.dump(yearMSE, fp)
+        '''
         with open(os.path.join(self.featurePath,'cycle','test_cycleVXY.pkl'),'wb') as fp:
             pickle.dump(cycle_xTest, fp)
             pickle.dump(te_paramB, fp)
             pickle.dump(te_yearMSE, fp)
-    # ----
-
+        '''
+     # ----
+    
     # Load train & test dataset ----
     def loadTrainTestData(self, nameInds=[0]):
         
         # name of train & test pickles
         trainNames = ["b2b3b4b5b6_train{}{}".format(num,self.nClass) for num in np.arange(1,9)]
-        testNames = ["b2b3b4b5b6_test1{}".format(self.nClass)]
+        #testNames = ["b2b3b4b5b6_test1{}".format(self.nClass)]
         
         # train
         flag = False
@@ -162,26 +167,21 @@ class NankaiData:
             
             if not flag:
                 X = self.xTrain
-                Y1 = self.y2Train
-                Y2 = self.y4Train
-                Y3 = self.y5Train
+                Y1,Y2,Y3 = self.y2Train,self.y4Train,self.y5Train
                 flag = True
             else:
                 X = np.vstack([X,self.xTrain])
-                Y1 = np.hstack([Y1,self.y2Train])
-                Y2 = np.hstack([Y2,self.y4Train])
-                Y3 = np.hstack([Y3,self.y5Train])
+                Y1,Y2,Y3 = np.hstack([Y1,self.y2Train]),np.hstack([Y2,self.y4Train]),np.hstack([Y3,self.y5Train])
         
         X = X[:,1:6,:]
         self.xTrain = np.reshape(X, [-1,self.nCell*self.nWindow]).astype(np.float32)
         self.yTrain = np.concatenate((Y1[:,np.newaxis],Y2[:,np.newaxis],Y3[:,np.newaxis]),1)
-        
+        '''
         # num.of train
         self.nTrain =  int(self.yTrain.shape[0])
         # random train index
         self.batchRandInd = np.random.permutation(self.nTrain)
-            
-
+        
         # test data
         with open(os.path.join(self.featurePath, 'traintest' ,testNames[0]),'rb') as fp:
             self.xTest = pickle.load(fp)
@@ -201,6 +201,7 @@ class NankaiData:
         yTest = np.concatenate((self.y2Test[:,np.newaxis],self.y4Test[:,np.newaxis],self.y5Test[:,np.newaxis]),1)
         
         return xTest, yTest
+        '''
     # ----
     
     # Load train & test dataset for cycle loss ----
