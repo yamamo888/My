@@ -42,7 +42,7 @@ class NankaiData:
         interval_list = []
         flag = False
         #filename = ['b2b3b4b5b6205-300','tmp300','b2b3b4b5b60-100','b2b3b4b5b6105-200','b2b3b4b5b6400-450'] 
-        filename = ['b2b3b4b5b6105-200'] 
+        filename = ['tmp300'] 
 
         flag = False
         #for fID in ['tmp300','b2b3b4b5b6205-300']:
