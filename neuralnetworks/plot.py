@@ -49,6 +49,26 @@ class Plot:
           plt.close()
       # ----
       
+      # Plot loss ----
+      def cLoss(self, data, labels):
+          #pdb.set_trace()
+          
+          sns.set_style('dark')
+      
+          plt.plot(data[0], linewidth=2, label=labels[0])
+          
+          plt.title('evCycleLoss: %f' % (data[0]))
+          
+          plt.xlabel('iteration')
+          plt.ylabel('# of data')
+          plt.legend()
+
+          losspath = os.path.join(self.figurePath, 'loss', f'{self.trialID}.png')
+          plt.savefig(losspath)
+          plt.close()
+      # ----
+      
+      
       # Plot exact-pred scatter ----
       def epScatter(self, params, labels):
           '''
@@ -57,22 +77,17 @@ class Plot:
           
           sns.set_style('dark')
           
-          for predparams, label in zip([params[0],params[1]], labels):
-              # cycle loss pred
-              fig, figInds = plt.subplots(ncols=3, sharex=True, sharey=True)
-              plt.xlabel('Predict')
-              plt.ylabel('Exact')
-                  
-              for figInd in np.arange(len(figInds)):
-                  figInds[figInd].scatter(params[2][:,figInd], predparams[:,figInd], c='black')
-                  
-                    
-
-              fig.suptitle(f'{label}')
+          # cycle loss pred
+          fig, figInds = plt.subplots(ncols=3, sharex=True, sharey=True)
               
-              pcpath = os.path.join(self.figurePath, 'gtpred', f'{self.trialID}_{label}.png')
-              plt.savefig(pcpath)
-              plt.close()  
+          for figInd in np.arange(len(figInds)):
+              figInds[figInd].scatter(params[2][:,figInd], params[1][:,figInd], c='black')
+              
+          fig.suptitle(f'{labels[1]}')
+          
+          pcpath = os.path.join(self.figurePath, 'gtpred', f'{self.trialID}_{labels[1]}.png')
+          plt.savefig(pcpath)
+          plt.close()  
       # ----
       
       

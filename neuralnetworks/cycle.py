@@ -234,15 +234,12 @@ class Cycle:
         self.maxSim = yearErrors[sInd]
         
         if isLSTM:
-            #pdb.set_trace()
             # minimum eq.year 
             self.nk1Year = self.predyear[0][(self.predyear[0] > sInd) & (self.predyear[0] < eInd)] - sInd
             self.nk2Year = self.predyear[1][(self.predyear[1] > sInd) & (self.predyear[1] < eInd)] - sInd
             self.tnk1Year = self.predyear[2][(self.predyear[2] > sInd) & (self.predyear[2] < eInd)] - sInd
             self.tnk2Year = self.predyear[3][(self.predyear[3] > sInd) & (self.predyear[3] < eInd)] - sInd
             self.tkYear = self.predyear[4][(self.predyear[4] > sInd) & (self.predyear[4] < eInd)] - sInd
-
-            self.pJ = [self.nk2Year, self.tnk2Year, self.tkYear]
             
         else:
             # minimum eq.year 
@@ -250,12 +247,13 @@ class Cycle:
             tnkYear = self.predyear[self.tntI][(self.predyear[self.tntI] > sInd) & (self.predyear[self.tntI] < eInd)] - sInd
             tkYear = self.predyear[self.ttI][(self.predyear[self.ttI] > sInd) & (self.predyear[self.ttI] < eInd)] - sInd
             
-            nkJ = np.pad(nkYear, (0, 500 - nkYear.shape[0]), 'constant', constant_values=0)
-            tnkJ = np.pad(tnkYear, (0, 500 - tnkYear.shape[0]), 'constant', constant_values=0)
-            tkJ = np.pad(tkYear, (0, 500 - tkYear.shape[0]), 'constant', constant_values=0)
-            self.pJ = np.concatenate([nkJ[:,np.newaxis], tnkJ[:,np.newaxis], tkJ[:,np.newaxis]],1) #[150,3]
-    
-        return self.pJ, self.maxSim
+            #nkJ = np.pad(nkYear, (0, 500 - nkYear.shape[0]), 'constant', constant_values=0)
+            #tnkJ = np.pad(tnkYear, (0, 500 - tnkYear.shape[0]), 'constant', constant_values=0)
+            #tkJ = np.pad(tkYear, (0, 500 - tkYear.shape[0]), 'constant', constant_values=0)
+            #self.pJ = np.concatenate([nkJ[:,np.newaxis], tnkJ[:,np.newaxis], tkJ[:,np.newaxis]],1) #[150,3]
+            
+            return self.maxSim
+            #return self.pJ, self.maxSim
     # ----
     
     # ----
@@ -265,6 +263,7 @@ class Cycle:
             interval.
             year interval.
         '''
+        pdb.set_trace()
         
         # interval
         interval_nk1 = self.nk1Year[1:] - self.nk1Year[:-1]
@@ -339,9 +338,6 @@ class Cycle:
             worstMS = np.max(MSE)
             MSE[pinds] = worstMS * np.sum(np.abs(predParams[pinds]),1)
         
-            
-        #pdb.set_trace()
-            
         return MSE
     # ----
          
