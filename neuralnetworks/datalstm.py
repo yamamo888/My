@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 import tensorflow as tf
 
@@ -17,35 +18,25 @@ import cycle
 
 
 class NankaiData:
-    def __init__(self):
-        
-        #self.logsfullpath1 = glob.glob(os.path.join('logs', 'b2b3b4b5b6205-300', '*txt'))
-        self.logsfullpath2 = glob.glob(os.path.join('logs', 'tmp300', '*txt'))
+    def __init__(self, isLSTM=True):
         
         # init batch count
-        #self.batchCnt1 = 0
-        self.batchCnt2 = 0
+        self.batchCnt = 0
         
-        # size of data
-        #self.nTrain1 = len(self.logsfullpath1)
-        self.nTrain2 = len(self.logsfullpath2)
-        
-        self.isLSTM = True
+        # path ----
+        self.featurePath = 'features'
     
     # ----
     def makeIntervalData(self):
-        
+        '''
         # Loading logs
         makeInterval = cycle.Cycle()
         
         self.EvalData()       
-        interval_list = []
-        flag = False
+        
         #filename = ['b2b3b4b5b6205-300','tmp300','b2b3b4b5b60-100','b2b3b4b5b6105-200','b2b3b4b5b6400-450'] 
-        filename = ['tmp300'] 
-
+        
         flag = False
-        #for fID in ['tmp300','b2b3b4b5b6205-300']:
         for fID in filename:
             logspath = glob.glob(os.path.join('logs',f'{fID}','*.txt'))
             cnt = 0
@@ -81,13 +72,48 @@ class NankaiData:
                     Years = np.vstack([Years, years[np.newaxis]])
                     Bs = np.vstack([Bs, B[np.newaxis]])
 
-            with open(os.path.join('features','interval','intervalSeqXY_{fID}.pkl'),'wb') as fp:
+            with open(os.path.join(self.featurePath,'interval',f'intervalSeqXY_{fID}.pkl'),'wb') as fp:
                 pickle.dump(seqs, fp)
                 pickle.dump(Intervals, fp)
                 pickle.dump(Years, fp)
-                pickle.dump(Bs, fp)
-    # ----    
-
+                pickle.dump(Bs, fp)'''
+            
+        with open(os.path.join(self.featurePath,'interval',f'intervalSeqXY_tmp300.pkl'),'wb') as fp:
+            Seqs = pickle.load(fp)
+            intervals = pickle.load(fp)
+            years = pickle.load(fp)
+            Paramb = pickle.load(fp)
+        pdb.set_trace()
+        Intervals = intervals[:,:8,:]
+        Years = years[:,:8,:]
+        
+        nData = Intervals.shape[0]
+        nTrain = nData * 0.8
+        randInd = np.random.permutation(nData)
+        
+        # Separate train & test
+        seqTrain = Seqs[randInd[:nTrain]]
+        seqTest = Seqs[randInd[:nTrain]]
+        intervalTrain = Intervals[randInd[:nTrain]]
+        intervalTest = Intervals[randInd[nTrain:]]
+        yearTrain = Years[randInd[:nTrain]]
+        yearTest = Years[randInd[nTrain:]]
+        parambTrain = Paramb[randInd[:nTrain]]
+        parambTest = Paramb[randInd[nTrain:]]
+        
+        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY_tmp300.pkl'),'wb') as fp:
+            pickle.dump(seqTrain, fp)
+            pickle.dump(intervalTrain, fp)
+            pickle.dump(yearTrain, fp)
+            pickle.dump(parambTrain, fp)
+    
+        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300.pkl'),'wb') as fp:
+            pickle.dump(seqTest, fp)
+            pickle.dump(intervalTest, fp)
+            pickle.dump(yearTest, fp)
+            pickle.dump(parambTest, fp)
+    # ----
+    
     # ----
     def LSTM(self, x, seq, reuse=False):
 
@@ -122,11 +148,23 @@ class NankaiData:
         fID = 190
        
         # eq.year ----        
-        rirekipath = os.path.join('features','eval','nankairireki.pkl')
+        rirekipath = os.path.join(self.featurePath,'eval','nankairireki.pkl')
         with open(rirekipath ,'rb') as fp:
             data = pickle.load(fp)
         xrireki = data[fID,:,:]
         self.yEval = [np.where(xrireki[:,0]>0)[0], np.where(xrireki[:,1]>0)[0], np.where(xrireki[:,2]>0)[0]] # [[eq.year in nk], [eq.year in tnk], [eq.year in tk]]
+    
+        '''
+        sns.set_style('dark')
+        #pdb.set_trace()
+        fig, figInds = plt.subplots(nrows=3, sharex=True)
+        for figInd in np.arange(len(figInds)):
+            figInds[figInd].plot(np.arange(1400), xrireki[:,figInd], color='coral')
+        
+        plt.savefig("Nankai.png")
+        plt.close()
+        '''
+        pdb.set_trace()
     
         # interval nk:8.tnk:8.tk:6
         nk = self.yEval[0][1:] - self.yEval[0][:-1]
@@ -143,110 +181,35 @@ class NankaiData:
 
         return xEval, self.yEval, seqEval
     # ----
-           
+   
     # ----
-    def nextBatch(self, nBatch=100):
+    def nextBatch(self, nameInds, nBatch=100):
         '''
         batchX: eq.intervals. [data, max of eq.length, 5(cell)]
-        batchY: eq.year. list
+        batchY: paramb
+        batchCycleY: eq.years
         batchSeq: length of maximum eq.intervals
         '''
+        self.loadIntervalData(nameInds)
         
         # index
-        #sInd1 = nBatch * self.batchCnt1
-        #eInd1 = sInd1 + nBatch
+        sInd = nBatch * self.batchCnt
+        eInd = sInd + nBatch
         
-        sInd2 = nBatch * self.batchCnt2
-        eInd2 = sInd2 + nBatch
+        batchX = self.intervals[sInd:eInd]
+        batchY = self.paramb[sInd:eInd]
+        batchCycleY = self.years[sInd:eInd]
+        batchSeq = self.seqs[sInd:eInd]
         
-        # Select path
-        #batchPath1 = self.logsfullpath1[sInd1:eInd1]
-        batchPath2 = self.logsfullpath2[sInd2:eInd2]
-        #batchPath = []
-        #batchPath.append(batchPath1)
-        #batchPath.append(batchPath2)
-        # flatten [2] -> [batchSize*2]
-        #batchPath = sum(batchPath, [])
+        batchXY = [batchX, batchY, batchCycleY, batchSeq]
         
-        # Loading logs
-        makeInterval = cycle.Cycle()
-        
-        interval_list = []
-        flag = False
-        #for path in batchPath:
-        for path in batchPath2:
-            
-            makeInterval.loadBV(path)
-            makeInterval.convV2YearlyData(isLSTM=self.isLSTM)
-            
-            # eq.year list[nk1,nk2,tnk1,tnk2,tk]
-            years, _ =  makeInterval.calcYearMSE(self.yEval,isLSTM=self.isLSTM)
-            
-            # if years < len([8,8,6])
-            if len(years[0]) < 8:
-                years[0] = np.pad(years[0], [0,8-len(years[0])], 'constant')
-            if len(years[1]) < 8:
-                years[1] = np.pad(years[1], [0,8-len(years[1])], 'constant')
-            if len(years[2]) < 6:
-                years[2] = np.pad(years[2], [0,6-len(years[2])], 'constant')
-
-            # intervals:list, seq: max length of year
-            intervals, seq = makeInterval.calcInterval()
-            
-            interval_list.append(intervals)
-            
-            if not flag:
-                batchSeq = np.array([seq])
-                # nk
-                batchY1 = years[0][:8]
-                # tnk
-                batchY2 = years[1][:8]
-                # tk
-                batchY3 = years[2][:6]
-                flag = True
-            else:
-                batchSeq = np.hstack([batchSeq, np.array([seq])])
-
-                batchY1 = np.vstack([batchY1, years[0][:8]])
-                batchY2 = np.vstack([batchY2, years[1][:8]])
-                batchY3 = np.vstack([batchY3, years[2][:6]])
-        
-        batchY = [batchY1, batchY2, batchY3]
-        
-        # stand zero-padding length
-        maxseq = np.max(batchSeq)
-        
-        # zero-padding size(maxseq)
-        flag = False
-        for intervals in interval_list:
-            # zero-padding length(maxseq)
-            interval_nk1 = np.pad(intervals[0], [0, maxseq-len(intervals[0])], 'constant')
-            interval_nk2 = np.pad(intervals[1], [0, maxseq-len(intervals[1])], 'constant')
-            interval_tnk1 = np.pad(intervals[2], [0, maxseq-len(intervals[2])], 'constant')
-            interval_tnk2 = np.pad(intervals[3], [0, maxseq-len(intervals[3])], 'constant')
-            interval_tk = np.pad(intervals[4], [0, maxseq-len(intervals[4])], 'constant')
-            
-            intervals = np.concatenate([interval_nk1[:,np.newaxis],interval_nk2[:,np.newaxis],interval_tnk1[:,np.newaxis],interval_tnk2[:,np.newaxis],interval_tk[:,np.newaxis]],1)
-            
-            if not flag:
-                batchX = intervals[np.newaxis]
-                flag = True
-            else:
-                batchX = np.vstack([batchX, intervals[np.newaxis]])
-                
-        #if eInd1 + nBatch > self.nTrain1:
-            #self.batchCnt1 = 0
-        #else:
-            #self.batchCnt1 += 1
-        
-        if eInd2 + nBatch > self.nTrain2:
-            self.batchCnt2 = 0
+        if eInd + nBatch > self.nTrain:
+            self.batchCnt = 0
         else:
-            self.batchCnt2 += 1
+            self.batchCnt += 1
     
-        return batchX, batchY, batchSeq
+        return batchXY
     # ----
    
-NankaiData().makeIntervalData()       
-    
+NankaiData().makeIntervalData()    
     
