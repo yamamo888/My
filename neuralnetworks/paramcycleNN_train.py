@@ -19,11 +19,12 @@ import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pylab as plt
 
+import datalstm
 import cycle
 import plot
 
 class ParamCycleNN:
-    def __init__(self, rateTrain=0.0, lr=1e-3, dInput=50, trialID=0):
+    def __init__(self, rateTrain=0.0, lr=1e-3, nCell=5, trialID=0):
         
         # path ----
         self.modelPath = 'model'
@@ -33,35 +34,21 @@ class ParamCycleNN:
         # ----
         
         # parameter ----
-        self.dInput = dInput
+        self.dInput = nCell
         self.dOutput = 3
         self.dOutput_nk = 8
         self.dOutput_tnk = 8
         self.dOutput_tk = 6
         self.trialID = trialID
-        self.isCycle = True
-        self.isLSTM = True
+        isReModel = False
         # ----
         
         # Dataset ----
-        if self.isLSTM:
-            import datalstm
-            
-            self.myData = datalstm.NankaiData(isLSTM=self.isLSTM)
-            # Train & Test data for cycle
-            self.xCycleTest, self.yCyclebTest, self.yCycleTest, self.yCycleseqTest = self.myData.loadIntervalTrainTestData()
-            # Eval data
-            self.xEval, self.yCycleEval, self.yCycleseqEval = self.myData.IntervalEvalData()
-            
-        else: 
-            import data
-            
-            self.myData = data.NankaiData()
-            # Train & Test data for cycle
-            self.xCycleTest, self.yCyclebTest, self.yCycleTest = self.myData.loadCycleTrainTestData()
-            # Eval data
-            self.xEval, self.yCycleEval = self.myData.loadNankaiRireki()
-            self.xEval = self.xEval[np.newaxis]
+        self.myData = datalstm.NankaiData()
+        # Train & Test data for cycle
+        self.xCycleTest, self.yCyclebTest, self.yCycleTest, self.yCycleseqTest = self.myData.loadIntervalTrainTestData()
+        # Eval data
+        self.xEval, self.yCycleEval, self.yCycleseqEval = self.myData.IntervalEvalData()
         # ----
         
         # Module ----
@@ -70,28 +57,20 @@ class ParamCycleNN:
         # ----
         
         # Placeholder ----
-        if self.isLSTM:
-            self.x = tf.compat.v1.placeholder(tf.float32,shape=[None, None, 5])
-            self.seq = tf.compat.v1.placeholder(tf.int32, shape=[None])
-        else:
-            self.x = tf.compat.v1.placeholder(tf.float32,shape=[None, self.dInput])
+        self.x = tf.compat.v1.placeholder(tf.float32,shape=[None, None, self.dInput])
+        self.seq = tf.compat.v1.placeholder(tf.int32, shape=[None])
         self.y = tf.compat.v1.placeholder(tf.float32,shape=[None, self.dOutput])
         self.closs = tf.compat.v1.placeholder(tf.float32,shape=[None])
         # ----
         
         # neural network ----
-        if self.isLSTM:
-            xlstm = self.myData.LSTM(self.x, self.seq)
-            xlstm_test = self.myData.LSTM(self.x, self.seq, reuse=True)
-            xlstm_eval = self.myData.LSTM(self.x, self.seq, reuse=True)
-            # ※ Ht
-            self.ppred = self.pcRegress(xlstm[1][-1])
-            self.ppred_test = self.pcRegress(xlstm_test[1][-1], reuse=True)
-            self.ppred_eval = self.pcRegress(xlstm_eval[1][-1], reuse=True)
-        else:
-            self.ppred = self.pcRegress(self.x)
-            self.ppred_test = self.pcRegress(self.x, reuse=True)
-            self.ppred_eval = self.pcRegress(self.x, reuse=True)
+        xlstm = self.myData.LSTM(self.x, self.seq)
+        xlstm_test = self.myData.LSTM(self.x, self.seq, reuse=True)
+        xlstm_eval = self.myData.LSTM(self.x, self.seq, reuse=True)
+    
+        self.ppred = self.pcRegress(xlstm[1][-1], rate=rateTrain)
+        self.ppred_test = self.pcRegress(xlstm_test[1][0], reuse=True)
+        self.ppred_eval = self.pcRegress(xlstm_eval[1][0], reuse=True)
         # ----
         
         # loss ----
@@ -106,7 +85,7 @@ class ParamCycleNN:
         pmin_test = tf.reduce_min(plosses_test)
         cmax = tf.reduce_max(self.closs)
         cmin = tf.reduce_min(self.closs)
-        
+       
         self.ploss_norm = (plosses - pmin) / (pmax - pmin)
         self.ploss_norm_test = (plosses_test - pmin_test) / (pmax_test - pmin_test)
         self.closs_norm = (self.closs - cmin) / (cmax - cmin)
@@ -118,18 +97,25 @@ class ParamCycleNN:
         # optimizer ----
         Vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES,scope='Regress') 
         self.opt = tf.train.AdamOptimizer(lr).minimize(self.pcloss,var_list=Vars)
-        #print(f'Train values: {Vars}')
-        
+       
         config = tf.compat.v1.ConfigProto(gpu_options=tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.1,allow_growth=True)) 
-        #saver = tf.compat.v1.train.Saver()
         self.sess = tf.compat.v1.Session(config=config)
-        self.sess.run(tf.global_variables_initializer())
         # ----
         
-        # save model ----
-        saver = tf.compat.v1.train.Saver()
-        saver.save(self.sess, os.path.join('model', 'pcNN_rnn', 'first_RNN'))
-        # ----
+        if isReModel:
+            saver = tf.compat.v1.train.Saver()
+            ckptpath = os.path.join(self.modelPath, 'pNN_rnn')
+            ckpt = tf.train.get_checkpoint_state(ckptpath)
+        
+            lastmodel = ckpt.model_checkpoint_path
+            saver.restore(self.sess, lastmodel)
+            print('>>> Restore pcNN model')
+        else:
+            self.sess.run(tf.global_variables_initializer())
+            # save model ----
+            saver = tf.compat.v1.train.Saver()
+            saver.save(self.sess, os.path.join('model', 'pcNN_rnn', 'first'))
+            # ----
     
     # ----
     def weight_variable(self, name, shape, trainable=False):
@@ -195,23 +181,16 @@ class ParamCycleNN:
     def train(self, nItr=10000, nBatch=100):
         
         testPeriod = 100
-        nameInds = [1,4] # ※ static
+       
         trPL,trCL,trPCL = np.zeros(int(nItr/testPeriod)),np.zeros(int(nItr/testPeriod)),np.zeros(int(nItr/testPeriod))
         tePL,teCL,tePCL = np.zeros(int(nItr/testPeriod)),np.zeros(int(nItr/testPeriod)),np.zeros(int(nItr/testPeriod))
         
         for itr in np.arange(nItr):
             
-            if self.isLSTM:
-                batchXY = self.myData.nextBatch(nameInds, nBatch=nBatch)
-               
-                pfeed_dict = {self.x:batchXY[0], self.y:batchXY[1], self.seq:batchXY[3]}
+            batchXY = self.myData.nextBatch(nBatch=nBatch)
             
-            else:
-                # 2 -> eq.intervals [nBatch,500,3]
-                batchXY = self.myData.nextBatch(nBatch=nBatch, isCycle=self.isCycle)
-                
-                pfeed_dict = {self.x:batchXY[0], self.y:batchXY[1]}
-               
+            pfeed_dict = {self.x:batchXY[0], self.y:batchXY[1], self.seq:batchXY[3]}
+            
             # 1. pred fric paramters ----
             # paramB, loss
             trainPPred, trainPLoss = self.sess.run([self.ppred, self.ploss], pfeed_dict)
@@ -219,16 +198,14 @@ class ParamCycleNN:
             # 2. cycle loss, [nBatch] ----
             trainCLoss = self.cycle.loss(trainPPred, batchXY[2], itr=itr, dirpath='train')
             
-            if self.isLSTM:
-                pcfeed_dict = {self.x:batchXY[0], self.y:batchXY[1], self.seq:batchXY[3], self.closs:trainCLoss}
-            else:
-                pcfeed_dict = {self.x:batchXY[0], self.y:batchXY[1], self.closs:trainCLoss}
+            
+            pcfeed_dict = {self.x:batchXY[0], self.y:batchXY[1], self.seq:batchXY[3], self.closs:trainCLoss}
             
             # 3. pred + cycle loss ----
             _, trainPCPred, trainPCLoss, PLossnorm, CLossnorm = \
             self.sess.run([self.opt, self.ppred, self.pcloss, self.ploss_norm, self.closs_norm], pcfeed_dict)
            
-            
+          
             if itr % testPeriod == 0:
                 self.test(itr=itr)
                 self.eval(itr=itr)
@@ -254,22 +231,25 @@ class ParamCycleNN:
     
     # ----
     def test(self, itr=0):
-        if self.isLSTM:
-            feed_dict={self.x:self.xCycleTest, self.y:self.yCyclebTest, self.seq:self.yCycleseqTest}    
-        else:
-            feed_dict={self.x:self.xCycleTest, self.y:self.yCyclebTest}
-            
+        
+        feed_dict={self.x:self.xCycleTest, self.y:self.yCyclebTest, self.seq:self.yCycleseqTest}    
+           
         # 1. pred fric paramters ----
         self.testPPred, self.testPLoss = self.sess.run([self.ppred_test, self.ploss_test], feed_dict)
         
         # 2. cycle loss ----
         self.testCLoss = self.cycle.loss(self.testPPred, self.yCycleTest, itr=itr, dirpath='test')
         
+        print(f'mean: {np.mean(self.testCLoss)}')
+        print(f'max: {np.max(self.testCLoss)}')
+        print(f'min: {np.min(self.testCLoss)}')
+        print('----')
+        print(self.yCyclebTest[:10,:])
+        print(self.testPPred[:10,:])
+        
         # 3. pred + cycle loss ----
-        if self.isLSTM:
-            pcfeed_dict = {self.x:self.xCycleTest, self.y:self.yCyclebTest, self.seq:self.yCycleseqTest, self.closs:self.testCLoss}
-        else:
-            pcfeed_dict = {self.x:self.xCycleTest, self.y:self.yCyclebTest, self.closs:self.testCLoss}
+        pcfeed_dict = {self.x:self.xCycleTest, self.y:self.yCyclebTest, self.seq:self.yCycleseqTest, self.closs:self.testCLoss}
+      
         self.testPCPred, self.testPCLoss, self.testPLossnorm, self.testCLossnorm = \
         self.sess.run([self.ppred_test, self.pcloss_test, self.ploss_norm_test, self.closs_norm], pcfeed_dict)
         
@@ -277,23 +257,17 @@ class ParamCycleNN:
     
     # ----
     def eval(self, itr=0):
-        if self.isLSTM:
-            # 1. pred fric paramters
-            feed_dict={self.x:self.xEval, self.seq:self.yCycleseqEval}
-        else:
-            feed_dict={self.x:self.xEval}
-        
+        # 1. pred fric paramters
+        feed_dict={self.x:self.xEval, self.seq:self.yCycleseqEval}
+    
         self.evalPPred = self.sess.run(self.ppred_eval, feed_dict)
         
         # 2. cycle loss
         self.evalCLoss = self.cycle.loss(self.evalPPred, self.yCycleEval, itr=itr, dirpath='eval')
      
         # 3. pred + cycle loss
-        if self.isLSTM:
-            pcfeed_dict = {self.x:self.xEval, self.seq:self.yCycleseqEval, self.closs:self.evalCLoss}
-        else:
-            pcfeed_dict = {self.x:self.xEval, self.closs:self.evalCLoss}
-        
+        pcfeed_dict = {self.x:self.xEval, self.seq:self.yCycleseqEval, self.closs:self.evalCLoss}
+       
         self.evalPCPred = self.sess.run(self.ppred_eval, pcfeed_dict)
     # ----
     
@@ -315,19 +289,13 @@ if __name__ == "__main__":
     # ----
    
     # parameters ----
-    # select nankai data(3/5) 
-    nametrInds = [0,1,2,3,4,5,6,7]
-    # random sample loading train data
-    nameInds = random.sample(nametrInds,3)
     nCell = 5
-    nWindow = 10
-    dInput = nCell*nWindow
-    rateTrain=0.0
+    rateTrain = 0.2
     lr = 1e-3
     # ----
           
     # model ----
-    model = ParamCycleNN(rateTrain=rateTrain, lr=lr, dInput=dInput, trialID=trialID)
+    model = ParamCycleNN(rateTrain=rateTrain, lr=lr, nCell=nCell, trialID=trialID)
     losses, params = model.train(nItr=nItr, nBatch=nBatch)
     # ----
     

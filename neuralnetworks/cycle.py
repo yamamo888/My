@@ -324,9 +324,18 @@ class Cycle:
                 self.loadBV(logpath)
                 self.convV2YearlyData()
                 
-                gtCycles_nk = np.trim_zeros(gtCycles[ind,:,self.ntI])
-                gtCycles_tnk = np.trim_zeros(gtCycles[ind,:,self.tntI])
-                gtCycles_tk = np.trim_zeros(gtCycles[ind,:,self.ttI])            
+                if dirpath == 'train' or 'test':
+                    pdb.set_trace()
+                    gtCycles_nk = np.trim_zeros(gtCycles[ind,:,self.ntI])
+                    gtCycles_tnk = np.trim_zeros(gtCycles[ind,:,self.tntI])
+                    gtCycles_tk = np.trim_zeros(gtCycles[ind,:,self.ttI])            
+                
+                else:
+                    pdb.set_trace()
+                    gtCycles_nk = np.trim_zeros(gtCycles[ind,:,self.ntI])
+                    gtCycles_tnk = np.trim_zeros(gtCycles[ind,:,self.tntI])
+                    gtCycles_tk = np.trim_zeros(gtCycles[ind,:,self.ttI])            
+                
                 gt = [gtCycles_nk, gtCycles_tnk, gtCycles_tk]
                 
                 self.calcYearMSE(gt)            

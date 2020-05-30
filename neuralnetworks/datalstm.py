@@ -78,12 +78,12 @@ class NankaiData:
                 pickle.dump(Years, fp)
                 pickle.dump(Bs, fp)'''
             
-        with open(os.path.join(self.featurePath,'interval',f'intervalSeqXY_tmp300.pkl'),'rb') as fp:
+        with open(os.path.join(self.featurePath,'interval',f'intervalSeqXY_tmp300_slip1.pkl'),'rb') as fp:
             Seqs = pickle.load(fp)
             Intervals = pickle.load(fp)
             Years = pickle.load(fp)
             Paramb = pickle.load(fp)
-        #pdb.set_trace()
+        pdb.set_trace()
         
         #Intervals = intervals[:,:8,:]
         #Years = years[:,:8,:]
@@ -103,13 +103,13 @@ class NankaiData:
         yearTest = Years[randInd[nTrain:]]
         parambTest = Paramb[randInd[nTrain:]]
         
-        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY_tmp300.pkl'),'wb') as fp:
+        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY_tmp300_slip1.pkl'),'wb') as fp:
             pickle.dump(seqTrain, fp)
             pickle.dump(intervalTrain, fp)
             pickle.dump(yearTrain, fp)
             pickle.dump(parambTrain, fp)
     
-        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300.pkl'),'wb') as fp:
+        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300_slip1.pkl'),'wb') as fp:
             pickle.dump(seqTest, fp)
             pickle.dump(intervalTest, fp)
             pickle.dump(yearTest, fp)
@@ -119,7 +119,7 @@ class NankaiData:
     # ----
     def loadIntervalTrainTestData(self):
         
-        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY_tmp300.pkl'),'rb') as fp:
+        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY_tmp300_slip1.pkl'),'rb') as fp:
             self.seqTrain = pickle.load(fp)
             self.intervalTrain = pickle.load(fp)
             self.yearTrain = pickle.load(fp)
@@ -130,15 +130,21 @@ class NankaiData:
         # random train index
         self.batchRandInd = np.random.permutation(self.nTrain)
     
-        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300.pkl'),'rb') as fp:
+        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300_slip1.pkl'),'rb') as fp:
             seqTest = pickle.load(fp)
             intervalTest = pickle.load(fp)
             yearTest = pickle.load(fp)
             parambTest = pickle.load(fp)
         
+        '''
         seqTest = seqTest[:100]
         intervalTest = intervalTest[:100]
         yearTest = yearTest[:100]
+        parambTest = parambTest[:100]
+        '''
+        seqTest = seqTest[:100]
+        intervalTest = intervalTest[:100,:25,:]
+        yearTest = yearTest[:100,:25,:]
         parambTest = parambTest[:100]
         
         return intervalTest, parambTest, yearTest, seqTest
@@ -147,7 +153,7 @@ class NankaiData:
     # ----
     def LSTM(self, x, seq, reuse=False):
 
-        nHidden=64
+        nHidden=32
         
         with tf.compat.v1.variable_scope("LSTM") as scope:
             if reuse:
@@ -156,16 +162,16 @@ class NankaiData:
             # multi cell
             cells = []
             # 1st LSTM
-            cell1 = tf.contrib.rnn.LSTMCell(nHidden, use_peepholes=True)
+            cell1 = tf.compat.v1.nn.rnn_cell.LSTMCell(nHidden, use_peepholes=True)
             # 2nd LSTM
-            cell2 = tf.contrib.rnn.LSTMCell(nHidden, use_peepholes=True)
+            cell2 = tf.compat.v1.nn.rnn_cell.LSTMCell(nHidden, use_peepholes=True)
         
             cells.append(cell1)
             cells.append(cell2)
             
-            cell = tf.nn.rnn_cell.MultiRNNCell(cells)
+            cell = tf.compat.v1.nn.rnn_cell.MultiRNNCell(cells)
             
-            outputs, states = tf.nn.dynamic_rnn(cell=cell, inputs=x, dtype=tf.float32, sequence_length=seq)
+            outputs, states = tf.compat.v1.nn.dynamic_rnn(cell=cell, inputs=x, dtype=tf.float32, sequence_length=seq)
             
             # outputs [None,None,HIDDEN] 
             # states[-1] tuple (Ct [None,128], Ht [None,128])
@@ -212,7 +218,7 @@ class NankaiData:
     # ----
    
     # ----
-    def nextBatch(self, nameInds, nBatch=100):
+    def nextBatch(self, nBatch=100):
         '''
         batchX: eq.intervals. [data, max of eq.length, 5(cell)]
         batchY: paramb
@@ -224,10 +230,15 @@ class NankaiData:
         # index
         sInd = nBatch * self.batchCnt
         eInd = sInd + nBatch
-        
+        '''
         batchX = self.intervalTrain[self.batchRandInd[sInd:eInd]]
         batchY = self.parambTrain[self.batchRandInd[sInd:eInd]]
         batchCycleY = self.yearTrain[self.batchRandInd[sInd:eInd]]
+        batchSeq = self.seqTrain[self.batchRandInd[sInd:eInd]]
+        '''
+        batchX = self.intervalTrain[self.batchRandInd[sInd:eInd],:25,:]
+        batchY = self.parambTrain[self.batchRandInd[sInd:eInd]]
+        batchCycleY = self.yearTrain[self.batchRandInd[sInd:eInd],:25,:]
         batchSeq = self.seqTrain[self.batchRandInd[sInd:eInd]]
         
         batchXY = [batchX, batchY, batchCycleY, batchSeq]
