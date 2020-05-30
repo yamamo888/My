@@ -286,14 +286,9 @@ class Cycle:
         
         return intervals, max_seq
     # ----
-
+    
     # ----
-    def loss(self, predParams, gtCycles, itr=0, dirpath='train'):
-        
-        '''
-        gtCycles: gt eq.year, numpy [batchsize,500(zero-padding),3]
-        '''
-        
+    def evalloss(self, predParams, gtCycles, itr=0, dirpath='eval'):
         # Make logs        
         self.simulate(predParams, itr=itr, dirpath=dirpath)
         
@@ -304,8 +299,8 @@ class Cycle:
         MSE = np.zeros(predParams.shape[0])
         # all no paramb
         if logsallpath == []:
-            # ※
-            MSE = np.sum(np.abs(predParams),1)*1000
+            
+            MSE = 100000 
         
         else:
             
@@ -324,18 +319,14 @@ class Cycle:
                 self.loadBV(logpath)
                 self.convV2YearlyData()
                 
-                if dirpath == 'train' or 'test':
-                    pdb.set_trace()
-                    gtCycles_nk = np.trim_zeros(gtCycles[ind,:,self.ntI])
-                    gtCycles_tnk = np.trim_zeros(gtCycles[ind,:,self.tntI])
-                    gtCycles_tk = np.trim_zeros(gtCycles[ind,:,self.ttI])            
+                     
+                gtCycles_nk = gtCycles[self.ntI]
+                gtCycles_tnk = gtCycles[self.tntI]
+                gtCycles_tk = gtCycles[self.ttI]
                 
-                else:
-                    pdb.set_trace()
-                    gtCycles_nk = np.trim_zeros(gtCycles[ind,:,self.ntI])
-                    gtCycles_tnk = np.trim_zeros(gtCycles[ind,:,self.tntI])
-                    gtCycles_tk = np.trim_zeros(gtCycles[ind,:,self.ttI])            
-                
+                saveparampath = os.path.join('model', 'params', 'eval', f'{self.trialID}')
+                np.savetxt(os.path.join(saveparampath, f'logs_ok{itr}.csv'), predParams, delimiter=',', fmt='%5f')
+   
                 gt = [gtCycles_nk, gtCycles_tnk, gtCycles_tk]
                 
                 self.calcYearMSE(gt)            
@@ -346,6 +337,62 @@ class Cycle:
             # ※ sum(paramB)        
             worstMS = np.max(MSE)
             MSE[pinds] = worstMS * np.sum(np.abs(predParams[pinds]),1)
+        
+        return MSE
+    
+
+    # ----
+    def loss(self, predParams, exactParams, gtCycles, itr=0, dirpath='train'):
+        
+        '''
+        gtCycles: gt eq.year, numpy [batchsize,500(zero-padding),3]
+        '''
+        
+        # Make logs        
+        self.simulate(predParams, itr=itr, dirpath=dirpath)
+        
+        # Save predb
+        savelogspath = os.path.join(self.logsPath, 'pcNN', '*.txt')
+        logsallpath = glob.glob(savelogspath)
+        
+        MSE = np.zeros(predParams.shape[0])
+        # all no paramb
+        if logsallpath == []:
+            # ※
+            mse = np.abs(exactParams - predParams)
+            MSE = np.sum(mse,1)*1000000
+        
+        else:
+            
+            # index (if maxB > paramB)
+            delInd = self.ind_params[:,-1].astype(int).tolist()
+            pinds = np.ones(predParams.shape[0], dtype=bool)
+            pinds[delInd] = False
+                    
+            # if minB < paramB < maxB
+            for logpath in logsallpath:
+                
+                #pdb.set_trace()
+                ind = int(os.path.basename(logpath).split('_')[0])
+                
+                # logs -> V,B
+                self.loadBV(logpath)
+                self.convV2YearlyData()
+                 
+                gtCycles_nk = np.trim_zeros(gtCycles[ind,:,self.ntI])
+                gtCycles_tnk = np.trim_zeros(gtCycles[ind,:,self.tntI])
+                gtCycles_tk = np.trim_zeros(gtCycles[ind,:,self.ttI])            
+            
+                gt = [gtCycles_nk, gtCycles_tnk, gtCycles_tk]
+                
+                self.calcYearMSE(gt)            
+                MSE[ind] = self.maxSim
+                
+                os.remove(logpath)
+            
+            # ※ sum(paramB)        
+            mse = np.abs(exactParams[pinds] - predParams[pinds])
+            MSE[pinds] = np.sum(mse,1)*1000000
         
         return MSE
     # ----

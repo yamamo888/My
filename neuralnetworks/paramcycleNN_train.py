@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
 
-'''
-lstm,FFT両方対応
-'''
 
 import sys
 import os
@@ -40,7 +37,7 @@ class ParamCycleNN:
         self.dOutput_tnk = 8
         self.dOutput_tk = 6
         self.trialID = trialID
-        isReModel = False
+        isReModel = True
         # ----
         
         # Dataset ----
@@ -77,21 +74,8 @@ class ParamCycleNN:
         self.ploss = tf.square(self.y - self.ppred)
         self.ploss_test = tf.square(self.y - self.ppred_test)
         
-        plosses = tf.reduce_sum(self.ploss,1)
-        plosses_test = tf.reduce_sum(self.ploss_test,1)
-        pmax = tf.reduce_max(plosses)
-        pmin = tf.reduce_min(plosses)
-        pmax_test = tf.reduce_max(plosses_test)
-        pmin_test = tf.reduce_min(plosses_test)
-        cmax = tf.reduce_max(self.closs)
-        cmin = tf.reduce_min(self.closs)
-       
-        self.ploss_norm = (plosses - pmin) / (pmax - pmin)
-        self.ploss_norm_test = (plosses_test - pmin_test) / (pmax_test - pmin_test)
-        self.closs_norm = (self.closs - cmin) / (cmax - cmin)
-        
-        self.pcloss = tf.reduce_mean(self.ploss_norm) + tf.reduce_mean(self.closs_norm)
-        self.pcloss_test = tf.reduce_mean(self.ploss_norm_test) + tf.reduce_mean(self.closs_norm)  
+        self.pcloss = tf.reduce_mean(self.ploss) +  0.0001 * tf.reduce_mean(self.closs)
+        self.pcloss_test = tf.reduce_mean(self.ploss_test) + 0.0001 * tf.reduce_mean(self.closs)  
         # ----
       
         # optimizer ----
@@ -139,7 +123,7 @@ class ParamCycleNN:
          return fc
     # ----
     # ----
-    def pcRegress(self, x, rate=0.0, reuse=False, isPre=False, trainable=True):
+    def pcRegress(self, x, rate=0.0, reuse=False, isPre=False, trainable=False):
         
         nHidden=64
         
@@ -169,8 +153,8 @@ class ParamCycleNN:
             else:
                 
                 # 4th layer
-                w4_reg = self.weight_variable('w4_reg',[nHidden, self.dOutput], trainable=trainable)
-                bias4_reg = self.bias_variable('bias4_reg',[self.dOutput], trainable=trainable)
+                w4_reg = self.weight_variable('w4_reg',[nHidden, self.dOutput], trainable=True)
+                bias4_reg = self.bias_variable('bias4_reg',[self.dOutput], trainable=True)
                 
                 y = self.fc(h3,w4_reg,bias4_reg,rate)
                 
@@ -196,30 +180,29 @@ class ParamCycleNN:
             trainPPred, trainPLoss = self.sess.run([self.ppred, self.ploss], pfeed_dict)
             
             # 2. cycle loss, [nBatch] ----
-            trainCLoss = self.cycle.loss(trainPPred, batchXY[2], itr=itr, dirpath='train')
+            trainCLoss = self.cycle.loss(trainPPred, batchXY[1], batchXY[2], itr=itr, dirpath='train')
             
             
             pcfeed_dict = {self.x:batchXY[0], self.y:batchXY[1], self.seq:batchXY[3], self.closs:trainCLoss}
             
             # 3. pred + cycle loss ----
-            _, trainPCPred, trainPCLoss, PLossnorm, CLossnorm = \
-            self.sess.run([self.opt, self.ppred, self.pcloss, self.ploss_norm, self.closs_norm], pcfeed_dict)
+            _, trainPCPred, trainPCLoss  = \
+            self.sess.run([self.opt, self.ppred, self.pcloss], pcfeed_dict)
            
           
             if itr % testPeriod == 0:
                 self.test(itr=itr)
                 self.eval(itr=itr)
                 
-                print('itr:%d, trainPLoss:%3f, trainCLoss:%3f, trainPCLoss:%3f' % (itr, np.mean(PLossnorm), np.mean(CLossnorm), trainPCLoss))
-                print('itr:%d, testPLoss:%3f, testCLoss:%3f, testPCLoss:%3f' % (itr,  np.mean(self.testPLossnorm), np.mean(self.testCLossnorm), self.testPCLoss))
-                print(f'Eval paramB: {self.evalPCPred}')
+                print('itr:%d, trainPLoss:%3f, trainCLoss:%3f, trainPCLoss:%3f' % (itr, np.mean(trainPLoss), np.mean(trainCLoss), trainPCLoss))
+                print('itr:%d, testPLoss:%3f, testCLoss:%3f, testPCLoss:%3f' % (itr,  np.mean(self.testPLoss), np.mean(self.testCLoss), self.testPCLoss))
                 
-                trPL[int(itr/testPeriod)] = np.mean(PLossnorm)
-                trCL[int(itr/testPeriod)] = np.mean(CLossnorm)
+                trPL[int(itr/testPeriod)] = np.mean(trainPLoss)
+                trCL[int(itr/testPeriod)] = np.mean(trainCLoss)
                 trPCL[int(itr/testPeriod)] = trainPCLoss
                 
-                tePL[int(itr/testPeriod)] = np.mean(self.testPLossnorm)
-                teCL[int(itr/testPeriod)] = np.mean(self.testCLossnorm)
+                tePL[int(itr/testPeriod)] = np.mean(self.testPLoss)
+                teCL[int(itr/testPeriod)] = np.mean(self.testCLoss)
                 tePCL[int(itr/testPeriod)] = self.testPCLoss
                 
         # train & test loss
@@ -238,20 +221,22 @@ class ParamCycleNN:
         self.testPPred, self.testPLoss = self.sess.run([self.ppred_test, self.ploss_test], feed_dict)
         
         # 2. cycle loss ----
-        self.testCLoss = self.cycle.loss(self.testPPred, self.yCycleTest, itr=itr, dirpath='test')
-        
-        print(f'mean: {np.mean(self.testCLoss)}')
-        print(f'max: {np.max(self.testCLoss)}')
-        print(f'min: {np.min(self.testCLoss)}')
-        print('----')
-        print(self.yCyclebTest[:10,:])
-        print(self.testPPred[:10,:])
+        self.testCLoss = self.cycle.loss(self.testPPred, self.yCyclebTest, self.yCycleTest, itr=itr, dirpath='test')
         
         # 3. pred + cycle loss ----
         pcfeed_dict = {self.x:self.xCycleTest, self.y:self.yCyclebTest, self.seq:self.yCycleseqTest, self.closs:self.testCLoss}
       
-        self.testPCPred, self.testPCLoss, self.testPLossnorm, self.testCLossnorm = \
-        self.sess.run([self.ppred_test, self.pcloss_test, self.ploss_norm_test, self.closs_norm], pcfeed_dict)
+        self.testPCPred, self.testPCLoss = \
+        self.sess.run([self.ppred_test, self.pcloss_test], pcfeed_dict)
+     
+        print(f'mean: {np.mean(self.testCLoss)}')
+        print(f'max: {np.max(self.testCLoss)}')
+        print(f'min: {np.min(self.testCLoss)}')
+        print('----')
+        print('>>> exact')
+        print(self.yCyclebTest[:5,:])
+        print('>>> pcNN')
+        print(self.testPCPred[:5,:])
         
     # ----
     
@@ -259,16 +244,14 @@ class ParamCycleNN:
     def eval(self, itr=0):
         # 1. pred fric paramters
         feed_dict={self.x:self.xEval, self.seq:self.yCycleseqEval}
-    
         self.evalPPred = self.sess.run(self.ppred_eval, feed_dict)
         
         # 2. cycle loss
-        self.evalCLoss = self.cycle.loss(self.evalPPred, self.yCycleEval, itr=itr, dirpath='eval')
-     
-        # 3. pred + cycle loss
-        pcfeed_dict = {self.x:self.xEval, self.seq:self.yCycleseqEval, self.closs:self.evalCLoss}
-       
-        self.evalPCPred = self.sess.run(self.ppred_eval, pcfeed_dict)
+        self.evalCLoss = self.cycle.evalloss(self.evalPPred, self.yCycleEval, itr=itr, dirpath='eval')
+        
+        print(f'Eval paramB: {self.evalPPred[0]}')
+        print(f'Eval CLoss:%3f' % (self.evalCLoss))
+        
     # ----
     
         
