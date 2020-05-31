@@ -117,9 +117,79 @@ class NankaiData:
     # ----
     
     # ----
+    def makeNearYearData(self):
+        
+        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300_slip1.pkl'),'rb') as fp:
+            Seqs = pickle.load(fp)
+            Intervals = pickle.load(fp)
+            Years = pickle.load(fp)
+            Paramb = pickle.load(fp)
+            
+        
+        self.IntervalEvalData()
+        gt_year_nk,gt_year_tnk,gt_year_tk = self.yEval[0],self.yEval[1],self.yEval[2]
+        cnt = 0
+        Flag = False
+        for years in Years:
+            
+            print(cnt)
+            cnt += 1
+            year_nk,year_tnk,year_tk = np.trim_zeros(years[:,0]),np.trim_zeros(years[:,1]),np.trim_zeros(years[:,2])
+            flag = False
+            for pyear,gyear in zip([year_nk,year_tnk,year_tk],[gt_year_nk,gt_year_tnk,gt_year_tk]):
+                
+                # exact year > simulated year
+                if len(pyear) <= len(gyear):
+                    
+                    near_pyear = pyear
+                
+                else:
+                    # exact year == simulated year
+                    gyears = gyear.repeat(pyear.shape[0],0).reshape(-1,pyear.shape[0])
+                    pyears = pyear.repeat(gyear.shape[0],0).reshape(-1,gyear.shape[0])
+                    # minimum year index & year 
+                    inds = [np.argmin(np.abs(g-p)) for g,p in zip(gyears,pyears.T)]
+                    near_pyear = [pyear[ind] for ind in inds]
+                    # del multiple
+                    near_pyear = np.unique(np.array(near_pyear))
+                
+                #pdb.set_trace()
+                near_pintervals = (near_pyear[1:]-near_pyear[:-1])
+                near_pinterval = near_pintervals[near_pintervals>0]
+            
+                # zero-padding
+                zero_year = np.pad(near_pyear, [0,9-len(near_pyear)], 'constant')
+                zero_interval = np.pad(near_pinterval, [0,8-len(near_pinterval)], 'constant')
+                
+                if not flag:
+                    zero_years = zero_year
+                    zero_intervals = zero_interval
+                    flag = True
+                else:
+                    zero_years = np.vstack([zero_years,zero_year])
+                    zero_intervals = np.vstack([zero_intervals,zero_interval])
+                    
+            if not Flag:
+                zeroYears = zero_years.T[np.newaxis]
+                zeroIntervals = zero_intervals.T[np.newaxis]
+                Flag = True
+            else:
+                # [data,9(zero-padding),3(cell)],[data,8(zero-padding),3(cell)] 
+                zeroYears = np.vstack([zeroYears,zero_years.T[np.newaxis]])
+                zeroIntervals = np.vstack([zeroIntervals,zero_intervals.T[np.newaxis]])
+            #pdb.set_trace()
+       
+        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300_near_back0.pkl'),'wb') as fp:
+            pickle.dump(Seqs, fp)
+            pickle.dump(zeroIntervals, fp)
+            pickle.dump(zeroYears, fp)
+            pickle.dump(Paramb, fp)
+    # ----
+    
+    # ----
     def loadIntervalTrainTestData(self):
         
-        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY_tmp300_slip1.pkl'),'rb') as fp:
+        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY_tmp300_near_back0.pkl'),'rb') as fp:
             self.seqTrain = pickle.load(fp)
             self.intervalTrain = pickle.load(fp)
             self.yearTrain = pickle.load(fp)
@@ -130,54 +200,28 @@ class NankaiData:
         # random train index
         self.batchRandInd = np.random.permutation(self.nTrain)
     
-        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300_slip1.pkl'),'rb') as fp:
+        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300_near_back0.pkl'),'rb') as fp:
             seqTest = pickle.load(fp)
             intervalTest = pickle.load(fp)
             yearTest = pickle.load(fp)
             parambTest = pickle.load(fp)
         
-        '''
+        
         seqTest = seqTest[:100]
         intervalTest = intervalTest[:100]
         yearTest = yearTest[:100]
         parambTest = parambTest[:100]
+        
+        #pdb.set_trace()
         '''
         seqTest = seqTest[:100]
         intervalTest = intervalTest[:100,:25,:]
         yearTest = yearTest[:100,:25,:]
         parambTest = parambTest[:100]
-        
+        '''
         return intervalTest, parambTest, yearTest, seqTest
     # ----
 
-    # ----
-    def LSTM(self, x, seq, reuse=False):
-
-        nHidden=32
-        
-        with tf.compat.v1.variable_scope("LSTM") as scope:
-            if reuse:
-                scope.reuse_variables()
-            
-            # multi cell
-            cells = []
-            # 1st LSTM
-            cell1 = tf.compat.v1.nn.rnn_cell.LSTMCell(nHidden, use_peepholes=True)
-            # 2nd LSTM
-            cell2 = tf.compat.v1.nn.rnn_cell.LSTMCell(nHidden, use_peepholes=True)
-        
-            cells.append(cell1)
-            cells.append(cell2)
-            
-            cell = tf.compat.v1.nn.rnn_cell.MultiRNNCell(cells)
-            
-            outputs, states = tf.compat.v1.nn.dynamic_rnn(cell=cell, inputs=x, dtype=tf.float32, sequence_length=seq)
-            
-            # outputs [None,None,HIDDEN] 
-            # states[-1] tuple (Ct [None,128], Ht [None,128])
-            return outputs, states[-1]
-    # ----
-    
     # ----
     def IntervalEvalData(self):
         
@@ -210,13 +254,43 @@ class NankaiData:
         tk = np.pad(tk, [0,2], 'constant')
 
         # evaluation input, [1(data),8(interval),5(cell)]
-        xEval = np.concatenate([nk[:,np.newaxis],nk[:,np.newaxis],tnk[:,np.newaxis],tnk[:,np.newaxis],tk[:,np.newaxis]],1)[np.newaxis]
+        #xEval = np.concatenate([nk[:,np.newaxis],nk[:,np.newaxis],tnk[:,np.newaxis],tnk[:,np.newaxis],tk[:,np.newaxis]],1)[np.newaxis]
+        xEval = np.concatenate([nk[:,np.newaxis],tnk[:,np.newaxis],tk[:,np.newaxis]],1)[np.newaxis]
+        
         # length of interval, array(8)
         seqEval = np.array([np.max([len(nk),len(tnk),len(tk)])])
 
         return xEval, self.yEval, seqEval
     # ----
    
+    # ----
+    def LSTM(self, x, seq, reuse=False):
+
+        nHidden=32
+        
+        with tf.compat.v1.variable_scope("LSTM") as scope:
+            if reuse:
+                scope.reuse_variables()
+            
+            # multi cell
+            cells = []
+            # 1st LSTM
+            cell1 = tf.compat.v1.nn.rnn_cell.LSTMCell(nHidden, use_peepholes=True)
+            # 2nd LSTM
+            cell2 = tf.compat.v1.nn.rnn_cell.LSTMCell(nHidden, use_peepholes=True)
+        
+            cells.append(cell1)
+            cells.append(cell2)
+            
+            cell = tf.compat.v1.nn.rnn_cell.MultiRNNCell(cells)
+            
+            outputs, states = tf.compat.v1.nn.dynamic_rnn(cell=cell, inputs=x, dtype=tf.float32, sequence_length=seq)
+            
+            # outputs [None,None,HIDDEN] 
+            # states[-1] tuple (Ct [None,128], Ht [None,128])
+            return outputs, states[-1]
+    # ----
+    
     # ----
     def nextBatch(self, nBatch=100):
         '''
@@ -230,17 +304,18 @@ class NankaiData:
         # index
         sInd = nBatch * self.batchCnt
         eInd = sInd + nBatch
-        '''
+        
         batchX = self.intervalTrain[self.batchRandInd[sInd:eInd]]
         batchY = self.parambTrain[self.batchRandInd[sInd:eInd]]
         batchCycleY = self.yearTrain[self.batchRandInd[sInd:eInd]]
         batchSeq = self.seqTrain[self.batchRandInd[sInd:eInd]]
+        
         '''
         batchX = self.intervalTrain[self.batchRandInd[sInd:eInd],:25,:]
         batchY = self.parambTrain[self.batchRandInd[sInd:eInd]]
         batchCycleY = self.yearTrain[self.batchRandInd[sInd:eInd],:25,:]
         batchSeq = self.seqTrain[self.batchRandInd[sInd:eInd]]
-        
+        '''
         batchXY = [batchX, batchY, batchCycleY, batchSeq]
         
         if eInd + nBatch > self.nTrain:
@@ -252,3 +327,4 @@ class NankaiData:
     # ----
    
 #NankaiData().makeIntervalData()
+#NankaiData().makeNearYearData()
