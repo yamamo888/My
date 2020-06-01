@@ -131,7 +131,7 @@ class NankaiData:
         cnt = 0
         Flag = False
         for years in Years:
-            
+            pdb.set_trace()
             print(cnt)
             cnt += 1
             year_nk,year_tnk,year_tk = np.trim_zeros(years[:,0]),np.trim_zeros(years[:,1]),np.trim_zeros(years[:,2])
@@ -189,7 +189,9 @@ class NankaiData:
     # ----
     def loadIntervalTrainTestData(self):
         
-        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY_tmp300_near_back0.pkl'),'rb') as fp:
+        self.IntervalEvalData()
+        
+        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY_tmp300_near5000_back0.pkl'),'rb') as fp:
             self.seqTrain = pickle.load(fp)
             self.intervalTrain = pickle.load(fp)
             self.yearTrain = pickle.load(fp)
@@ -200,24 +202,31 @@ class NankaiData:
         # random train index
         self.batchRandInd = np.random.permutation(self.nTrain)
     
-        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300_near_back0.pkl'),'rb') as fp:
+        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300_near5000_back0.pkl'),'rb') as fp:
             seqTest = pickle.load(fp)
             intervalTest = pickle.load(fp)
             yearTest = pickle.load(fp)
             parambTest = pickle.load(fp)
-        
         
         seqTest = seqTest[:100]
         intervalTest = intervalTest[:100]
         yearTest = yearTest[:100]
         parambTest = parambTest[:100]
         
-        #pdb.set_trace()
         '''
-        seqTest = seqTest[:100]
-        intervalTest = intervalTest[:100,:25,:]
-        yearTest = yearTest[:100,:25,:]
-        parambTest = parambTest[:100]
+        intervalEval = np.concatenate([self.yEval[0][:,np.newaxis],self.yEval[1][:,np.newaxis],np.pad(self.yEval[2],[0,2],'constant')[:,np.newaxis]],1)
+        
+        interval1 = intervalEval[:,0].repeat(self.yearTrain.shape[0],0).reshape(-1,self.yearTrain.shape[0])
+        interval2 = intervalEval[:,1].repeat(self.yearTrain.shape[0],0).reshape(-1,self.yearTrain.shape[0])
+        interval3 = intervalEval[:,2].repeat(self.yearTrain.shape[0],0).reshape(-1,self.yearTrain.shape[0])
+        
+        #norm = np.abs(interval1.T - self.yearTrain[:,:,0]) + np.abs(interval2.T - self.yearTrain[:,:,1]) + np.abs(interval3.T - self.yearTrain[:,:,2])      
+        ind = np.argsort(np.sum(norm,1))[:1000]
+        
+        trseq = self.seqTrain[ind]
+        trinterval = self.intervalTrain[ind]
+        tryear = self.yearTrain[ind]
+        trb = self.parambTrain[ind]
         '''
         return intervalTest, parambTest, yearTest, seqTest
     # ----
@@ -255,12 +264,12 @@ class NankaiData:
 
         # evaluation input, [1(data),8(interval),5(cell)]
         #xEval = np.concatenate([nk[:,np.newaxis],nk[:,np.newaxis],tnk[:,np.newaxis],tnk[:,np.newaxis],tk[:,np.newaxis]],1)[np.newaxis]
-        xEval = np.concatenate([nk[:,np.newaxis],tnk[:,np.newaxis],tk[:,np.newaxis]],1)[np.newaxis]
+        self.xEval = np.concatenate([nk[:,np.newaxis],tnk[:,np.newaxis],tk[:,np.newaxis]],1)[np.newaxis]
         
         # length of interval, array(8)
         seqEval = np.array([np.max([len(nk),len(tnk),len(tk)])])
 
-        return xEval, self.yEval, seqEval
+        return self.xEval, self.yEval, seqEval
     # ----
    
     # ----
@@ -310,12 +319,6 @@ class NankaiData:
         batchCycleY = self.yearTrain[self.batchRandInd[sInd:eInd]]
         batchSeq = self.seqTrain[self.batchRandInd[sInd:eInd]]
         
-        '''
-        batchX = self.intervalTrain[self.batchRandInd[sInd:eInd],:25,:]
-        batchY = self.parambTrain[self.batchRandInd[sInd:eInd]]
-        batchCycleY = self.yearTrain[self.batchRandInd[sInd:eInd],:25,:]
-        batchSeq = self.seqTrain[self.batchRandInd[sInd:eInd]]
-        '''
         batchXY = [batchX, batchY, batchCycleY, batchSeq]
         
         if eInd + nBatch > self.nTrain:
@@ -328,3 +331,4 @@ class NankaiData:
    
 #NankaiData().makeIntervalData()
 #NankaiData().makeNearYearData()
+NankaiData().loadIntervalTrainTestData()

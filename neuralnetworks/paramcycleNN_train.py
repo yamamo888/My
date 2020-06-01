@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+'''
+lstm,FFT両方対応
+'''
 
 import sys
 import os
@@ -31,13 +34,13 @@ class ParamCycleNN:
         # ----
         
         # parameter ----
-        self.dInput = nCell
+        self.dInput = 3
         self.dOutput = 3
         self.dOutput_nk = 8
         self.dOutput_tnk = 8
         self.dOutput_tk = 6
         self.trialID = trialID
-        isReModel = True
+        isReModel = False
         # ----
         
         # Dataset ----
@@ -61,27 +64,29 @@ class ParamCycleNN:
         # ----
         
         # neural network ----
-        xlstm = self.myData.LSTM(self.x, self.seq)
+        self.xlstm = self.myData.LSTM(self.x, self.seq)
         xlstm_test = self.myData.LSTM(self.x, self.seq, reuse=True)
-        xlstm_eval = self.myData.LSTM(self.x, self.seq, reuse=True)
+        self.xlstm_eval = self.myData.LSTM(self.x, self.seq, reuse=True)
     
-        self.ppred = self.pcRegress(xlstm[1][-1], rate=rateTrain)
-        self.ppred_test = self.pcRegress(xlstm_test[1][0], reuse=True)
-        self.ppred_eval = self.pcRegress(xlstm_eval[1][0], reuse=True)
+        self.ppred = self.pcRegress(self.xlstm[1][-1], rate=rateTrain)
+        self.ppred_test = self.pcRegress(xlstm_test[1][-1], reuse=True)
+        self.ppred_eval = self.pcRegress(self.xlstm_eval[1][-1], reuse=True)
         # ----
         
         # loss ----
         self.ploss = tf.square(self.y - self.ppred)
         self.ploss_test = tf.square(self.y - self.ppred_test)
         
-        self.pcloss = tf.reduce_mean(self.ploss) +  0.0001 * tf.reduce_mean(self.closs)
-        self.pcloss_test = tf.reduce_mean(self.ploss_test) + 0.0001 * tf.reduce_mean(self.closs)  
+        lambda1 = 10000
+        lambda2 = 0.0001
+        
+        self.pcloss = lambda1 * tf.reduce_mean(self.ploss) + lambda2 * tf.reduce_mean(self.closs)
+        self.pcloss_test = tf.reduce_mean(self.ploss_test) + tf.reduce_mean(self.closs)  
         # ----
       
         # optimizer ----
         Vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES,scope='Regress') 
         self.opt = tf.train.AdamOptimizer(lr).minimize(self.pcloss,var_list=Vars)
-       
         config = tf.compat.v1.ConfigProto(gpu_options=tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.1,allow_growth=True)) 
         self.sess = tf.compat.v1.Session(config=config)
         # ----
@@ -94,13 +99,15 @@ class ParamCycleNN:
             lastmodel = ckpt.model_checkpoint_path
             saver.restore(self.sess, lastmodel)
             print('>>> Restore pcNN model')
+            
+            self.sess.run(tf.compat.v1.variables_initializer(Vars))
         else:
             self.sess.run(tf.global_variables_initializer())
             # save model ----
             saver = tf.compat.v1.train.Saver()
             saver.save(self.sess, os.path.join('model', 'pcNN_rnn', 'first'))
             # ----
-    
+
     # ----
     def weight_variable(self, name, shape, trainable=False):
          return tf.compat.v1.get_variable(name,shape,initializer=tf.random_normal_initializer(stddev=0.1), trainable=trainable)
@@ -123,7 +130,7 @@ class ParamCycleNN:
          return fc
     # ----
     # ----
-    def pcRegress(self, x, rate=0.0, reuse=False, isPre=False, trainable=False):
+    def pcRegress(self, x, rate=0.0, reuse=False, isPre=False, trainable=True):
         
         nHidden=64
         
@@ -132,29 +139,32 @@ class ParamCycleNN:
                 scope.reuse_variables()
             
             dInput = x.get_shape().as_list()[-1]
-            
+           
             # 1st layer
             w1_reg = self.weight_variable('w1_reg',[dInput, nHidden], trainable=trainable)
             bias1_reg = self.bias_variable('bias1_reg',[nHidden], trainable=trainable)
-            h1 = self.fc_relu(x,w1_reg,bias1_reg,rate)
+            #h1 = self.fc_relu(x,w1_reg,bias1_reg,rate)
+            h1 = self.fc(x,w1_reg,bias1_reg,rate)
             
             # 2nd layer
             w2_reg = self.weight_variable('w2_reg',[nHidden, nHidden], trainable=trainable)
             bias2_reg = self.bias_variable('bias2_reg',[nHidden], trainable=trainable)
-            h2 = self.fc_relu(h1,w2_reg,bias2_reg,rate)
+            #h2 = self.fc_relu(h1,w2_reg,bias2_reg,rate)
+            h2 = self.fc(h1,w2_reg,bias2_reg,rate)
             
             # 3rd layer 
             w3_reg = self.weight_variable('w3_reg',[nHidden, nHidden], trainable=trainable)
             bias3_reg = self.bias_variable('bias3_reg',[nHidden], trainable=trainable)
-            h3 = self.fc_relu(h2,w3_reg,bias3_reg,rate)
+            #h3 = self.fc_relu(h2,w3_reg,bias3_reg,rate)
+            h3 = self.fc(h2,w3_reg,bias3_reg,rate)
             
             if isPre:
                 return h3
             else:
                 
                 # 4th layer
-                w4_reg = self.weight_variable('w4_reg',[nHidden, self.dOutput], trainable=True)
-                bias4_reg = self.bias_variable('bias4_reg',[self.dOutput], trainable=True)
+                w4_reg = self.weight_variable('w4_reg',[nHidden, self.dOutput], trainable=trainable)
+                bias4_reg = self.bias_variable('bias4_reg',[self.dOutput], trainable=trainable)
                 
                 y = self.fc(h3,w4_reg,bias4_reg,rate)
                 
@@ -172,31 +182,36 @@ class ParamCycleNN:
         for itr in np.arange(nItr):
             
             batchXY = self.myData.nextBatch(nBatch=nBatch)
-            
-            pfeed_dict = {self.x:batchXY[0], self.y:batchXY[1], self.seq:batchXY[3]}
-            
             # 1. pred fric paramters ----
+            pfeed_dict = {self.x:batchXY[0], self.y:batchXY[1], self.seq:batchXY[3]}
             # paramB, loss
             trainPPred, trainPLoss = self.sess.run([self.ppred, self.ploss], pfeed_dict)
-            
             # 2. cycle loss, [nBatch] ----
             trainCLoss = self.cycle.loss(trainPPred, batchXY[1], batchXY[2], itr=itr, dirpath='train')
             
-            
-            pcfeed_dict = {self.x:batchXY[0], self.y:batchXY[1], self.seq:batchXY[3], self.closs:trainCLoss}
-            
             # 3. pred + cycle loss ----
-            _, trainPCPred, trainPCLoss  = \
+            pcfeed_dict = {self.x:batchXY[0], self.y:batchXY[1], self.seq:batchXY[3], self.closs:trainCLoss}
+            _, trainPCPred, trainPCLoss = \
             self.sess.run([self.opt, self.ppred, self.pcloss], pcfeed_dict)
            
-          
+            #pdb.set_trace()
             if itr % testPeriod == 0:
                 self.test(itr=itr)
                 self.eval(itr=itr)
-                
+                print('----')
                 print('itr:%d, trainPLoss:%3f, trainCLoss:%3f, trainPCLoss:%3f' % (itr, np.mean(trainPLoss), np.mean(trainCLoss), trainPCLoss))
                 print('itr:%d, testPLoss:%3f, testCLoss:%3f, testPCLoss:%3f' % (itr,  np.mean(self.testPLoss), np.mean(self.testCLoss), self.testPCLoss))
+                print(batchXY[1][:10,:])
+                print(trainPPred[:10,:])
+                print(f'mean: {np.mean(trainCLoss)}')
+                print(f'max: {np.max(trainCLoss)}')
+                print(f'min: {np.min(trainCLoss)}')
                 
+                print('----')
+                print(f'Eval paramB: {self.evalPPred}')
+                print('Eval CLoss:%3f' % (self.evalCLoss))
+                print('----')
+        
                 trPL[int(itr/testPeriod)] = np.mean(trainPLoss)
                 trCL[int(itr/testPeriod)] = np.mean(trainCLoss)
                 trPCL[int(itr/testPeriod)] = trainPCLoss
@@ -207,7 +222,7 @@ class ParamCycleNN:
                 
         # train & test loss
         losses = [trPL,trCL,trPCL, tePL,teCL,tePCL]
-        params = [self.testPPred,self.testPCPred,self.yCyclebTest, self.evalPPred,self.evalPCPred]
+        params = [self.testPPred,self.testPCPred,self.yCyclebTest, self.evalPPred]
         
         return losses, params
     # ----
@@ -222,36 +237,35 @@ class ParamCycleNN:
         
         # 2. cycle loss ----
         self.testCLoss = self.cycle.loss(self.testPPred, self.yCyclebTest, self.yCycleTest, itr=itr, dirpath='test')
-        
+          
         # 3. pred + cycle loss ----
         pcfeed_dict = {self.x:self.xCycleTest, self.y:self.yCyclebTest, self.seq:self.yCycleseqTest, self.closs:self.testCLoss}
       
         self.testPCPred, self.testPCLoss = \
         self.sess.run([self.ppred_test, self.pcloss_test], pcfeed_dict)
-     
-        print(f'mean: {np.mean(self.testCLoss)}')
-        print(f'max: {np.max(self.testCLoss)}')
-        print(f'min: {np.min(self.testCLoss)}')
         print('----')
-        print('>>> exact')
-        print(self.yCyclebTest[:5,:])
-        print('>>> pcNN')
-        print(self.testPCPred[:5,:])
-        
+        print(f'Testmean: {np.mean(self.testCLoss)}')
+        print(f'Testmax: {np.max(self.testCLoss)}')
+        print(f'Testmin: {np.min(self.testCLoss)}')
+        print('----')
+        print(self.yCyclebTest[:10,:])
+        print(self.testPPred[:10,:])
+      
     # ----
     
     # ----
     def eval(self, itr=0):
+        #pdb.set_trace()
+        #xEval = np.concatenate([self.yCycleEval[0][:,np.newaxis],self.yCycleEval[1][:,np.newaxis],np.pad(self.yCycleEval[2],[0,2],'constant')[:,np.newaxis]],1)
+        
         # 1. pred fric paramters
         feed_dict={self.x:self.xEval, self.seq:self.yCycleseqEval}
+    
         self.evalPPred = self.sess.run(self.ppred_eval, feed_dict)
         
         # 2. cycle loss
         self.evalCLoss = self.cycle.evalloss(self.evalPPred, self.yCycleEval, itr=itr, dirpath='eval')
-        
-        print(f'Eval paramB: {self.evalPPred[0]}')
-        print(f'Eval CLoss:%3f' % (self.evalCLoss))
-        
+     
     # ----
     
         
@@ -273,7 +287,7 @@ if __name__ == "__main__":
    
     # parameters ----
     nCell = 5
-    rateTrain = 0.2
+    rateTrain = 0.0
     lr = 1e-3
     # ----
           
