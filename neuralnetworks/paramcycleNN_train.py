@@ -81,19 +81,19 @@ class ParamCycleNN:
         lambda2 = 0.0001
         
         self.pcloss = lambda1 * tf.reduce_mean(self.ploss) + lambda2 * tf.reduce_mean(self.closs)
-        self.pcloss_test = tf.reduce_mean(self.ploss_test) + tf.reduce_mean(self.closs)  
+        self.pcloss_test = lambda1 * tf.reduce_mean(self.ploss_test) + lambda2 * tf.reduce_mean(self.closs)  
         # ----
       
         # optimizer ----
         Vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES,scope='Regress') 
         self.opt = tf.train.AdamOptimizer(lr).minimize(self.pcloss,var_list=Vars)
         config = tf.compat.v1.ConfigProto(gpu_options=tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.1,allow_growth=True)) 
+        self.saver = tf.compat.v1.train.Saver()
         self.sess = tf.compat.v1.Session(config=config)
         # ----
         
         if isReModel:
-            saver = tf.compat.v1.train.Saver()
-            ckptpath = os.path.join(self.modelPath, 'pNN_rnn')
+            ckptpath = os.path.join(self.modelPath, 'pcNN_rnn')
             ckpt = tf.train.get_checkpoint_state(ckptpath)
         
             lastmodel = ckpt.model_checkpoint_path
@@ -103,10 +103,7 @@ class ParamCycleNN:
             self.sess.run(tf.compat.v1.variables_initializer(Vars))
         else:
             self.sess.run(tf.global_variables_initializer())
-            # save model ----
-            saver = tf.compat.v1.train.Saver()
-            saver.save(self.sess, os.path.join('model', 'pcNN_rnn', 'first'))
-            # ----
+        # ----
 
     # ----
     def weight_variable(self, name, shape, trainable=False):
@@ -174,12 +171,14 @@ class ParamCycleNN:
     # ----
     def train(self, nItr=10000, nBatch=100):
         
+        
         testPeriod = 100
+        savePeriod = 100
        
         trPL,trCL,trPCL = np.zeros(int(nItr/testPeriod)),np.zeros(int(nItr/testPeriod)),np.zeros(int(nItr/testPeriod))
         tePL,teCL,tePCL = np.zeros(int(nItr/testPeriod)),np.zeros(int(nItr/testPeriod)),np.zeros(int(nItr/testPeriod))
         
-        for itr in np.arange(nItr):
+        for itr in np.arange(nItr+1):
             
             batchXY = self.myData.nextBatch(nBatch=nBatch)
             # 1. pred fric paramters ----
@@ -193,8 +192,11 @@ class ParamCycleNN:
             pcfeed_dict = {self.x:batchXY[0], self.y:batchXY[1], self.seq:batchXY[3], self.closs:trainCLoss}
             _, trainPCPred, trainPCLoss = \
             self.sess.run([self.opt, self.ppred, self.pcloss], pcfeed_dict)
-           
-            #pdb.set_trace()
+            
+            # save model ----
+            if itr % savePeriod == 0:
+                self.saver.save(self.sess, os.path.join('model', 'pcNN_rnn', 'first'), global_step=itr)
+                
             if itr % testPeriod == 0:
                 self.test(itr=itr)
                 self.eval(itr=itr)
