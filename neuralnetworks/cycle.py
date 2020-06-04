@@ -127,7 +127,7 @@ class Cycle:
     # ----
     
     # ----
-    def convV2YearlyData(self, isLSTM=False):
+    def convV2YearlyData(self, isLSTM=False, isResult=False):
     
         yrInd = 1
         stateYear = 2000        
@@ -158,6 +158,11 @@ class Cycle:
             tkYear = np.where(deltaU[stateYear:,vInds[3]] > self.slip)[0]
             self.predyear = [nk1Year,nk2Year,tnk1Year,tnk2Year,tkYear]
     
+        elif isResult:
+            nkYear = np.where(deltaU[stateYear:,vInds[0]] > 1)[0]
+            tnkYear = np.where(deltaU[stateYear:,vInds[2]] > 1)[0]
+            tkYear = np.where(deltaU[stateYear:,vInds[3]] > 1)[0]
+            self.predyear = [nkYear,tnkYear,tkYear]
         else:
             # ※ Uの発生年数
             nkYear = np.where(deltaU[stateYear:,vInds[0]] > self.slip)[0]
@@ -167,7 +172,7 @@ class Cycle:
     # ----
     
     # ---- 
-    def calcYearMSE(self, gt, isLSTM=False):
+    def calcYearMSE(self, gt, isLSTM=False, isResult=False):
         '''
         gt: exact eq.year, list[numpy]
         '''
@@ -240,7 +245,17 @@ class Cycle:
             self.tnk1Year = self.predyear[2][(self.predyear[2] > sInd) & (self.predyear[2] < eInd)] - sInd
             self.tnk2Year = self.predyear[3][(self.predyear[3] > sInd) & (self.predyear[3] < eInd)] - sInd
             self.tkYear = self.predyear[4][(self.predyear[4] > sInd) & (self.predyear[4] < eInd)] - sInd
+        
+        elif isResult:
+            # minimum eq.year 
+            nkYear = self.predyear[self.ntI][(self.predyear[self.ntI] > sInd) & (self.predyear[self.ntI] < eInd)] - sInd
+            tnkYear = self.predyear[self.tntI][(self.predyear[self.tntI] > sInd) & (self.predyear[self.tntI] < eInd)] - sInd
+            tkYear = self.predyear[self.ttI][(self.predyear[self.ttI] > sInd) & (self.predyear[self.ttI] < eInd)] - sInd
             
+            pJ = [nkYear, tnkYear, tkYear]
+            
+            return pJ, self.maxSim
+        
         else:
             # minimum eq.year 
             nkYear = self.predyear[self.ntI][(self.predyear[self.ntI] > sInd) & (self.predyear[self.ntI] < eInd)] - sInd
@@ -255,38 +270,7 @@ class Cycle:
             return self.maxSim
             #return self.pJ, self.maxSim
     # ----
-    
-    # ----
-    def calcInterval(self):
-        '''
-        return
-            interval.
-            year interval.
-        '''
-        pdb.set_trace()
-        
-        # interval
-        interval_nk1 = self.nk1Year[1:] - self.nk1Year[:-1]
-        interval_nk2 = self.nk2Year[1:] - self.nk2Year[:-1]
-        interval_tnk1 = self.tnk1Year[1:] - self.tnk1Year[:-1]
-        interval_tnk2 = self.tnk2Year[1:] - self.tnk2Year[:-1]
-        interval_tk = self.tkYear[1:] - self.tkYear[:-1]
-        
-        intervals = [interval_nk1,interval_nk2,interval_tnk1,interval_tnk2,interval_tk]
-        
-        # length of interval
-        seq_nk1 = len(interval_nk1)
-        seq_nk2 = len(interval_nk2)
-        seq_tnk1 = len(interval_tnk1)
-        seq_tnk2 = len(interval_tnk2)
-        seq_tk = len(interval_tk)
-        
-        # maximum length of interval
-        max_seq = np.max([seq_nk1,seq_nk2,seq_tnk1,seq_tnk2,seq_tk])
-        
-        return intervals, max_seq
-    # ----
-    
+     
     # ----
     def evalloss(self, predParams, gtCycles, itr=0, dirpath='eval'):
         # Make logs        

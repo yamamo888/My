@@ -51,13 +51,12 @@ class Plot:
       
       # Plot loss ----
       def cLoss(self, data, labels):
-          #pdb.set_trace()
           
           sns.set_style('dark')
       
           plt.plot(data[0], linewidth=2, label=labels[0])
           
-          plt.title('evCycleLoss: %f' % (data[0]))
+          plt.title('evCycleLoss: %f' % (data[0][-1]))
           
           plt.xlabel('iteration')
           plt.ylabel('# of data')
