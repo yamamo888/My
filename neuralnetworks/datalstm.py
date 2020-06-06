@@ -20,9 +20,6 @@ import cycle
 class NankaiData:
     def __init__(self, isLSTM=True):
         
-        # init batch count
-        self.batchCnt = 0
-        
         # path ----
         self.featurePath = 'features'
     
@@ -189,19 +186,12 @@ class NankaiData:
     # ----
     def loadIntervalTrainTestData(self):
         
-        self.IntervalEvalData()
-        
-        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY_tmp300_near5000_back0.pkl'),'rb') as fp:
+        with open(os.path.join(self.featurePath,'interval',f'lstm.pkl'),'rb') as fp:
             self.seqTrain = pickle.load(fp)
             self.intervalTrain = pickle.load(fp)
             self.yearTrain = pickle.load(fp)
             self.parambTrain = pickle.load(fp)
-            
-        # num.of train
-        self.nTrain = int(self.seqTrain.shape[0])
-        # random train index
-        self.batchRandInd = np.random.permutation(self.nTrain)
-    
+        
         with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300_near5000_back0.pkl'),'rb') as fp:
             seqTest = pickle.load(fp)
             intervalTest = pickle.load(fp)
@@ -213,21 +203,6 @@ class NankaiData:
         yearTest = yearTest[:100]
         parambTest = parambTest[:100]
         
-        '''
-        intervalEval = np.concatenate([self.yEval[0][:,np.newaxis],self.yEval[1][:,np.newaxis],np.pad(self.yEval[2],[0,2],'constant')[:,np.newaxis]],1)
-        
-        interval1 = intervalEval[:,0].repeat(self.yearTrain.shape[0],0).reshape(-1,self.yearTrain.shape[0])
-        interval2 = intervalEval[:,1].repeat(self.yearTrain.shape[0],0).reshape(-1,self.yearTrain.shape[0])
-        interval3 = intervalEval[:,2].repeat(self.yearTrain.shape[0],0).reshape(-1,self.yearTrain.shape[0])
-        
-        #norm = np.abs(interval1.T - self.yearTrain[:,:,0]) + np.abs(interval2.T - self.yearTrain[:,:,1]) + np.abs(interval3.T - self.yearTrain[:,:,2])      
-        ind = np.argsort(np.sum(norm,1))[:1000]
-        
-        trseq = self.seqTrain[ind]
-        trinterval = self.intervalTrain[ind]
-        tryear = self.yearTrain[ind]
-        trb = self.parambTrain[ind]
-        '''
         return intervalTest, parambTest, yearTest, seqTest
     # ----
 
@@ -301,34 +276,24 @@ class NankaiData:
     # ----
     
     # ----
-    def nextBatch(self, nBatch=100):
+    def nextBatch(self, index):
         '''
         batchX: eq.intervals. [data, max of eq.length, 5(cell)]
         batchY: paramb
         batchCycleY: eq.years
         batchSeq: length of maximum eq.intervals
         '''
-        self.loadIntervalTrainTestData()
-        
-        # index
-        sInd = nBatch * self.batchCnt
-        eInd = sInd + nBatch
-        
-        batchX = self.intervalTrain[self.batchRandInd[sInd:eInd]]
-        batchY = self.parambTrain[self.batchRandInd[sInd:eInd]]
-        batchCycleY = self.yearTrain[self.batchRandInd[sInd:eInd]]
-        batchSeq = self.seqTrain[self.batchRandInd[sInd:eInd]]
+              
+        batchX = self.intervalTrain[index]
+        batchY = self.parambTrain[index]
+        batchCycleY = self.yearTrain[index]
+        batchSeq = self.seqTrain[index]
         
         batchXY = [batchX, batchY, batchCycleY, batchSeq]
         
-        if eInd + nBatch > self.nTrain:
-            self.batchCnt = 0
-        else:
-            self.batchCnt += 1
-    
         return batchXY
     # ----
    
 #NankaiData().makeIntervalData()
 #NankaiData().makeNearYearData()
-NankaiData().loadIntervalTrainTestData()
+#NankaiData().loadIntervalTrainTestData()

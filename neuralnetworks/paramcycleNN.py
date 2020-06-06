@@ -176,14 +176,25 @@ class ParamCycleNN:
     # ----
     def train(self, nItr=10000, nBatch=100):
         
-        testPeriod = 50
-       
+        testPeriod = 500
+        batchCnt = 0
+        
+        self.myData.loadIntervalTrainTestData()
+        nTrain = 200
+        batchRandInd = np.random.permutation(nTrain)
+    
         trPL,trCL,trPCL = np.zeros(int(nItr/testPeriod)),np.zeros(int(nItr/testPeriod)),np.zeros(int(nItr/testPeriod))
         tePL,teCL,tePCL = np.zeros(int(nItr/testPeriod)),np.zeros(int(nItr/testPeriod)),np.zeros(int(nItr/testPeriod))
         
-        for itr in np.arange(nItr):
+        for itr in np.arange(nItr+1):
             
-            batchXY = self.myData.nextBatch(nBatch=nBatch)
+            # index
+            sInd = nBatch * batchCnt
+            eInd = sInd + nBatch
+            index = batchRandInd[sInd:eInd]
+            # Get train data
+            batchXY = self.myData.nextBatch(index)
+            
             # 1. pred fric paramters ----
             pfeed_dict = {self.x:batchXY[0], self.y:batchXY[1], self.seq:batchXY[3]}
             # paramB, loss
@@ -197,16 +208,20 @@ class ParamCycleNN:
             _, trainPCPred, trainPCLoss, lstmFeature = \
             self.sess.run([self.opt, self.ppred, self.pcloss, self.xlstm], pcfeed_dict)
             
-            print(batchXY[-1][:10])
+            
+            if eInd + nBatch > nTrain:
+                batchCnt = 0
+                batchRandInd = np.random.permutation(nTrain)
+            else:
+                batchCnt += 1
             
             if itr % testPeriod == 0:
             
                 with open(os.path.join('model','lstm',f'lstm_{itr}.pkl'),'wb') as fp:
-                    pickle.dump(batchXY[0], fp)
                     pickle.dump(batchXY[1], fp)
                     pickle.dump(batchXY[2], fp)
-                    pickle.dump(batchXY[3], fp)
-                    pickle.dump(batchXY[3], fp)
+                    pickle.dump(index, fp)
+                    pickle.dump(lstmFeature, fp)
                     
             #pdb.set_trace()
             '''
@@ -377,8 +392,8 @@ if __name__ == "__main__":
     for param,label in zip(params,Plabels):
         np.savetxt(os.path.join('model', 'params', 'eval', f'{trialID}', f'{label}.csv'), param, delimiter=',', fmt='%5f')
     # ----
-    '''
     
+    '''
     # ※ reccomend comment out
     # Plot best result rireki ----
     model = ParamCycleNN()
@@ -389,3 +404,50 @@ if __name__ == "__main__":
     myPlot.Rireki(gt, pred)
     # ----
     '''
+    '''
+    myPlot = plot.Plot()
+            
+    paths = glob.glob((os.path.join('model','lstm','*pkl')))
+    
+    flag = False
+    for path in paths:
+    
+        with open(path,'rb') as fp:
+            paramb = pickle.load(fp)
+            year = pickle.load(fp)
+            index = pickle.load(fp)
+            feature = pickle.load(fp)
+        
+        if not flag:
+            minf = np.min(feature)
+            maxf = np.max(feature)
+            flag = True
+        else:
+            minf = np.hstack([minf,np.min(feature)])
+            maxf = np.hstack([maxf,np.max(feature)])
+        pdb.set_trace()
+        np.savetxt(os.path.join('model', 'lstm', f'{os.path.basename(path)}.csv'), paramb, delimiter=',', fmt='%5f')
+        np.savetxt(os.path.join('model', 'lstm', f'{os.path.basename(path)}.csv'), index, delimiter=',', fmt='%5f')
+        
+    
+    minf = np.min(minf)
+    maxf = np.max(maxf)
+            
+    for path in paths:
+    
+        with open(path,'rb') as fp:
+            Paramb = pickle.load(fp)
+            Feature = pickle.load(fp)
+            Index = pickle.load(fp)
+        
+        for paramb, index, feature in zip(Paramb,Feature[1][-1],Index):
+            myPlot.feature2D(feature, label=f'{index}_{paramb[0]}_{paramb[1]}_{paramb[2]}')'''
+    
+            
+        
+        
+        
+        
+        
+        
+    
