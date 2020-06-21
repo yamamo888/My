@@ -127,7 +127,7 @@ class Cycle:
     # ----
     
     # ----
-    def convV2YearlyData(self, isLSTM=False, isResult=False):
+    def convV2YearlyData(self, isLSTM=False, isResult=False, isZeroYear=False):
     
         yrInd = 1
         stateYear = 2000        
@@ -157,6 +157,24 @@ class Cycle:
             tnk2Year = np.where(deltaU[stateYear:,vInds[2]] > self.slip)[0]
             tkYear = np.where(deltaU[stateYear:,vInds[3]] > self.slip)[0]
             self.predyear = [nk1Year,nk2Year,tnk1Year,tnk2Year,tkYear]
+        
+        elif isZeroYear:
+            
+            onehot = np.zeros([8000,5])
+       
+            nk1Year = np.where(deltaU[stateYear:,1] > 1)[0]
+            nk2Year = np.where(deltaU[stateYear:,vInds[0]] > 1)[0]
+            tnk1Year = np.where(deltaU[stateYear:,vInds[1]] > 1)[0]
+            tnk2Year = np.where(deltaU[stateYear:,vInds[2]] > 1)[0]
+            tkYear = np.where(deltaU[stateYear:,vInds[3]] > 1)[0]
+            
+            onehot[0,nk1Year.tolist()] = 1
+            onehot[1,nk2Year.tolist()] = 1
+            onehot[2,tnk1Year.tolist()] = 1
+            onehot[3,tnk2Year.tolist()] = 1
+            onehot[4,tkYear.tolist()] = 1
+            
+            return [nk1Year,nk2Year,tnk1Year,tnk2Year,tkYear], onehot
     
         elif isResult:
             nkYear = np.where(deltaU[stateYear:,vInds[0]] > 1)[0]
@@ -170,6 +188,21 @@ class Cycle:
             tkYear = np.where(deltaU[stateYear:,vInds[3]] > self.slip)[0]
             self.predyear = [nkYear,tnkYear,tkYear]
     # ----
+    
+    # ---- 
+    def calcInterval(self, years):
+        
+        interval_nk1 = np.abs(years[1:,0] - years[:-1,0])
+        interval_nk2 = np.abs(years[1:,1] - years[:-1,1])
+        interval_tnk1 = np.abs(years[1:,2] - years[:-1,2])
+        interval_tnk2 = np.abs(years[1:,3] - years[:-1,3])
+        interval_tk = np.abs(years[1:,4] - years[:-1,4])
+        
+        seq = np.max([len(interval_nk1),len(interval_nk2),len(interval_tnk1),len(interval_tnk2),len(interval_tk)])
+        print(seq)
+        
+        return [interval_nk1,interval_nk2,interval_tnk1,interval_tnk2,interval_tk], seq 
+    # ---- 
     
     # ---- 
     def calcYearMSE(self, gt, isLSTM=False, isResult=False):
@@ -208,13 +241,21 @@ class Cycle:
             pYear_tk = np.where(pred[sYear:eYear,2] > th)[0][:gNum_tk]
             
             # gtよりpredの地震回数が少ない場合
-            if pYear_nk.shape[0] < gNum_nk:
+            if 0 < pYear_nk.shape[0] < gNum_nk:
                 pYear_nk = np.hstack([pYear_nk, np.tile(pYear_nk[-1], gNum_nk-pYear_nk.shape[0])])
-            if pYear_tnk.shape[0] < gNum_tnk:
+            if 0 < pYear_tnk.shape[0] < gNum_tnk:
                 pYear_tnk = np.hstack([pYear_tnk, np.tile(pYear_tnk[-1], gNum_tnk-pYear_tnk.shape[0])])
-            if pYear_tk.shape[0] < gNum_tk:
+            if 0 < pYear_tk.shape[0] < gNum_tk:
                 pYear_tk = np.hstack([pYear_tk, np.tile(pYear_tk[-1], gNum_tk-pYear_tk.shape[0])])
             
+            # pred.shape == 0
+            if pYear_nk.shape[0] == 0:
+                pYear_nk = np.hstack([pYear_nk, np.tile(0, gNum_nk)])
+            if pYear_tnk.shape[0] == 0:
+                pYear_tnk = np.hstack([pYear_tnk, np.tile(0, gNum_tnk)])
+            if pYear_tk.shape[0] == 0:
+                pYear_tk = np.hstack([pYear_tk, np.tile(0, gNum_tk)])
+                
             # sum(abs(exact eq.year - pred eq.year))
             ndist_nk = np.abs(gYear_nk - pYear_nk)
             ndist_tnk = np.abs(gYear_tnk - pYear_tnk)
