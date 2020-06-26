@@ -36,7 +36,7 @@ class NankaiData:
         for fID in filename:
             logspath = glob.glob(os.path.join('logs',f'{fID}','*.txt'))
             cnt = 0
-            for logpath in logspath[:100]:
+            for logpath in logspath:
                 print(f'{fID}:{len(logspath)-cnt}')
                 cnt += 1
                 
@@ -67,13 +67,13 @@ class NankaiData:
                     onehotYears = np.vstack([onehotYears, onehotYear[np.newaxis]])
                     Bs = np.vstack([Bs, B[np.newaxis]])
 
-            #with open(os.path.join(self.featurePath,'interval',f'intervalSeqXYonehotY_{fID}.pkl'),'wb') as fp:
-            with open(os.path.join(self.featurePath,'interval',f'practice.pkl'),'wb') as fp:
-                pickle.dump(seqs, fp)
-                pickle.dump(Intervals, fp)
-                pickle.dump(Years, fp)
-                pickle.dump(onehotYears, fp)
-                pickle.dump(Bs, fp)
+            with open(os.path.join(self.featurePath,'interval',f'intervalSeqXYonehotY_{fID}.pkl'),'wb') as fp:
+            #with open(os.path.join(self.featurePath,'interval',f'practice.pkl'),'wb') as fp:
+                pickle.dump(seqs, fp, protocol=4)
+                pickle.dump(Intervals, fp, protocol=4)
+                pickle.dump(Years, fp, protocol=4)
+                pickle.dump(onehotYears, fp, protocol=4)
+                pickle.dump(Bs, fp, protocol=4)
                 
         '''    
         with open(os.path.join(self.featurePath,'interval',f'intervalSeqXY_tmp300_slip1.pkl'),'rb') as fp:
