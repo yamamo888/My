@@ -29,7 +29,8 @@ class NankaiData:
         
         #self.EvalData()       
         
-        #filename = ['b2b3b4b5b6205-300','tmp300','b2b3b4b5b60-100','b2b3b4b5b6105-200','b2b3b4b5b6400-450'] 
+        #filename = ['b2b3b4b5b6205-300','b2b3b4b5b60-100','b2b3b4b5b6105-200','b2b3b4b5b6400-450'] 
+        #filename = ['b2b3b4b5b6105-200','b2b3b4b5b6400-450'] 
         filename = ['tmp300'] 
         
         flag = False
@@ -42,38 +43,39 @@ class NankaiData:
                 
                 B,_ = makeInterval.loadBV(logpath)
                 B = np.concatenate([B[2,np.newaxis],B[4,np.newaxis],B[5,np.newaxis]],0)
-                years, onehotYear = makeInterval.convV2YearlyData(isZeroYear=True)
+                allyears, onehotYear = makeInterval.convV2YearlyData(isZeroYear=True)
                 
                 # zero-padding array[500,]
-                #years = [np.pad(year, [0, 500-len(year)], 'constant') for year in years] 
+                #years = [np.pad(year, [0, 200-len(year)], 'constant') for year in [allyears[1],allyears[3],allyears[4]]] 
                 #years = np.concatenate([years[0][:,np.newaxis],years[1][:,np.newaxis],years[2][:,np.newaxis]],1)
                     
                 # input dataset, intervals:list
-                intervals, seq = makeInterval.calcInterval(years)
+                intervals, seq = makeInterval.calcInterval(allyears)
                 # list[5]
-                intervals = [np.pad(interval, [0, 500-len(interval)], 'constant') for interval in intervals] 
-                intervals = np.concatenate([intervals[0][:,np.newaxis],intervals[1][:,np.newaxis],intervals[2][:,np.newaxis],intervals[3][:,np.newaxis],intervals[4][:,np.newaxis]],1)
-
+                intervals = [np.pad(interval, [0, 150-len(interval)], 'constant') for interval in intervals] 
+                intervals = np.concatenate([intervals[1][:,np.newaxis],intervals[3][:,np.newaxis],intervals[4][:,np.newaxis]],1)
+                
                 if not flag:
                     seqs = np.array([seq])
                     Intervals = intervals[np.newaxis]
-                    Years = years[np.newaxis]
+                    #Years = years[np.newaxis]
                     onehotYears = onehotYear[np.newaxis]
                     Bs = B[np.newaxis]
                     flag = True
                 else:
                     seqs = np.hstack([seqs, np.array([seq])])
                     Intervals = np.vstack([Intervals, intervals[np.newaxis]])
-                    Years = np.vstack([Years, years[np.newaxis]])
+                    #Years = np.vstack([Years, years[np.newaxis]])
                     onehotYears = np.vstack([onehotYears, onehotYear[np.newaxis]])
                     Bs = np.vstack([Bs, B[np.newaxis]])
 
             with open(os.path.join(self.featurePath,'interval',f'intervalSeqXYonehotY_{fID}.pkl'),'wb') as fp:
-                pickle.dump(seqs, fp)
-                pickle.dump(Intervals, fp)
-                pickle.dump(Years, fp)
-                pickle.dump(onehotYears, fp)
-                pickle.dump(Bs, fp)
+            #with open(os.path.join(self.featurePath,'interval',f'practice.pkl'),'wb') as fp:
+                pickle.dump(seqs, fp, protocol=4)
+                pickle.dump(Intervals, fp, protocol=4)
+                #pickle.dump(Years, fp, protocol=4)
+                pickle.dump(onehotYears, fp, protocol=4)
+                pickle.dump(Bs, fp, protocol=4)
                 
         '''    
         with open(os.path.join(self.featurePath,'interval',f'intervalSeqXY_tmp300_slip1.pkl'),'rb') as fp:
@@ -289,6 +291,6 @@ class NankaiData:
         return batchXY
     # ----
    
-#NankaiData().makeIntervalData()
+NankaiData().makeIntervalData()
 #NankaiData().makeNearYearData()
 #NankaiData().loadIntervalTrainTestData()
