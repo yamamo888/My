@@ -6,6 +6,7 @@ import pickle
 import time
 import glob
 import shutil
+import csv
 import pdb
 
 import numpy as np
@@ -47,15 +48,21 @@ aYear = 1400
 ntI,tntI,ttI = 0,1,2
 nCell = 3
 # num.of epoch
-nEpoch = 10
+nEpoch = 5
 # range b
 mt = 1000000
 # default
 # range of under & over in parameter
-nkmin,nkmax = 0.014449,0.015499
-tnkmin,tnkmax = 0.012,0.014949
+#nkmin,nkmax = 0.014449,0.015499
+#tnkmin,tnkmax = 0.012,0.014949
 #tkmin,tkmax = 0.012,0.0135
-tkmin,tkmax = 0.013450,0.013450
+# for all search
+nkmin,nkmax = 0.011,0.0165
+tnkmin,tnkmax = 0.011,0.0165
+tkmin,tkmax = 0.011,0.0170
+
+# for not searching tokai
+#tkmin,tkmax = 0.013450,0.013450
 
 defaultpdB = [[nkmin,nkmax],[tnkmin,tnkmax],[tkmin,tkmax]]
 # -----------------------------------------------------------------------------
@@ -131,7 +138,6 @@ def func(b1,b2,b3):
     
     # reading gt & logs
     logfile = readFiles()[0]
-    
     print(logfile)
     # U:[None,10], B:[3,]
     U,B = myData.loadABLV(logfile)
@@ -139,24 +145,27 @@ def func(b1,b2,b3):
     # each mse var.
     maxSim = myData.MinErrorNankai(deltaU,mode=3)
     maxSim = 1/maxSim
+    pdb.set_trace()
+    # Delate logfile
+    os.remove(logfile)
     
     # Move readed logfile
-    oldpath = os.path.join(logfile)
-    newpath = os.path.join(logsPath,savedlogPath)
-    moveFiles(oldpath,newpath)
+    #oldpath = os.path.join(logfile)
+    #newpath = os.path.join(logsPath,savedlogPath)
+    #moveFiles(oldpath,newpath)
   
     return maxSim
 # -----------------------------------------------------------------------------
-"""
+
 # -----------------------------------------------------------------------------
 for epoch in np.arange(nEpoch):
     
-    # Set 
+    # Set prior
     if epoch == 0:
         pdB = defaultpdB
     else:
         pdBs = np.loadtxt(os.path.join(savedirPath,f"BO_paramb_{epoch-1}_{itrNum}_{trID}.txt"))
-        
+    
         minpdBs = pdBs[-1]/mt
         maxpdBs = pdBs[-2]/mt
         
@@ -165,16 +174,20 @@ for epoch in np.arange(nEpoch):
         
         pdB = [[minpdBs[ntI],maxpdBs[ntI]],[minpdBs[tntI],maxpdBs[tntI]],[minpdBs[ttI],maxpdBs[ttI]]]
     
-    
+    pdB = defaultpdB
     # prior distribution parameter b    
     pbounds = setPriorDistribution(pdB)
 
     # Start Bayes -------------------------------------------------------------
     # verbose: 学習過程表示 0:無し, 1:すべて, 2:最大値更新時
-    opt = BayesianOptimization(f=func,pbounds=pbounds,verbose=2)
+    opt = BayesianOptimization(f=func,pbounds=pbounds,verbose=1)
+    
+    opt = BayesianOptimization(f=func,pbounds=pbounds)
+    opt.maximize(init_points=5,n_iter=itrNum,acq='ucb',kappa=10)
+    
     # init_points:最初に取得するf(x)の数、ランダムに選択される
     # n_iter:試行回数(default:25パターンのパラメータで学習)
-    opt.maximize(init_points=5,n_iter=itrNum)
+    opt.maximize(init_points=5,n_iter=itrNum,acq='ucb',kappa=10)
     # -------------------------------------------------------------------------
     #pdb.set_trace()
     # Result ------------------------------------------------------------------
@@ -205,7 +218,7 @@ for epoch in np.arange(nEpoch):
     np.savetxt(os.path.join(savedirPath,f"BO_paramb_{epoch}_{itrNum}_{trID}.txt"),params,fmt=f"%d")
     # -------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-"""
+
 """
 # Make best csv ---------------------------------------------------------------
 # Get best paramter b
@@ -250,13 +263,12 @@ best100b = bs[best100ind.tolist()]
 
 np.savetxt(os.path.join(savedirPath,f'best100_target.txt'),best100target)
 # for bat
-np.savetxt(os.path.join(savedirPath,f'best100_b.csv'),best100b,delimiter=',',fmt='%d')
+np.savetxt(os.path.join(savedirPath,f'best100_b_{trID}.csv'),best100b,delimiter=',',fmt='%d')
 # -----------------------------------------------------------------------------
-
-# after featureV.bat
-
 """
-# Make rireki -----------------------------------------------------------------
+# after featureV.bat
+"""
+# Plot rireki -----------------------------------------------------------------
 logsfullPath = os.path.join(logsPath,f'sortbayes_{trID}',filePath)
 logsfile = glob.glob(logsfullPath)
 
@@ -275,16 +287,16 @@ for iS in np.arange(len(logsfile)):
    
     U, th, V, B = myDataPF.loadABLV(logsPath,f'sortbayes_{trID}',file)
     B = np.concatenate([B[2,np.newaxis],B[4,np.newaxis],B[5,np.newaxis]],0)
-    deltaU, yth, yV, pJ_all = myDataPF.convV2YearlyData(U,th,V,nYear=10000,cnt=0,isLast=True)
+    deltaU, _, _, _ = myDataPF.convV2YearlyData(U,th,V,nYear=10000,cnt=0,isLast=True)
     deltaU = np.concatenate((deltaU[:,2,np.newaxis],deltaU[:,4,np.newaxis],deltaU[:,5,np.newaxis]),1)
     maxSim, pred = myData.MinErrorNankai(deltaU,mode=3,isPlot=True)
     
     pJ_all = [np.where(pred[:,ntI]>1)[0],np.where(pred[:,tntI]>1)[0],np.where(pred[:,ttI]>1)[0]]
     predV = [pJ_all[ntI]-int(U[0,1]),pJ_all[tntI]-int(U[0,1]),pJ_all[ttI]-int(U[0,1])]
     gtV = [np.where(gt[:,ntI]>0)[0],np.where(gt[:,tntI]>0)[0],np.where(gt[:,ttI]>0)[0]]
-    
+    #pdb.set_trace()
     # plot & mae eq. of predict & gt
-    myPlot.Rireki(gtV,predV,path=f"bayes_{trID}",label=f"{iS}_{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}",title=f'{int(maxSim)}')
+    myPlot.Rireki(gtV,predV,path=f"bayes_{trID}",label=f"{iS}_{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}",title=f'{int(maxSim)}\n{predV[0].tolist()}\n{predV[1].tolist()}\n{predV[2].tolist()}',iseach=True)
 
     if not flag:
         maxSims = maxSim
@@ -298,4 +310,56 @@ index = np.argsort(maxSims)
 np.savetxt(os.path.join(f"bayes_{trID}",'maxsim.txt'),sort_maxSims,fmt='%d')
 np.savetxt(os.path.join(f"bayes_{trID}",'index.txt'),index,fmt='%d')
 # -----------------------------------------------------------------------------
+"""
+"""
+# Plot scatter parameter b (heatmap) ----------------------------------------------------
+
+bs = np.loadtxt('ucb_kappa10.csv', delimiter=',')
+var = np.loadtxt('ucb_kappa10.txt')
+
+x = bs[:,ntI]
+y = bs[:,tntI]
+z = bs[:,ttI]
+
+
+nkmin, nkmax = 0.0152, 0.0154
+tnkmin, tnkmax = 0.012, 0.0128
+tkmin, tkmax = 0.012, 0.0125
+
+rangeb = [[nkmin*1000000,tnkmin*1000000,tkmin*1000000],[nkmax*1000000,tnkmax*1000000,tkmax*1000000]]
+
+minvar = np.min(1/var)
+maxvar = np.max(1/var)
+sigmavar = np.var(1/var)
+muvar = np.mean(1/var)
+
+myPlot.scatter3D_heatmap(x,y,z,var,rangeP=rangeb,path=os.path.join('images','allsearch','sort_ucb_kappa10'),title=f'top100',label=f"heatmap_sort_ucb_kappa10")
+"""
+# -----------------------------------------------------------------------------
+"""
+# Plot scatter parameter b ----------------------------------------------------
+
+bs = np.loadtxt('ucb_kappa10.csv', delimiter=',')
+
+x = bs[:,ntI]
+y = bs[:,tntI]
+z = bs[:,ttI]
+
+nkmin, nkmax = np.min(x), np.max(x)
+tnkmin, tnkmax = np.min(y), np.max(y)
+tkmin, tkmax = np.min(z), np.max(z)
+
+nkmin, nkmax = 0.0146, 0.0154
+tnkmin, tnkmax = 0.012, 0.0146
+tkmin, tkmax = 0.012, 0.0134
+
+rangeb = [[nkmin*1000000,tnkmin*1000000,tkmin*1000000],[nkmax*1000000,tnkmax*1000000,tkmax*1000000]]
+
+myPlot.scatter3D(x,y,z,rangeP=rangeb,path=os.path.join('images','allsearch','sort_ucb_kappa10'),title='top100',label='sort_ucb_kappa10')    
+# -----------------------------------------------------------------------------
+"""
+
+
+
+
 

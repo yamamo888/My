@@ -15,6 +15,7 @@ import seaborn as sns
 import numpy as np
 from scipy import stats
 import pandas as pd
+import seaborn as sns
 import csv
 
 import PlotPF as myPlot
@@ -179,14 +180,25 @@ def MinErrorNankai(pred,mode=2,isPlot=False):
             pYear_nk = np.where(pred[sYear:eYear,0] > th)[0][:gNum_nk]
             pYear_tnk = np.where(pred[sYear:eYear,1] > th)[0][:gNum_tnk]
             pYear_tk = np.where(pred[sYear:eYear,2] > th)[0][:gNum_tk]
-            
             # gtよりpredの地震回数が少ない場合
             if pYear_nk.shape[0] < gNum_nk:
-                pYear_nk = np.hstack([pYear_nk, np.tile(pYear_nk[-1], gNum_nk-pYear_nk.shape[0])])
+                try:
+                    pYear_nk = np.hstack([pYear_nk, np.tile(pYear_nk[-1], gNum_nk-pYear_nk.shape[0])])
+                except IndexError:
+                    pYear_nk = np.hstack([pYear_nk, np.tile(10000,gNum_nk)])
+            
             if pYear_tnk.shape[0] < gNum_tnk:
-                pYear_tnk = np.hstack([pYear_tnk, np.tile(pYear_tnk[-1], gNum_tnk-pYear_tnk.shape[0])])
+                try:
+                    pYear_tnk = np.hstack([pYear_tnk, np.tile(pYear_tnk[-1], gNum_tnk-pYear_tnk.shape[0])])
+                except IndexError:
+                    pYear_tnk = np.hstack([pYear_tnk, np.tile(10000,gNum_tnk)])
+            
             if pYear_tk.shape[0] < gNum_tk:
-                pYear_tk = np.hstack([pYear_tk, np.tile(pYear_tk[-1], gNum_tk-pYear_tk.shape[0])])
+                try:
+                    pYear_tk = np.hstack([pYear_tk, np.tile(pYear_tk[-1], gNum_tk-pYear_tk.shape[0])])
+                except IndexError:
+                    pYear_tk = np.hstack([pYear_tk, np.tile(10000,gNum_tk)])
+                
             # [9,]
             ndist_nk = gauss(gYear_nk,pYear_nk,mode=3)
             ndist_tnk = gauss(gYear_tnk,pYear_tnk,mode=3)
@@ -198,7 +210,7 @@ def MinErrorNankai(pred,mode=2,isPlot=False):
             yearError_tk = np.sum(ndist_tk)
             
             yearError = yearError_nk + yearError_tnk + yearError_tk
-            
+            #pdb.set_trace()
             if not flag:
                 yearErrors = yearError
                 flag = True
@@ -208,6 +220,33 @@ def MinErrorNankai(pred,mode=2,isPlot=False):
         # 最小誤差開始修了年数(1400年)取得
         sInd = np.argmin(yearErrors)
         
+        '''
+        # if slip velocity plot
+        sns.set_style("dark")
+  
+        #pdb.set_trace()
+        predVnk = pred[sInd:sInd+1400,0]
+        predVtnk = pred[sInd:sInd+1400,1]
+        predVtk = pred[sInd:sInd+1400,2]
+        
+        colors = ["coral","skyblue","coral","skyblue","coral","skyblue"]
+        
+        # scalling var.
+        gtV = np.zeros([1400,3])
+        gtV[gYear_nk.tolist(),ntI] = 5
+        gtV[gYear_tnk.tolist(),tntI] = 5
+        gtV[gYear_tk,ttI] = 5
+       
+        plot_data = [gtV[:,ntI],predVnk,gtV[:,tntI],predVtnk,gtV[:,ttI],predVtk]
+        
+        fig = plt.figure()
+        fig, axes = plt.subplots(nrows=6,sharex="col")
+        for row,(color,data) in enumerate(zip(colors,plot_data)):
+            axes[row].plot(np.arange(1400), data, color=color)
+            
+        plt.savefig('test_1.png')
+        plt.close()
+        '''
 
     # 閾値 & 二乗誤差
     elif mode == 2:
