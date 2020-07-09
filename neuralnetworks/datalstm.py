@@ -72,20 +72,36 @@ class NankaiData:
                 pickle.dump(Bs, fp, protocol=4)
                 
         '''    
-        with open(os.path.join(self.featurePath,'interval',f'intervalSeqXY_tmp300_slip1.pkl'),'rb') as fp:
-            Seqs = pickle.load(fp)
-            Intervals = pickle.load(fp)
-            Years = pickle.load(fp)
-            Paramb = pickle.load(fp)
+        
+        filename = ['b2b3b4b5b60-100','b2b3b4b5b6105-200','b2b3b4b5b6205-300','tmp300','b2b3b4b5b6400-450']
+        nData = []
+        flag = False
+        for fname in filename:
+
+            with open(os.path.join(self.featurePath,'interval',f'intervalSeqXY_{fname}.pkl'),'rb') as fp:
+                seqs = pickle.load(fp)
+                intervals = pickle.load(fp)
+                years = pickle.load(fp)
+                paramb = pickle.load(fp)
+
+            if not flag:
+                Seqs = seqs
+                Intervals = intervals
+                Years = years
+                Paramb = paramb
+                flag = True
+            else:
+                Seqs = np.hstack([Seqs,seqs])
+                Intervals = np.vstack([Intervals,intervals])
+                Years = np.vstack([Years,years])
+                Paramb = np.vstack([Paramb,paramb])
+
+            nData = np.append(nData,Intervals.shape[0])
         #pdb.set_trace()
-        
-        #Intervals = intervals[:,:8,:]
-        #Years = years[:,:8,:]
-        
-        nData = Intervals.shape[0]
+        nData = int(nData[-1])
         nTrain = int(nData * 0.8)
         randInd = np.random.permutation(nData)
-        
+        #pdb.set_trace() 
         # Separate train & test
         seqTrain = Seqs[randInd[:nTrain]]
         intervalTrain = Intervals[randInd[:nTrain]]
@@ -97,13 +113,13 @@ class NankaiData:
         yearTest = Years[randInd[nTrain:]]
         parambTest = Paramb[randInd[nTrain:]]
         
-        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY_tmp300_slip1.pkl'),'wb') as fp:
+        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY.pkl'),'wb') as fp:
             pickle.dump(seqTrain, fp)
             pickle.dump(intervalTrain, fp)
             pickle.dump(yearTrain, fp)
             pickle.dump(parambTrain, fp)
     
-        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300_slip1.pkl'),'wb') as fp:
+        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY.pkl'),'wb') as fp:
             pickle.dump(seqTest, fp)
             pickle.dump(intervalTest, fp)
             pickle.dump(yearTest, fp)
