@@ -16,10 +16,14 @@ import cycle
 
 
 class NankaiData:
-    def __init__(self, isLSTM=True):
+    def __init__(self, featurepath='features'):
         
         # path ----
-        self.featurePath = 'features'
+        self.featurePath = featurepath
+        # ----
+        
+        # Num.of test data (put all test data)
+        self.nTest = 1000
     
     # ----
     def makeIntervalData(self):
@@ -127,64 +131,72 @@ class NankaiData:
     # ----
     
     # ----
-    def loadIntervalTrainTestData(self):
+    def makeOnehotYear(self, data, nYear=8000):
+        '''
+        data: year [data, 150(8), 3]
+        nYear: onehot year (train&test->8000, eval->1400)
+        '''
         
-        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY_tmp300_near5000_back0.pkl'),'rb') as fp:
+        onehotYear = np.zeros([data.shape[0],nYear,3])
+        
+        for i in np.arange(data.shape[0]):
+            
+            # eq. year (data of zeros-padding, del zero)
+            ind_nk = np.trim_zeros(data[i][:,0])
+            ind_tnk = np.trim_zeros(data[i][:,1])
+            ind_tk = np.trim_zeros(data[i][:,2])
+            
+            # eq. == 1
+            onehotYear[i,ind_nk,0] = 1
+            onehotYear[i,ind_tnk,1] = 1
+            onehotYear[i,ind_tk,2] = 1
+                
+        return onehotYear 
+    # ----
+    
+    # ----
+    def TrainTest(self):
+        '''
+        seq: for RNN
+        interval: input RNN
+        year: onehot for odeNN
+        paramb: output paramNN
+        '''
+        
+        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY.pkl'),'rb') as fp:
             self.seqTrain = pickle.load(fp)
             self.intervalTrain = pickle.load(fp)
-            self.yearTrain = pickle.load(fp)
+            yearTrain = pickle.load(fp)
             self.parambTrain = pickle.load(fp)
-        #pdb.set_trace()
-        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY_tmp300_near_back0_onehotyear.pkl'),'rb') as fp:
-            self.onehot_yearTrain = pickle.load(fp)
+         
+        self.onehotyearTrain = self.makeOnehotYear(yearTrain)    
         
-        '''
-        onehot_yearTrain = np.zeros([self.yearTrain.shape[0],1400,3])
-        
-        for i in np.arange(self.yearTrain.shape[0]):
-            
-            print(self.yearTrain.shape[0]-i)
-            
-            ind_nk = np.trim_zeros(self.yearTrain[i][:,0])
-            ind_tnk = np.trim_zeros(self.yearTrain[i][:,1])
-            ind_tk = np.trim_zeros(self.yearTrain[i][:,2])
-            
-            onehot_yearTrain[i,ind_nk,0] = 1
-            onehot_yearTrain[i,ind_tnk,1] = 1
-            onehot_yearTrain[i,ind_tk,2] = 1
-        '''
-        #with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300_slip1.pkl'),'rb') as fp:
-        
-        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300_near5000_back0.pkl'),'rb') as fp:
+        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY.pkl'),'rb') as fp:
             seqTest = pickle.load(fp)
             intervalTest = pickle.load(fp)
             yearTest = pickle.load(fp)
             parambTest = pickle.load(fp)
-        #pdb.set_trace()
-        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300_near_back0_onehotyear.pkl'),'rb') as fp:
-            onehot_yearTest = pickle.load(fp)
        
-        seqTest = seqTest[:100]
-        intervalTest = intervalTest[:100]
-        yearTest = yearTest[:100]
-        parambTest = parambTest[:100]
-        #onehot_yearTest[:100]
+        yearTest = yearTest[:self.nTest]
+        onehotyearTest = self.makeOnehotYear(yearTest)
         
-        return intervalTest, parambTest, yearTest, seqTest
+        seqTest = seqTest[:self.nTest]
+        intervalTest = intervalTest[:self.nTest]
+        parambTest = parambTest[:self.nTest]
+        
+        return intervalTest, seqTest, onehotyearTest, parambTest 
     # ----
 
     # ----
-    def IntervalEvalData(self, cNNRestore=False):
+    def Eval(self, allRireki=False):
     
         # eq.year ----        
         rirekipath = os.path.join(self.featurePath,'eval','nankairireki.pkl')
         with open(rirekipath ,'rb') as fp:
             data = pickle.load(fp)
         
-        #pdb.set_trace()
-        
         # all rireki
-        if cNNRestore:
+        if allRireki:
             flag = False
             for xdata in data:
                 # year
@@ -231,7 +243,11 @@ class NankaiData:
             fID = 190
        
             xrireki = data[fID,:,:]
+            # year
             yEval = [np.where(xrireki[:,0]>0)[0], np.where(xrireki[:,1]>0)[0], np.where(xrireki[:,2]>0)[0]] # [[eq.year in nk], [eq.year in tnk], [eq.year in tk]]
+            
+            # onehot year
+            yonehotEval = self.makeOnehotYear(yEval,nYear=1400)
     
             # interval nk:8.tnk:8.tk:6
             nk = yEval[0][1:] - yEval[0][:-1]
@@ -241,20 +257,18 @@ class NankaiData:
             # zoro-padding tk 6->8
             tk = np.pad(tk, [0,2], 'constant')
     
-            # evaluation input, [1(data),8(interval),5(cell)]
-            #xEval = np.concatenate([nk[:,np.newaxis],nk[:,np.newaxis],tnk[:,np.newaxis],tnk[:,np.newaxis],tk[:,np.newaxis]],1)[np.newaxis]
+            # evaluation input, [1(data),8(interval),3(cell)]
             xEval = np.concatenate([nk[:,np.newaxis],tnk[:,np.newaxis],tk[:,np.newaxis]],1)[np.newaxis]
             
             # length of interval, array(8)
             seqEval = np.array([np.max([len(nk),len(tnk),len(tk)])])
             
-        return xEval, yEval, seqEval
+        return xEval, seqEval, yEval, yonehotEval
     # ----
    
     # ----
     def LSTM(self, x, seq, reuse=False):
 
-        #nHidden=120
         nHidden=32
         
         with tf.compat.v1.variable_scope("LSTM") as scope:
@@ -290,16 +304,15 @@ class NankaiData:
         '''
         #pdb.set_trace()
         batchX = self.intervalTrain[index]
-        batchY = self.parambTrain[index]
-        batchCycleY = self.yearTrain[index]
         batchSeq = self.seqTrain[index]
-        batchYear = self.onehot_yearTrain[index]
+        batchY = self.parambTrain[index]
+        batchYear = self.onehotyearTrain[index]
         
-        batchXY = [batchX, batchY, batchCycleY, batchSeq, batchYear]
+        batchXY = [batchX, batchSeq, batchY, batchYear]
         
         return batchXY
     # ----
    
-NankaiData().makeIntervalData()
+#NankaiData().makeIntervalData()
 #NankaiData().makeNearYearData()
 #NankaiData().loadIntervalTrainTestData()
