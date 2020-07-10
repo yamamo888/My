@@ -60,20 +60,32 @@ aYear = 1400
 ntI,tntI,ttI = 0,1,2
 nCell = 3
 # num.of epoch
-nEpoch = 5
+nEpoch = 10
 # range b
 mt = 1000000
 
 ## for researching Kij (default) ##
 # sampling range
-K22samples = np.arange(-139157.4154072-10000, -139157.4154072+10000)
-K22 = random.sample(K22samples.tolist(),2)
-K22min = Decimal(str(np.min(K22))).quantize(Decimal('0.0000001')) # ※ 小数点以下7桁しか受け付けてくれへん
-K22max = Decimal(str(np.max(K22))).quantize(Decimal('0.0000001'))
-defaultK22= [K22min, K22max]
+# K32
+#K32samples = np.arange(-139157.4154072-10000, -139157.4154072+10000)
+# K23
+#K23samples = np.arange(-140041.1031088-10000, -140041.1031088+10000)
+
+#K32sample = random.sample(K32samples.tolist(),2)
+#K23sample = random.sample(K23samples.tolist(),2)
+
+#K32min = Decimal(str(np.min(K32sample))).quantize(Decimal('0.0000001')) # ※ 小数点以下7桁しか受け付けてくれへん
+#K32max = Decimal(str(np.max(K32sample))).quantize(Decimal('0.0000001'))
+#K23min = Decimal(str(np.min(K23sample))).quantize(Decimal('0.0000001'))
+#K23max = Decimal(str(np.max(K23sample))).quantize(Decimal('0.0000001'))
+
+K32min, K32max = -139157.4154072-60000, -139157.4154072+30000
+K23min, K23max = -140041.1031088-50000, -140041.1031088+40000
+
+defaultK2332 = [[K23min, K23max],[K32min, K32max]]
 #pdb.set_trace()
 ##
-print(f'default >> {K22}')
+#print(f'default >> {Kijsample}')
 ## for researching for param b (default) ##
 # range of under & over in parameter
 nkmin,nkmax = 0.014449,0.015499
@@ -111,7 +123,8 @@ def setPriorDistribution(pd):
     
     elif mode == 'Kij':
         
-        pbounds = {"K22":(pd[0],pd[1])}
+        #pbounds = {"K22":(pd[0],pd[1])}
+        pbounds = {"K23":(pd[0][0],pd[0][1]), "K32":(pd[1][0],pd[1][1])}
     
     return pbounds
 # -----------------------------------------------------------------------------
@@ -177,20 +190,28 @@ def bfunc(b1,b2,b3):
 # -----------------------------------------------------------------------------
 
 # function (Kij) --------------------------------------------------------------
-def Kijfunc(K22):
+#def Kijfunc(K22):
+def Kijfunc(K23,K32):
     
     # Updata Kij
     # reading Kij file(K8_AV)
     Kij = open(Kijfile).readlines()
     # 上書きされるKij (別のKijを変えたいときは+以降も変える必要あり)
-    K22 = Decimal(str(K22)).quantize(Decimal('0.0000001'))
-    Kij[17] = str(K22) + ',3,2\n'
-    print(K22)
+    #K22 = Decimal(str(K22)).quantize(Decimal('0.0000001'))
+    K23 = Decimal(str(K23)).quantize(Decimal('0.0000001'))
+    K32 = Decimal(str(K32)).quantize(Decimal('0.0000001'))
+    
+    # K23
+    Kij[10] = str(K23) + ',2,3\n'
+    # K32
+    Kij[17] = str(K32) + ',3,2\n'
+    
+    #pdb.set_trace()
+    #print(K22)
     # 上書きされた値を含めて保存
     with open(Kijfile,"w") as fp:
         for line in Kij:
             fp.write(line)
-    print('make logs')
     
     # simulation (相互誤差のparamb固定)
     makeLog(b1=np.array(0.015499),b2=np.array(0.01205),b3=np.array(0.01205))
@@ -198,13 +219,12 @@ def Kijfunc(K22):
     # reading gt & logs
     logfile = readlogsFiles()[0]
     
-    print(logfile)
+    #print(logfile)
     # U:[None,10], B:[3,]
     U,B = myData.loadABLV(logfile)
     deltaU = myData.convV2YearlyData(U)
     
     # each mse var.
-    print('start gauss')
     maxSim = myData.MinErrorNankai(deltaU,mode=3)
     maxSim = 1/maxSim
     
@@ -213,7 +233,7 @@ def Kijfunc(K22):
     
     return maxSim
 # -----------------------------------------------------------------------------
-    
+
 # -----------------------------------------------------------------------------
 for epoch in np.arange(nEpoch):
     
@@ -244,11 +264,21 @@ for epoch in np.arange(nEpoch):
     # Kij #####################################################################
     elif mode == 'Kij':
         if epoch == 0:
-            pd = defaultK22
+            #pd = defaultK22
+            pd = defaultK2332
         
         if epoch > 0:
-            K22 = random.sample(K22samples.tolist(),2)
-            pd = [np.min(K22), np.max(K22)]
+            pds = np.loadtxt(os.path.join(savedirPath,f"BO_Kij_{epoch-1}_{itrNum}_{trID}.txt"))
+            
+            minpds = np.min(pds,0)
+            maxpds = np.max(pds,0)
+           
+            #K22 = random.sample(Kijsamples.tolist(),2)
+            #pd = [np.min(K22), np.max(K22)]
+        
+            #K32 = random.sample(K32samples.tolist(),2)
+            #K23 = random.sample(K23samples.tolist(),2)
+            pd = [[minpds[0], maxpds[0]],[minpds[1], maxpds[1]]]
         
         # prior distribution parameter b    
         pbounds = setPriorDistribution(pd)
@@ -259,7 +289,7 @@ for epoch in np.arange(nEpoch):
         
     # init_points:最初に取得するf(x)の数、ランダムに選択される
     # n_iter:試行回数(default:25パターンのパラメータで学習)
-    opt.maximize(init_points=5,n_iter=itrNum,acq='ucb',kappa=100)
+    opt.maximize(init_points=5,n_iter=itrNum,acq='ucb',kappa=10)
     # -------------------------------------------------------------------------
     #pdb.set_trace()
     # Result ------------------------------------------------------------------
@@ -299,7 +329,9 @@ for epoch in np.arange(nEpoch):
             
             # directory -> numpy [1,] [3,]
             target = np.array([line['target']])
-            param = np.array([line['params']['K22']])
+            #param = np.array([line['params']['K22']])
+            
+            param = np.concatenate((np.array([line['params']['K23']]), np.array([line['params']['K32']])), 0)
         
             if not flag:
                 targets = target
@@ -316,52 +348,64 @@ for epoch in np.arange(nEpoch):
         np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{trID}.txt"),params,fmt=f"%7f")
         
 # -----------------------------------------------------------------------------
-
+        
 """
 # Make best csv ---------------------------------------------------------------
 # Get best paramter b
 targetfullPath = os.path.join(savedirPath,'BO_target_*')
 targetfiles = glob.glob(targetfullPath)
 
-bfullPath = os.path.join(savedirPath,'BO_paramb_*')
-bfiles = glob.glob(bfullPath)
+paramfullPath = os.path.join(savedirPath,f'BO_{mode}_*')
+paramfiles = glob.glob(paramfullPath)
 
 flag = False
-for targetfile,bfile in zip(targetfiles,bfiles):
+# ファイル文
+for targetfile,paramfile in zip(targetfiles,paramfiles):
     target = np.loadtxt(targetfile)
-    paramb = np.loadtxt(bfile)
-    
+    param = np.loadtxt(paramfile)
+   
     if not flag:
         targets = target
-        bs = paramb
+        params = param
         flag = True
     else:
         #pdb.set_trace()
         targets = np.hstack([targets,target])
-        bs = np.vstack([bs,paramb])
+        # for paramb
+        #params = np.vstack([params,param])
+        # for Kij
+        params = np.hstack([params,param])
 
-# del multiple parameter b
-parambs = [bs[0]]
-index = [0]
-for ind,line in enumerate(bs):
-    if not all(line == parambs[-1]):
-        parambs.append(line)
-        index.append(ind)
+if mode == 'paramb':
 
-# del multiple targets
-maxsims = targets[index]
+    # del multiple parameter b
+    parambs = [params[0]]
+    index = [0]
+    for ind,line in enumerate(params):
+        if not all(line == parambs[-1]):
+            parambs.append(line)
+            index.append(ind)
+    
+       
+    # del multiple targets
+    maxsims = targets[index]
+    # list -> numpy
+    parambs = np.array(parambs)
+    # min mse index
+    best100ind = np.argsort(maxsims)[::-1][:100]
+    best100target = targets[best100ind]
+    best100param = params[best100ind.tolist()]
 
-# list -> numpy
-parambs = np.array(parambs)
+elif mode == 'Kij':
+    #pdb.set_trace()
+    best100ind = np.argsort(targets)[::-1][:100]
+    best100target = targets[best100ind]
+    best100param = params[best100ind.tolist()]
 
-# min mse index
-best100ind = np.argsort(maxsims)[::-1][:100]
-best100target = targets[best100ind]
-best100b = bs[best100ind.tolist()]
-
+# save target & param
 np.savetxt(os.path.join(savedirPath,f'best100_target.txt'),best100target)
 # for bat
-np.savetxt(os.path.join(savedirPath,f'best100_b_{trID}.csv'),best100b,delimiter=',',fmt='%d')
+np.savetxt(os.path.join(savedirPath,f'best100_b_{trID}.csv'),best100param,delimiter=',',fmt='%d')
 # -----------------------------------------------------------------------------
 """
 # after featureV.bat
