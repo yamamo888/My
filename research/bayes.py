@@ -29,7 +29,7 @@ parser.add_argument('--itrNum', type=int, default=100)
 # Num. of traial
 parser.add_argument('--trID', type=int, default=0)
 # mode
-parser.add_argument('--mode', required=True, choices=['paramb','Kij'])
+parser.add_argument('--mode', required=True, choices=['paramb','Kij','ABL'])
 # 引数展開
 args = parser.parse_args()
 
@@ -48,7 +48,10 @@ savedirPath = f'BO_{trID}'
 # for logs
 savedlogPath = f'savedPD_{trID}'
 paramCSV = 'bayesParam.csv'
-batFile = 'PyToCBayes.bat'
+if mode == 'ABL':
+    batFile = 'PyToCBayesABL.bat'
+else:
+    batFile = 'PyToCBayes.bat'
 filePath = '*txt'
 Kijfile = 'K8_AV2.txt'
 # -----------------------------------------------------------------------------
@@ -65,38 +68,35 @@ nEpoch = 10
 mt = 1000000
 
 ## for researching Kij (default) ##
-# sampling range
-# K32
-#K32samples = np.arange(-139157.4154072-10000, -139157.4154072+10000)
-# K23
-#K23samples = np.arange(-140041.1031088-10000, -140041.1031088+10000)
+#K32min, K32max = -139157.4154072-60000, -139157.4154072+30000
+#K23min, K23max = -140041.1031088-50000, -140041.1031088+40000
 
-#K32sample = random.sample(K32samples.tolist(),2)
-#K23sample = random.sample(K23samples.tolist(),2)
-
-#K32min = Decimal(str(np.min(K32sample))).quantize(Decimal('0.0000001')) # ※ 小数点以下7桁しか受け付けてくれへん
-#K32max = Decimal(str(np.max(K32sample))).quantize(Decimal('0.0000001'))
-#K23min = Decimal(str(np.min(K23sample))).quantize(Decimal('0.0000001'))
-#K23max = Decimal(str(np.max(K23sample))).quantize(Decimal('0.0000001'))
-
-K32min, K32max = -139157.4154072-60000, -139157.4154072+30000
-K23min, K23max = -140041.1031088-50000, -140041.1031088+40000
-
-defaultK2332 = [[K23min, K23max],[K32min, K32max]]
+#defaultK2332 = [[K23min, K23max],[K32min, K32max]]
 #pdb.set_trace()
 ##
-#print(f'default >> {Kijsample}')
+
+## for researching for param a (default) ##
+amin,amax = 0.01,0.02
+
+defaultA = [[amin,amax],[amin,amax],[amin,amax]]
+
 ## for researching for param b (default) ##
 # range of under & over in parameter
-nkmin,nkmax = 0.014449,0.015499
-tnkmin,tnkmax = 0.012,0.014949
-tkmin,tkmax = 0.012,0.0135
+#bnkmin,bnkmax = 0.014449,0.015499
+#btnkmin,btnkmax = 0.012,0.014949
+#btkmin,btkmax = 0.012,0.0135
 # for all search
-nkmin,nkmax = 0.011,0.0165
-tnkmin,tnkmax = 0.011,0.0165
-tkmin,tkmax = 0.011,0.0170
+bnkmin,bnkmax = 0.011,0.0165
+btnkmin,btnkmax = 0.011,0.0165
+btkmin,btkmax = 0.011,0.0170
 
-defaultpdB = [[nkmin,nkmax],[tnkmin,tnkmax],[tkmin,tkmax]]
+defaultB = [[bnkmin,bnkmax],[btnkmin,btnkmax],[btkmin,btkmax]]
+
+## for researching for param L (default) ##
+Lmin,Lmax = 0.01,0.05
+
+defaultL = [[Lmin,Lmax],[Lmin,Lmax],[Lmin,Lmax]]
+
 ##
 
 # -----------------------------------------------------------------------------
@@ -112,7 +112,9 @@ def isDirectory(fpath):
 
 # Prior distribution ----------------------------------------------------------
 def setPriorDistribution(pd):
-    
+    '''
+    pd: searching parameter
+    '''
     if mode == 'paramb':
         nkmin,nkmax = pd[ntI][0],pd[ntI][1]
         tnkmin,tnkmax = pd[tntI][0],pd[tntI][1]
@@ -125,6 +127,24 @@ def setPriorDistribution(pd):
         
         #pbounds = {"K22":(pd[0],pd[1])}
         pbounds = {"K23":(pd[0][0],pd[0][1]), "K32":(pd[1][0],pd[1][1])}
+    
+    elif mode == 'ABL':
+        
+        ankmin,ankmax = pd[0][ntI][0],pd[0][ntI][1]
+        atnkmin,atnkmax = pd[0][tntI][0],pd[0][tntI][1]
+        atkmin,atkmax = pd[0][ttI][0],pd[0][ttI][1]
+        
+        bnkmin,bnkmax = pd[1][ntI][0],pd[1][ntI][1]
+        btnkmin,btnkmax = pd[1][tntI][0],pd[1][tntI][1]
+        btkmin,btkmax = pd[1][ttI][0],pd[1][ttI][1]
+        
+        Lnkmin,Lnkmax = pd[2][ntI][0],pd[2][ntI][1]
+        Ltnkmin,Ltnkmax = pd[2][tntI][0],pd[2][tntI][1]
+        Ltkmin,Ltkmax = pd[2][ttI][0],pd[2][ttI][1]
+        
+        pbounds = {'a1':(ankmin,ankmax),'a2':(atnkmin,atnkmax),'a3':(atkmin,atkmax),
+                   'b1':(bnkmin,bnkmax),'b2':(btnkmin,btnkmax),'b3':(btkmin,btkmax),
+                   'L1':(Lnkmin,Lnkmax),'L2':(Ltnkmin,Ltnkmax),'L3':(Ltkmin,Ltkmax)}
     
     return pbounds
 # -----------------------------------------------------------------------------
@@ -142,7 +162,7 @@ def readlogsFiles():
     return files
 # -----------------------------------------------------------------------------
 
-# making logs -----------------------------------------------------------------
+# making logs (paramb) --------------------------------------------------------
 def makeLog(b1=np.array(0.011),b2=np.array(0.011),b3=np.array(0.011)):
     #pdb.set_trace()
     # save param b ------------------------------------------------------------
@@ -150,6 +170,31 @@ def makeLog(b1=np.array(0.011),b2=np.array(0.011),b3=np.array(0.011)):
     np.savetxt(paramCSV,params.T*mt,delimiter=",",fmt="%.0f")
     # -------------------------------------------------------------------------
     
+    callSimulation()
+# -----------------------------------------------------------------------------
+
+# making logs (parama,paramb,paramL) ------------------------------------------
+def makeLogABL(a1=np.array(0.011),a2=np.array(0.011),a3=np.array(0.011),
+               b1=np.array(0.011),b2=np.array(0.011),b3=np.array(0.011),
+               L1=np.array(0.011),L2=np.array(0.011),L3=np.array(0.011)):
+    #pdb.set_trace()
+    
+    # save param ABL ----------------------------------------------------------
+    params = np.concatenate((a1[np.newaxis],a2[np.newaxis],a3[np.newaxis],
+                             b1[np.newaxis],b2[np.newaxis],b3[np.newaxis],
+                             L1[np.newaxis],L2[np.newaxis],L3[np.newaxis]),0)[:,np.newaxis]
+    np.savetxt(paramCSV,params.T*mt,delimiter=",",fmt="%.0f")
+    # -------------------------------------------------------------------------
+    
+    callSimulation()
+# -----------------------------------------------------------------------------
+
+# simulation ------------------------------------------------------------------
+def callSimulation():    
+    '''
+    Do bat (making logs)
+    '''
+    #pdb.set_trace()
     # call bat ----------------------------------------------------------------
     lockPath = "Lock.txt"
     lock = str(1)
@@ -166,12 +211,9 @@ def makeLog(b1=np.array(0.011),b2=np.array(0.011),b3=np.array(0.011)):
             break
     # -------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
- 
-# function (paramb) -----------------------------------------------------------
-def bfunc(b1,b2,b3):
-    
-    # simulation
-    makeLog(b1=b1,b2=b2,b3=b3)
+
+# -----------------------------------------------------------------------------
+def objective():
     
     # reading gt & logs
     logfile = readlogsFiles()[0]
@@ -189,6 +231,30 @@ def bfunc(b1,b2,b3):
     return maxSim
 # -----------------------------------------------------------------------------
 
+# function (paramb) -----------------------------------------------------------
+def bfunc(b1,b2,b3):
+    
+    # simulation
+    makeLog(b1=b1,b2=b2,b3=b3)
+    
+    func = objective()
+    
+    return func
+# -----------------------------------------------------------------------------
+        
+# function (parama,paramb,paramL) ---------------------------------------------   
+def ABLfunc(a1,a2,a3,b1,b2,b3,L1,L2,L3):
+
+    # simulation
+    makeLogABL(a1=a1,a2=a2,a3=a3,
+               b1=b1,b2=b2,b3=b3,
+               L1=L1,L2=L2,L3=L3)
+    
+    func = objective()
+    
+    return func
+# -----------------------------------------------------------------------------
+    
 # function (Kij) --------------------------------------------------------------
 #def Kijfunc(K22):
 def Kijfunc(K23,K32):
@@ -216,22 +282,9 @@ def Kijfunc(K23,K32):
     # simulation (相互誤差のparamb固定)
     makeLog(b1=np.array(0.015499),b2=np.array(0.01205),b3=np.array(0.01205))
     
-    # reading gt & logs
-    logfile = readlogsFiles()[0]
+    func = objective()
     
-    #print(logfile)
-    # U:[None,10], B:[3,]
-    U,B = myData.loadABLV(logfile)
-    deltaU = myData.convV2YearlyData(U)
-    
-    # each mse var.
-    maxSim = myData.MinErrorNankai(deltaU,mode=3)
-    maxSim = 1/maxSim
-    
-    # Delate logfile
-    os.remove(logfile)
-    
-    return maxSim
+    return func
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
@@ -242,7 +295,7 @@ for epoch in np.arange(nEpoch):
     
         # Set prior
         if epoch == 0:
-            pd = defaultpdB
+            pd = defaultpd
         else:
             pdBs = np.loadtxt(os.path.join(savedirPath,f"BO_paramb_{epoch-1}_{itrNum}_{trID}.txt"))
         
@@ -263,11 +316,12 @@ for epoch in np.arange(nEpoch):
         
     # Kij #####################################################################
     elif mode == 'Kij':
+        
         if epoch == 0:
             #pd = defaultK22
             pd = defaultK2332
         
-        if epoch > 0:
+        elif epoch > 0:
             pds = np.loadtxt(os.path.join(savedirPath,f"BO_Kij_{epoch-1}_{itrNum}_{trID}.txt"))
             
             minpds = np.min(pds,0)
@@ -285,8 +339,21 @@ for epoch in np.arange(nEpoch):
     
         # Start Bayes ---------------------------------------------------------
         # verbose: 学習過程表示 0:無し, 1:すべて, 2:最大値更新時
-        opt = BayesianOptimization(f=Kijfunc,pbounds=pbounds,verbose=1)
+        opt = BayesianOptimization(f=ABLfunc,pbounds=pbounds,verbose=1)
+   
+    # ABL #####################################################################
+    elif mode == 'ABL':
         
+        pd = [defaultA, defaultB, defaultL]
+        
+        # prior distribution parameter b    
+        pbounds = setPriorDistribution(pd)
+    
+        # Start Bayes ---------------------------------------------------------
+        # verbose: 学習過程表示 0:無し, 1:すべて, 2:最大値更新時
+        opt = BayesianOptimization(f=ABLfunc,pbounds=pbounds,verbose=1)
+       
+    
     # init_points:最初に取得するf(x)の数、ランダムに選択される
     # n_iter:試行回数(default:25パターンのパラメータで学習)
     opt.maximize(init_points=5,n_iter=itrNum,acq='ucb',kappa=10)
@@ -321,7 +388,7 @@ for epoch in np.arange(nEpoch):
         np.savetxt(os.path.join(savedirPath,f"BO_target_{epoch}_{itrNum}_{trID}.txt"),targets)
         # parameter b
         np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{trID}.txt"),params,fmt=f"%d")
-    # -------------------------------------------------------------------------
+  
     elif mode == 'Kij':
         
         flag = False
@@ -347,6 +414,38 @@ for epoch in np.arange(nEpoch):
         # parameter Kij
         np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{trID}.txt"),params,fmt=f"%7f")
         
+    elif mode == 'ABL':
+        flag = False
+        for line in sort_res:
+            
+            # directory -> numpy [1,] [3,]
+            target = np.array([line['target']])
+            
+            parama = np.concatenate((np.array([line['params']['a1']]),np.array([line['params']['a2']]),np.array([line['params']['a3']])),0)
+            paramb = np.concatenate((np.array([line['params']['b1']]),np.array([line['params']['b2']]),np.array([line['params']['b3']])),0)
+            paramL = np.concatenate((np.array([line['params']['L1']]),np.array([line['params']['L2']]),np.array([line['params']['L3']])),0)
+            
+            if not flag:
+                targets = target
+                paramas = parama * mt
+                parambs = paramb * mt
+                paramLs = paramL * mt
+                
+                flag = True
+            else:
+                targets = np.vstack([targets,target])
+                paramas = np.vstack([paramas,parama * mt])
+                parambs = np.vstack([parambs,paramb * mt])
+                paramLs = np.vstack([paramLs,paramL * mt])
+                
+        
+        # optimized rate
+        np.savetxt(os.path.join(savedirPath,f"BO_target_{epoch}_{itrNum}_{trID}.txt"),targets)
+        # parameter 
+        np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{trID}_a.txt"),paramas,fmt=f"%d")
+        np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{trID}_b.txt"),parambs,fmt=f"%d")
+        np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{trID}_L.txt"),paramLs,fmt=f"%d")
+      
 # -----------------------------------------------------------------------------
         
 """
