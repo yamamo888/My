@@ -115,6 +115,30 @@ class NankaiData:
     # ----
     
     # ----
+    def makeOnehotYear(self, data, nYear=8000):
+        '''
+        data: year [data, 150(8), 3]
+        nYear: onehot year (train&test->8000, eval->1400)
+        '''
+        
+        onehotYear = np.zeros([data.shape[0],nYear,3])
+        
+        for i in np.arange(data.shape[0]):
+            
+            # eq. year (data of zeros-padding, del zero)
+            ind_nk = np.trim_zeros(data[i][:,0])
+            ind_tnk = np.trim_zeros(data[i][:,1])
+            ind_tk = np.trim_zeros(data[i][:,2])
+            
+            # eq. == 1
+            onehotYear[i,ind_nk,0] = 1
+            onehotYear[i,ind_tnk,1] = 1
+            onehotYear[i,ind_tk,2] = 1
+                
+        return onehotYear 
+    # ----
+    
+    # ----
     def TrainTest(self):
         '''
         seq: for RNN
