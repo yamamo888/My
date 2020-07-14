@@ -1,4 +1,4 @@
-#-*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 import os
 import glob
@@ -7,253 +7,272 @@ import pickle
 
 import numpy as np
 
-import matplotlib as mpl
-mpl.use('Agg')
 import matplotlib.pyplot as plt
+import seaborn as sns
+
+import tensorflow as tf
 
 import cycle
 
+
 class NankaiData:
-    def __init__(self, logpath='logs', nCell=5, nClass=10, nWindow=10):
-	
-        # number of input cell
-        self.nCell = nCell
-        # number of class
-        self.nClass = nClass
-        # number of sliding window
-        self.nWindow = nWindow
-        # init batch count
-        self.batchCnt = 0
-        # cell index
-        self.nI = 2
-        self.tnI = 4
-        self.tI = 5
+    def __init__(self):
         
-        self.logPath = logpath
+        # path ----
         self.featurePath = 'features'
     
-    # all & part of xy data ----
-    def makeCycleData(self, isPart=False):
-        '''
-        isPart: select part of data
-        '''
+    # ----
+    def makeIntervalData(self):
         
-        if isPart:
-            tr_randind =  np.random.permutation(xTrain.shape[0])[:int(xTrain.shape[0]*0.01)]
-            te_randind =  np.random.permutation(self.xTest.shape[0])[:int(self.xTest.shape[0]*0.01)]
-            
-            cycle_xTrain = xTrain[tr_randind]
-            cycle_yTrain = yTrain[tr_randind]
-            cycle_xTest = self.xTest[te_randind]
-            cycle_yTest = self.yTest[te_randind]
-
-        myCycle = cycle.Cycle()
-        self.loadNankaiRireki
-        self.loadTrainTestData()
+        # Loading logs
+        makeInterval = cycle.Cycle()
         
-        filename = ['b2b3b4b5b60-100','b2b3b4b5b6105-200','b2b3b4b5b6205-300','tmp300','b2b3b4b5b6400-450'] 
-
-        flag1,flag2 = False,False
-        for fID in filename:
-            cnt = 0
-            logspath = glob.glob(os.path.join('logs',f'{fID}','*.txt'))
-            
-            for logpath in logspath:
-                B,_ = myCycle.loadBV(logpath)
-                B = np.concatenate([B[self.nI,np.newaxis],B[self.tnI,np.newaxis],B[self.tI,np.newaxis]],0)
-                print(f'{fID}: {len(logspath)-cnt}')
-                cnt += 1
-                match = 0
-                # train
-                for i in np.arange(self.xTrain.shape[0]):
-                    yb = self.yTrain[i]
-                    x = self.xTrain[i]
-                    
-                    if match == 1:
-                        pass
-                    elif match == 0:
-                        pdb.set_trace()
-                        if all(B == yb):
-                            match = 1 
-                            
-                            myCycle.convV2YearlyData()
-                            # eq.year
-                            pJ,_ = myCycle.calcYearMSE(self.xCycleEval)
-
-                            if not flag2:
-                                yearMSE = pJ[np.newaxis]
-                                paramB = yb
-                                X = x
-                                flag2 = True
-                            else:
-                                yearMSE = np.vstack([yearMSE, pJ[np.newaxis]])
-                                paramB = np.vstack([paramB, yb])
-                                X = np.vstack([X,x])
-                                pdb.set_trace()
-                '''
-                # test
-                for j in np.arange(te_randind.shape[0]):
-                    yb = cycle_yTest[j]
-                    
-                    if all(B == yb):
-                        print('test same')
-                        print(yb)
-                        print(B)
-
-                        myCycle.convV2YearlyData()
-                        pJ,_ = myCycle.calcYearMSE(self.xCycleEval)
-
-                        if not flag1:
-                            te_yearMSE = pJ[np.newaxis]
-                            te_paramB = yb
-                            flag1 = True
-                        else:
-                            te_yearMSE = np.vstack([te_yearMSE, pJ[np.newaxis]]) # [num.data,250,3]
-                            te_paramB = np.vstack([paramB, yb])''' # [num.data,3]
-
-            with open(os.path.join(self.featurePath,'cycle','train_allcycleVXY_{fID}.pkl'),'wb') as fp:
-                pickle.dump(X, fp)
-                pickle.dump(paramB, fp)
-                pickle.dump(yearMSE, fp)
-        '''
-        with open(os.path.join(self.featurePath,'cycle','test_cycleVXY.pkl'),'wb') as fp:
-            pickle.dump(cycle_xTest, fp)
-            pickle.dump(te_paramB, fp)
-            pickle.dump(te_yearMSE, fp)
-        '''
-     # ----
-    
-    # Load train & test dataset ----
-    def loadTrainTestData(self, nameInds=[0]):
         
-        # name of train & test pickles
-        trainNames = ["b2b3b4b5b6_train{}{}".format(num,self.nClass) for num in np.arange(1,9)]
-        #testNames = ["b2b3b4b5b6_test1{}".format(self.nClass)]
+        #filename = ['b2b3b4b5b6205-300','tmp300','b2b3b4b5b60-100','b2b3b4b5b6105-200','b2b3b4b5b6400-450'] 
+        filename = ['tmp300'] 
         
-        # train
         flag = False
-        #for di in nameInds:
-        for di in np.arange(8):
-            # reading train data from pickle
-            with open(os.path.join(self.featurePath, 'traintest' ,trainNames[di]),'rb') as fp:
-                self.xTrain = pickle.load(fp)
-                _ = pickle.load(fp)
-                _ = pickle.load(fp)
-                _ = pickle.load(fp)
-                _ = pickle.load(fp)
-                _ = pickle.load(fp)
-                self.y1Train = pickle.load(fp)
-                self.y2Train = pickle.load(fp)
-                self.y3Train = pickle.load(fp)
-                self.y4Train = pickle.load(fp)
-                self.y5Train = pickle.load(fp)
-            
-            if not flag:
-                X = self.xTrain
-                Y1,Y2,Y3 = self.y2Train,self.y4Train,self.y5Train
-                flag = True
-            else:
-                X = np.vstack([X,self.xTrain])
-                Y1,Y2,Y3 = np.hstack([Y1,self.y2Train]),np.hstack([Y2,self.y4Train]),np.hstack([Y3,self.y5Train])
-        X = X[:,1:6,:]
-        self.xTrain = np.reshape(X, [-1,self.nCell*self.nWindow]).astype(np.float32)
-        self.yTrain = np.concatenate((Y1[:,np.newaxis],Y2[:,np.newaxis],Y3[:,np.newaxis]),1)
-        '''
-        # num.of train
-        self.nTrain =  int(self.yTrain.shape[0])
-        # random train index
-        self.batchRandInd = np.random.permutation(self.nTrain)
-        
-        # test data
-        with open(os.path.join(self.featurePath, 'traintest' ,testNames[0]),'rb') as fp:
-            self.xTest = pickle.load(fp)
-            _ = pickle.load(fp)
-            _ = pickle.load(fp)
-            _ = pickle.load(fp)
-            _ = pickle.load(fp)
-            _ = pickle.load(fp)
-            self.y1Test = pickle.load(fp)
-            self.y2Test = pickle.load(fp)
-            self.y3Test = pickle.load(fp)
-            self.y4Test = pickle.load(fp)
-            self.y5Test = pickle.load(fp)
+        for fID in filename:
+            logspath = glob.glob(os.path.join('logs',f'{fID}','*.txt'))
+            cnt = 0
+            for logpath in logspath:
+                print(f'{fID}:{len(logspath)-cnt}')
+                cnt += 1
+                
+                B,_ = makeInterval.loadBV(logpath)
+                B = np.concatenate([B[2,np.newaxis],B[4,np.newaxis],B[5,np.newaxis]],0)
+                allyears, onehotYear = makeInterval.convV2YearlyData(isZeroYear=True)
+                 
+                # zero-padding array[500,]
+                years = [np.pad(year, [0, 200-len(year)], 'constant') for year in [allyears[1],allyears[3],allyears[4]]] 
+                years = np.concatenate([years[0][:,np.newaxis],years[1][:,np.newaxis],years[2][:,np.newaxis]],1)
+                    
+                # input dataset, intervals:list
+                intervals, seq = makeInterval.calcInterval(years)
+                # list[5]
+                intervals = [np.pad(interval, [0, 200-len(interval)], 'constant') for interval in intervals] 
+                intervals = np.concatenate([intervals[0][:,np.newaxis],intervals[1][:,np.newaxis],intervals[2][:,np.newaxis],intervals[3][:,np.newaxis],intervals[4][:,np.newaxis]],1)
 
-        X = self.xTest[:,1:6,:]
-        xTest = np.reshape(X, [-1,self.nCell*self.nWindow]).astype(np.float32)
-        yTest = np.concatenate((self.y2Test[:,np.newaxis],self.y4Test[:,np.newaxis],self.y5Test[:,np.newaxis]),1)
+                if not flag:
+                    seqs = np.array([seq])
+                    Intervals = intervals[np.newaxis]
+                    Years = years[np.newaxis]
+                    onehotYears = onehotYear[np.newaxis]
+                    Bs = B[np.newaxis]
+                    flag = True
+                else:
+                    seqs = np.hstack([seqs, np.array([seq])])
+                    Intervals = np.vstack([Intervals, intervals[np.newaxis]])
+                    Years = np.vstack([Years, years[np.newaxis]])
+                    onehotYears = np.vstack([onehotYears, onehotYear[np.newaxis]])
+                    Bs = np.vstack([Bs, B[np.newaxis]])
+
+            with open(os.path.join(self.featurePath,'interval',f'intervalSeqXYonehotY_{fID}.pkl'),'wb') as fp:
+                pickle.dump(seqs, fp, protocol=4)
+                pickle.dump(Intervals, fp, protocol=4)
+                pickle.dump(Years, fp, protocol=4)
+                pickle.dump(onehotYears, fp, protocol=4)
+                pickle.dump(Bs, fp, protocol=4)
+              
+        '''    
+        with open(os.path.join(self.featurePath,'interval',f'intervalSeqXY_tmp300_slip1.pkl'),'rb') as fp:
+            Seqs = pickle.load(fp)
+            Intervals = pickle.load(fp)
+            Years = pickle.load(fp)
+            Paramb = pickle.load(fp)
+        #pdb.set_trace()
         
-        return xTest, yTest
+        #Intervals = intervals[:,:8,:]
+        #Years = years[:,:8,:]
+        
+        nData = Intervals.shape[0]
+        nTrain = int(nData * 0.8)
+        randInd = np.random.permutation(nData)
+        
+        # Separate train & test
+        seqTrain = Seqs[randInd[:nTrain]]
+        intervalTrain = Intervals[randInd[:nTrain]]
+        yearTrain = Years[randInd[:nTrain]]
+        parambTrain = Paramb[randInd[:nTrain]]
+        
+        seqTest = Seqs[randInd[nTrain:]]
+        intervalTest = Intervals[randInd[nTrain:]]
+        yearTest = Years[randInd[nTrain:]]
+        parambTest = Paramb[randInd[nTrain:]]
+        
+        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY_tmp300_slip1.pkl'),'wb') as fp:
+            pickle.dump(seqTrain, fp)
+            pickle.dump(intervalTrain, fp)
+            pickle.dump(yearTrain, fp)
+            pickle.dump(parambTrain, fp)
+    
+        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY_tmp300_slip1.pkl'),'wb') as fp:
+            pickle.dump(seqTest, fp)
+            pickle.dump(intervalTest, fp)
+            pickle.dump(yearTest, fp)
+            pickle.dump(parambTest, fp)
         '''
     # ----
     
-    # Load train & test dataset for cycle loss ----
-    def loadCycleTrainTestData(self):
-        
-        with open(os.path.join(self.featurePath,'cycle','train_cycleVXY.pkl'), 'rb') as fp:
-            self.xCycleTrain = pickle.load(fp)
-            self.yCyclebTrain = pickle.load(fp)
-            self.yCycleTrain = pickle.load(fp)
-        
-        # num.of train
-        self.nTrain =  int(self.yCycleTrain.shape[0])
-        # random train index
-        self.batchRandInd = np.random.permutation(self.nTrain)
-        
-        with open(os.path.join(self.featurePath,'cycle','test_cycleVXY.pkl'), 'rb') as fp:
-            xCycleTest = pickle.load(fp)
-            yCyclebTest = pickle.load(fp)
-            yCycleTest = pickle.load(fp)
-            
-        return xCycleTest, yCyclebTest, yCycleTest
     # ----
-    
-    # Load exact rireki ----
-    def loadNankaiRireki(self):
-    
-        # nankaifeatue.pkl -> 190.pkl
+    def TrainTest(self):
+        '''
+        seq: for RNN
+        interval: input RNN
+        year: onehot for odeNN
+        paramb: output paramNN
+        '''
         
-        # X (FFT feature) ----
-        fID = 190
-        fftpath = os.path.join(self.featurePath,"eval","{}.pkl".format(fID))
-        with open(fftpath,"rb") as fp:
-            data = pickle.load(fp)
-        xEval = np.reshape(np.concatenate([data[0][np.newaxis],data[0][np.newaxis],data[1][np.newaxis],data[1][np.newaxis],data[2][np.newaxis]]),[-1,]) # [50,]
+        with open(os.path.join(self.featurePath,'interval',f'train_intervalSeqXY.pkl'),'rb') as fp:
+            self.seqTrain = pickle.load(fp)
+            self.intervalTrain = pickle.load(fp)
+            yearTrain = pickle.load(fp)
+            self.parambTrain = pickle.load(fp)
+         
+        self.onehotyearTrain = self.makeOnehotYear(yearTrain)    
         
-        # eq.year for Cycle loss ----        
-        rirekipath = os.path.join(self.featurePath,"eval","nankairireki.pkl")
+        with open(os.path.join(self.featurePath,'interval',f'test_intervalSeqXY.pkl'),'rb') as fp:
+            seqTest = pickle.load(fp)
+            intervalTest = pickle.load(fp)
+            yearTest = pickle.load(fp)
+            parambTest = pickle.load(fp)
+       
+        yearTest = yearTest[:self.nTest]
+        onehotyearTest = self.makeOnehotYear(yearTest)
+        
+        seqTest = seqTest[:self.nTest]
+        intervalTest = intervalTest[:self.nTest]
+        parambTest = parambTest[:self.nTest]
+        
+        return intervalTest, seqTest, onehotyearTest, parambTest 
+    # ----
+
+    # ----
+    def Eval(self, allRireki=False):
+    
+        # eq.year ----        
+        rirekipath = os.path.join(self.featurePath,'eval','nankairireki.pkl')
         with open(rirekipath ,'rb') as fp:
             data = pickle.load(fp)
-        xrireki = data[fID,:,:]
-        yCycleEval = [np.where(xrireki[:,0]>0)[0], np.where(xrireki[:,1]>0)[0], np.where(xrireki[:,2]>0)[0]] # [[eq.year in nk], [eq.year in tnk], [eq.year in tk]]
         
-        return xEval, yCycleEval
+        # all rireki
+        if allRireki:
+            flag = False
+            for xdata in data:
+                # year
+                ynk = np.where(xdata[:,0]>0)[0]
+                ytnk = np.where(xdata[:,1]>0)[0]
+                ytk = np.where(xdata[:,2]>0)[0]
+                # interval
+                xnk = ynk[1:] - ynk[:-1]
+                xtnk = ytnk[1:] - ytnk[:-1]
+                xtk = ytk[1:] - ytk[:-1]
+                
+                seq = np.array([np.max([len(xnk),len(xtnk),len(xtk)])])
+                
+                # zero-padding
+                ynk = np.pad(ynk, [0,9-len(ynk)], 'constant')
+                ytnk = np.pad(ytnk, [0,9-len(ytnk)], 'constant')
+                ytk = np.pad(ytk, [0,7-len(ytk)], 'constant')
+                
+                xnk = np.pad(xnk, [0,8-len(xnk)], 'constant')
+                xtnk = np.pad(xtnk, [0,8-len(xtnk)], 'constant')
+                xtk = np.pad(xtk, [0,8-len(xtk)], 'constant')
+                
+                x = np.concatenate([xnk[:,np.newaxis],xtnk[:,np.newaxis],xtk[:,np.newaxis]],1)[np.newaxis]
+                        
+                if not flag:
+                    xEval = x
+                    yEvalnk = ynk
+                    yEvaltnk = ytnk
+                    yEvaltk = ytk
+                    seqEval = seq
+                    
+                    flag = True
+                else:
+                    xEval = np.vstack([xEval,x])
+                    yEvalnk = np.vstack([yEvalnk,ynk])
+                    yEvaltnk = np.vstack([yEvaltnk,ytnk])
+                    yEvaltk = np.vstack([yEvaltk,ytk])
+                    seqEval = np.hstack([seqEval,seq])
+                    
+            yEval = [yEvalnk, yEvaltnk, yEvaltk]
+        
+        # only No.190 rireki
+        else:    
+            fID = 190
+       
+            xrireki = data[fID,:,:]
+            # year
+            yEval = [np.where(xrireki[:,0]>0)[0], np.where(xrireki[:,1]>0)[0], np.where(xrireki[:,2]>0)[0]] # [[eq.year in nk], [eq.year in tnk], [eq.year in tk]]
+            
+            # onehot year
+            yonehotEval = self.makeOnehotYear(yEval,nYear=1400)
+    
+            # interval nk:8.tnk:8.tk:6
+            nk = yEval[0][1:] - yEval[0][:-1]
+            tnk = yEval[1][1:] - yEval[1][:-1]
+            tk = yEval[2][1:] - yEval[2][:-1]
+            
+            # zoro-padding tk 6->8
+            tk = np.pad(tk, [0,2], 'constant')
+    
+            # evaluation input, [1(data),8(interval),3(cell)]
+            xEval = np.concatenate([nk[:,np.newaxis],tnk[:,np.newaxis],tk[:,np.newaxis]],1)[np.newaxis]
+            
+            # length of interval, array(8)
+            seqEval = np.array([np.max([len(nk),len(tnk),len(tk)])])
+            
+        return xEval, seqEval, yEval, yonehotEval
     # ----
+   
+    # ----
+    def FeatureVec(self, x, seq, reuse=False):
+
+        nHidden = 64
         
-    # Make mini-batch dataset ----        
-    def nextBatch(self, nBatch=100, isCycle=False):
+        with tf.compat.v1.variable_scope("LSTM") as scope:
+            if reuse:
+                scope.reuse_variables()
+            
+            # multi cell
+            cells = []
+            # 1st LSTM
+            cell1 = tf.compat.v1.nn.rnn_cell.LSTMCell(nHidden, use_peepholes=True)
+            # 2nd LSTM
+            cell2 = tf.compat.v1.nn.rnn_cell.LSTMCell(nHidden, use_peepholes=True)
         
-        sInd = nBatch * self.batchCnt
-        eInd = sInd + nBatch
+            cells.append(cell1)
+            cells.append(cell2)
+            
+            cell = tf.compat.v1.nn.rnn_cell.MultiRNNCell(cells)
+            
+            _, states = tf.compat.v1.nn.dynamic_rnn(cell=cell, inputs=x, dtype=tf.float32, sequence_length=seq)
+            #pdb.set_trace()
+            # outputs [None,None,HIDDEN] 
+            # states[-1] tuple (Ct [None,128], Ht [None,128])
+            return states[-1][1]
+    # ----
+    
+    # ----
+    def nextBatch(self, index):
+        '''
+        batchX: eq.intervals. [data, max of eq.length, 5(cell)]
+        batchY: paramb
+        batchSeq: length of maximum eq.intervals
+        batchYear: eq.years (onehot)
+        '''
+        #pdb.set_trace()
+        batchX = self.intervalTrain[index]
+        batchSeq = self.seqTrain[index]
+        batchY = self.parambTrain[index]
+        batchYear = self.onehotyearTrain[index]
         
-        if isCycle:
-            batchX = self.xCycleTrain[sInd:eInd]
-            batchY = self.yCyclebTrain[sInd:eInd]
-            batchCycleY = self.yCycleTrain[sInd:eInd]
-            
-            batchXY = [batchX, batchY, batchCycleY]
-            
-        else:
-            batchX = self.xTrain[sInd:eInd]
-            batchY = self.yTrain[sInd:eInd]
-            
-            batchXY = [batchX, batchY]
-     
-        if eInd + nBatch > self.nTrain:
-            self.batchCnt = 0
-        else:
-            self.batchCnt += 1
+        batchXY = [batchX, batchSeq, batchY, batchYear]
         
         return batchXY
     # ----
-    
-NankaiData().makeCycleData()
+   
+#NankaiData().makeIntervalData()
+#NankaiData().makeNearYearData()
+#NankaiData().loadIntervalTrainTestData()

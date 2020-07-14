@@ -5,8 +5,6 @@ import os
 import numpy as np
 import seaborn as sns
 
-import matplotlib as mpl
-mpl.use('Agg')
 import matplotlib.pylab as plt
 
 import pdb
@@ -54,15 +52,15 @@ class Plot:
           
           sns.set_style('dark')
       
-          plt.plot(data[0], linewidth=2, label=labels[0])
+          plt.plot(data, linewidth=2, label=labels[0])
           
-          plt.title('evCycleLoss: %f' % (data[0][-1]))
+          plt.title('evCycleLoss: %f' % (data[-1]))
           
           plt.xlabel('iteration')
           plt.ylabel('# of data')
           plt.legend()
 
-          losspath = os.path.join(self.figurePath, 'loss', f'{self.trialID}.png')
+          losspath = os.path.join(self.figurePath, 'loss', f'{self.trialID}_{labels[0]}.png')
           plt.savefig(losspath)
           plt.close()
       # ----
@@ -114,9 +112,8 @@ class Plot:
           plt.close()  
       # ----
       
-      
       # Plot rireki ----
-      def Rireki(self, gt, pred):
+      def Rireki(self, gt, pred, label='pred'):
         
         sns.set_style('dark')
         
@@ -137,10 +134,57 @@ class Plot:
         fig, axes = plt.subplots(nrows=6,sharex="col")
         for row,(color,data) in enumerate(zip(colors,plot_data)):
             axes[row].plot(np.arange(1400), data, color=color)
-         
-        rirekipath = os.path.join(self.figurePath, 'rireki', f'{self.trialID}')
+        
+        rirekipath = os.path.join(self.figurePath, 'rireki', f'{label}_{self.trialID}.png')
         plt.savefig(rirekipath)
         plt.close()
+        
+        print(pred)
+        print(gt)
       # ----
+      
+      # Scatter rireki ----
+      def scatterRireki(self, gt, pred, path='none', label='pred'):
+          
+          sns.set_style('dark')
+          
+          fig = plt.figure()
+          fig, axes = plt.subplots(nrows=3,sharex="col")
+          for figInd in np.arange(3):     
+              axes[figInd].plot(np.arange(gt.shape[0]), gt[:,figInd], color="coral", marker='.', linestyle='None')
+              axes[figInd].plot(np.arange(gt.shape[0]), pred[:,figInd], color="skyblue", marker='.', ms=0.5, linestyle='None')
+        
+          rirekipath = os.path.join(self.figurePath, 'srireki', path, f'{label}_{self.trialID}.png')
+          plt.savefig(rirekipath)
+          plt.close()
+      # ----
+        
+      # ----
+      def feature2D(self, data, label, range):
+          #pdb.set_trace()
+          sns.heatmap(data[np.newaxis], vmin=range[0], vmax=range[1])
+          rirekipath = os.path.join(self.figurePath, 'feature', f'{label}.png')
+          plt.savefig(rirekipath)
+          plt.close()
+      # ----
+      
+      # ----
+      def BoxPlot(self, data, label='pred'):
+          
+          sns.set_style("dark")
+           
+          fig,ax = plt.subplots()
+          ax.boxplot([data],sym='d',patch_artist=True,boxprops=dict(facecolor='lightblue',color='gray'),medianprops=dict(color='gray'),labels=['pcNN'])
+          ax.set_ylabel('MAE')
+            
+          bpath = os.path.join(self.figurePath, 'box', f'{label}_{self.trialID}.png')
+          plt.savefig(bpath)
+          plt.close()
+      # ----
+        
+          
+          
+          
+          
       
   

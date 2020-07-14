@@ -167,12 +167,12 @@ class Cycle:
             tnk1Year = np.where(deltaU[stateYear:,vInds[1]] > 1)[0]
             tnk2Year = np.where(deltaU[stateYear:,vInds[2]] > 1)[0]
             tkYear = np.where(deltaU[stateYear:,vInds[3]] > 1)[0]
-         
-            onehot[nk1Year.tolist(),0] = 1
-            onehot[nk2Year.tolist(),1] = 1
-            onehot[tnk1Year.tolist(),2] = 1
-            onehot[tnk2Year.tolist(),3] = 1
-            onehot[tkYear.tolist(),4] = 1
+            
+            onehot[0,nk1Year.tolist()] = 1
+            onehot[1,nk2Year.tolist()] = 1
+            onehot[2,tnk1Year.tolist()] = 1
+            onehot[3,tnk2Year.tolist()] = 1
+            onehot[4,tkYear.tolist()] = 1
             
             return [nk1Year,nk2Year,tnk1Year,tnk2Year,tkYear], onehot
     
@@ -191,11 +191,12 @@ class Cycle:
     
     # ---- 
     def calcInterval(self, years):
-        interval_nk1 = np.abs(years[0][1:] - years[0][:-1])
-        interval_nk2 = np.abs(years[1][1:] - years[1][:-1])
-        interval_tnk1 = np.abs(years[2][1:] - years[2][:-1])
-        interval_tnk2 = np.abs(years[3][1:] - years[3][:-1])
-        interval_tk = np.abs(years[4][1:] - years[4][:-1])
+        
+        interval_nk1 = np.abs(years[1:,0] - years[:-1,0])
+        interval_nk2 = np.abs(years[1:,1] - years[:-1,1])
+        interval_tnk1 = np.abs(years[1:,2] - years[:-1,2])
+        interval_tnk2 = np.abs(years[1:,3] - years[:-1,3])
+        interval_tk = np.abs(years[1:,4] - years[:-1,4])
         
         seq = np.max([len(interval_nk1),len(interval_nk2),len(interval_tnk1),len(interval_tnk2),len(interval_tk)])
         print(seq)
