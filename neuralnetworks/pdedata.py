@@ -172,16 +172,18 @@ class pdeData:
             pickle.dump(trainU, fp)
             pickle.dump(trainNU, fp)
         
+        
         with open(os.path.join(self.modelPath, self.pdeMode, f'testXTUNU_{savepklname}.pkl'), 'wb') as fp:
             pickle.dump(testX, fp)
             pickle.dump(testT, fp)
             pickle.dump(testU, fp)
             pickle.dump(testNU, fp)
+        
     # ----
         
     # ----    
     def traintest(self):
-        
+         
         # train data
         with open(os.path.join(self.modelPath, self.pdeMode, f'trainXTUNU_{self.dataMode}.pkl'), 'rb') as fp:
             self.trainX = pickle.load(fp)
@@ -195,20 +197,24 @@ class pdeData:
             testT = pickle.load(fp)
             testU = pickle.load(fp)
             testNU = pickle.load(fp)
-       
-        return testX, testT, testU, testNU
+
+        #pdb.set_trace()
+
+        return testX[0], testT[0], testU[:150], testNU[:150]
     # ----
         
     # ----
     def nextBatch(self, index):
-        
+
+        batchX = self.trainX[0]
+        batchT = self.trainT[0]
         batchU = self.trainU[index]
         batchNU = self.trainNU[index]
         
-        return self.trainX, self.trainT, batchU, batchNU
+        return batchX, batchT, batchU, batchNU
     # ----
     
-#myData = pdeData(datamode='small')
+#myData = pdeData(dataMode='small')
 #trainXY, testXY, xt = myData.Loadingburgers()
 #trainXY, testXY, xt = myData.burgers()
 #myData.saveXTU()

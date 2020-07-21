@@ -15,7 +15,7 @@ import pdb
 import matplotlib.pylab as plt
 
 import pdedata
-import plot
+import pdeplot
 
 
 class ParamNN:
@@ -25,12 +25,18 @@ class ParamNN:
         # parameter ----
         if dataMode == 'large':
             # x,t
-            self.xDim = 25
-            tDim = 100
-            self.uInput = self.xDim * int(tDim/10)
-           
+            self.xDim = 25 
+        elif dataMode == 'middle':
+            # x,t
+            self.xDim = 20
+        elif dataMode == 'small':
+            # x,t
+            self.xDim = 2
+        
+        tDim = 100
         self.nBatch = nBatch
         self.trialID = trialID
+        self.uInput = self.xDim * int(tDim/10)   
         # ----
         
         # Dataset ----
@@ -41,11 +47,12 @@ class ParamNN:
         # [1000,100,256] -> [1000,100,xDim]
         idx = np.random.choice(testu.shape[-1], self.xDim, replace=False)
         self.testU = testu[:,:,idx]
-        
-        # input u [1000,uInput]
-        idt = np.random.choice(testu.shape[1], 10, replace=False)
+        #pdb.set_trace()
+        # input u [1000,uInput], [t,x]=[int(tDim/10),xdim]
+        idt = np.random.choice(testu.shape[1], int(tDim/10), replace=False)
         self.testinU = np.reshape(self.testU[:,idt,:], [-1, self.uInput])
         
+        # [testdata, 256] -> [testdata, xdim]
         self.testX = np.reshape(np.tile(testx[idx], testt.shape[0]), [-1, self.xDim])
         self.testT = np.reshape(np.tile(testt, self.xDim), [-1, testt.shape[0]])
         # ----
@@ -62,7 +69,8 @@ class ParamNN:
         # PDE ----
         # output: u
         self.predu, self.predparam, self.a,self.b,self.c,self.phi,self.dphi = self.pde(self.x, self.t, self.inobs, nData=self.nBatch)
-        self.predu_test, self.predparam_test, self.a_test,self.b_test,self.c_test,self.phi_test,self.dphi_test = self.pde(self.x, self.t, self.inobs, nData=1000, reuse=True)
+        # ※ testデータサイズは手動
+        self.predu_test, self.predparam_test, self.a_test,self.b_test,self.c_test,self.phi_test,self.dphi_test = self.pde(self.x, self.t, self.inobs, nData=150, reuse=True)
         # ----
         #pdb.set_trace()
         # loss ----
@@ -138,7 +146,7 @@ class ParamNN:
             if reuse:
                 scope.reuse_variables()
             
-            pdb.set_trace()
+            #pdb.set_trace()
             
             # pred nu [ndata,]
             param = self.lambdaNN(u, reuse=reuse)
@@ -159,6 +167,8 @@ class ParamNN:
             # [nBatch, t.shape, x.shape]
             phi = tf.exp(- a * a / c) + tf.exp(- b * b / c)
             dphi = - 2.0 * a * tf.exp(- a * a / c ) / c - 2.0 * b * tf.exp(- b * b / c) / c
+
+            u = 4.0 - 2.0 * tf.expand_dims(tf.expand_dims(param,1),1) * dphi / phi
             
             return u,param,a,b,c,phi,dphi
     # ----
@@ -167,9 +177,9 @@ class ParamNN:
     def train(self, nItr=1000):
         
         # parameters ----
-        testPeriod = 500
+        testPeriod = 100
         batchCnt = 0
-        nTrain = int(5000 * 0.8)
+        nTrain = 3995
         batchRandInd = np.random.permutation(nTrain)
         # ----
         
@@ -192,16 +202,20 @@ class ParamNN:
             batchT = np.reshape(np.tile(batcht, batchx.shape[0]), [-1, batcht.shape[0]])
             
             # ※ 工夫の余地あり(input)
-            # random u(t) for feature (ｄａｔａ増やしたいときは第二引数+) 
+            # random u(t) for feature (data増やしたいときは第二引数+) 
             idt = np.random.choice(batchU.shape[1], 10, replace=False)
             batchinU = np.reshape(batchU[:,idt,:], [-1, self.uInput])
             
-            #pdb.set_trace()
             feed_dict = {self.x:batchX, self.t:batchT, self.inobs:batchinU, self.outobs:batchU}
            
-            _, trainParam, trainPred, trainLoss, traina,trainb,trainc,trainphi,traindphi =\
+            _, trainParam, trainPred, trainULoss, traina,trainb,trainc,trainphi,traindphi =\
             self.sess.run([self.opt, self.predparam, self.predu, self.loss, self.a, self.b, self.c,self.phi,self.dphi], feed_dict)
             
+            #pdb.set_trace()
+
+            trainPLoss = np.mean(np.square(batchNU - trainParam))
+
+
             if eInd + self.nBatch > nTrain:
                 batchCnt = 0
                 batchRandInd = np.random.permutation(nTrain)
@@ -214,43 +228,37 @@ class ParamNN:
                 self.test(itr=itr)
                 
                 print('----')
-                print('itr: %d, trainLoss:%f' % (itr, trainLoss))
+                print('itr: %d, trainULoss:%f, trainPLoss:%f' % (itr, trainULoss, trainPLoss))
                 
-                trL = np.append(trL,trainLoss)
-                teL = np.append(teL,self.testLoss)
+                # u loss 
+                trL = np.append(trL,trainULoss)
+                teL = np.append(teL,self.testULoss)
                 
-                if not flag:
-                    trP = trainParam
-                    teP = self.testlambda
-                    
-                    flag = True
-                else:
-                    trP = np.vstack([trP, trainParam])
-                    teP = np.vstack([teP, self.testParam])
-                    
-                pdb.set_trace()
+                # param loss
+                trPL = np.append(trPL,trainPLoss)
+                tePL = np.append(tePL,self.testPLoss)
+
                 # Save model
                 #self.saver.save(self.sess, os.path.join('model', 'burgers', 'first'), global_step=itr)
         
-        # x,t
-        data = [self.XT, self.testXY[1], self.testinvPred, self.testPreds]
-        lambdas = [trP,teP]
-        lambdasloss = [trPL,tePL]
-        losses = [trL, teL]
+        paramloss = [trPL,tePL]
+        ulosses = [trL, teL]
     
-        return losses, data, lambdas, lambdasloss
+        return ulosses, paramloss
     # ----
     
     # ----
     def test(self,itr=0):
-        pdb.set_trace()
         
         feed_dict={self.x:self.testX, self.t:self.testT, self.inobs:self.testinU, self.outobs:self.testU}    
         
-        self.testParam, self.testPred, self.testLoss =\
+        self.testParam, self.testPred, self.testULoss =\
         self.sess.run([self.predparam_test, self.predu_test, self.loss_test], feed_dict)
-         
-        print('itr: %d, testLoss:%f' % (itr, self.testLoss))
+
+        self.testPLoss = np.mean(np.square(self.testNU-self.testParam))
+
+
+        print('itr: %d, testULoss:%f, testPLoss:%f' % (itr, self.testULoss, self.testPLoss))
        
     # ----
     
@@ -291,12 +299,13 @@ if __name__ == "__main__":
     
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, nBatch=nBatch, trialID=trialID, dataMode=dataMode)
-    losses = model.train(nItr=nItr)
+    ulosses, plosses = model.train(nItr=nItr)
     # ----
     
     # Plot ----
-    myPlot = plot.Plot(trialID=trialID)
-    myPlot.pLoss(losses, labels=['train','test'])
+    myPlot = pdeplot.Plot(trialID=trialID)
+    myPlot.pLoss(ulosses, labels=['train','test'], savename='u')
+    myPlot.pLoss(plosses, labels=['train','test'], savename='param')
     # ----
  
     

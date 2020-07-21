@@ -25,7 +25,7 @@ class Plot:
           self.trialID = trialID
     
       # Plot loss ----
-      def pLoss(self, data, labels):
+      def pLoss(self, data, labels, savename='loss'):
           
           sns.set_style('dark')
       
@@ -38,7 +38,7 @@ class Plot:
           plt.ylabel('# of data')
           plt.legend()
           
-          losspath = os.path.join(self.figurePath, 'loss', f'{self.trialID}.png')
+          losspath = os.path.join(self.figurePath, 'loss', f'{savename}_{self.trialID}.png')
           plt.savefig(losspath)
           plt.close()
       # ----
