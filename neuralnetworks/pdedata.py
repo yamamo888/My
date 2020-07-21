@@ -19,11 +19,16 @@ np.random.seed(1234)
 
 
 class pdeData:
-    def __init__(self, datamode='test'):
+    def __init__(self, pdeMode='test', dataMode='test'):
+        '''
+        datamode: small(256/100) or middle(256/50) or large(256/10)
+                  Num of X.
+        '''
         
-        self.pdemode = 'burgers'
+        
+        self.pdeMode = 'burgers'
         self.modelPath = 'model'
-        self.datamode = datamode
+        self.dataMode = dataMode
     
     # ---- 
     def burgers(self, nu=0.01):
@@ -100,7 +105,7 @@ class pdeData:
                 U = np.vstack([U, obsu.T[np.newaxis]]) # [data, 100, 256]
                 NU = np.hstack([NU, np.array([nu])]) # [data,]
         
-        with open(os.path.join(self.modelPath, self.pdemode, 'XTUNU.pkl'), 'wb') as fp:
+        with open(os.path.join(self.modelPath, self.pdeMode, 'XTUNU.pkl'), 'wb') as fp:
             pickle.dump(X, fp)
             pickle.dump(T, fp)
             pickle.dump(U, fp)
@@ -108,101 +113,112 @@ class pdeData:
     # ----
         
     # ----
-    def savetraintest(self, xSize=10, savepklname='test.pkl'):
+    def savetraintest(self, size=10, savepklname='test.pkl'):
         '''
         xSize: small -> 1/1000, middle -> 1/100, large -> 1/10
         '''
         
-        with open(os.path.join(self.modelPath, self.pdemode, 'XTUNU.pkl'), 'rb') as fp:
+        with open(os.path.join(self.modelPath, self.pdeMode, 'XTUNU.pkl'), 'rb') as fp:
             X = pickle.load(fp)
             T = pickle.load(fp)
             U = pickle.load(fp)
             NU = pickle.load(fp)
             
-        pdb.set_trace()
         # train data
         # Num.of data
         nData = X.shape[0]
         nTrain = int(nData*0.8)
+        
+        xSize = int(X.shape[1] / size)
+        
+        # select x
+        # [1] static x (とりあえずこっち) [2] random
+        idx = np.random.choice(X.shape[1], xSize, replace=False)
+        
         # Index of traindata
         trainID = np.random.choice(X.shape[0], nTrain, replace=False)
-        #testID = 
-
-        # select x
-        # [1]すべて同じ x (とりあえずこっち) [2] random
-        idx = np.random.choice(X.shape[1], xSize, replace=False)
-        trainx = X[trainID][idx]
-        trX, trT = np.meshgrid(trainx,T)
-        trXT = np.hstack((trX.flatten()[:,None], trT.flatten()[:,None]))
-   
-        trainOBS = U[trainID, :, idx]
-        traininvOBS = trainOBS.flatten()[:,None]
+        # expectiong trainID
+        allind = np.arange(X.shape[0])
+        ind = np.ones(nData,dtype=bool)
+        ind[trainID] = False
+        testID = allind[ind]
         
-        #with open(os.path.join(self.modelPath, self.pdemode, f'train{datamode}'), 'wb') as fp:
-            # pickle.dump(trainX, fp)
-            # pickle.dump(trainT, fp)
-            # pickle.dump(trainU, fp)
-            # pickle.dump(trainNU, fp)
+        # train data
+        trainX = X[trainID][:,idx] # [traindata,xsize]
+        trainT = T[trainID]
         
-        #with open(os.path.join(self.modelPath, self.pdemode, f'train{datamode}'), 'wb') as fp:
-            # pickle.dump(testX, fp)
-            # pickle.dump(testT, fp)
-            # pickle.dump(testU, fp)
-            # pickle.dump(testNU, fp)
+        flag = False
+        for id in idx:
+            allu = U[trainID]
+            u = allu[:,:,id]
+            
+            if not flag:
+                trainU = u[:,:,np.newaxis]
+                flag = True
+            else:
+                trainU = np.concatenate([trainU, u[:,:,np.newaxis]],2)
+                
+        trainNU = NU[trainID]
         
+        # test data
+        testX = X[testID]
+        testT = T[testID] 
+        testU = U[testID] # [testdata,100,256]
+        testNU = NU[testID] # [testdata]
+        
+        with open(os.path.join(self.modelPath, self.pdeMode, f'trainXTUNU_{savepklname}.pkl'), 'wb') as fp:
+            pickle.dump(trainX, fp)
+            pickle.dump(trainT, fp)
+            pickle.dump(trainU, fp)
+            pickle.dump(trainNU, fp)
+        
+        with open(os.path.join(self.modelPath, self.pdeMode, f'testXTUNU_{savepklname}.pkl'), 'wb') as fp:
+            pickle.dump(testX, fp)
+            pickle.dump(testT, fp)
+            pickle.dump(testU, fp)
+            pickle.dump(testNU, fp)
     # ----
         
     # ----    
     def traintest(self):
         
         # train data
-        #with open(os.path.join(self.modelPath, self.pdemode, f'train{datamode}'), 'rb') as fp:
-            #self.trainX = pickle.load(fp)
-            #self.trainT = pickle.load(fp)
-            #self.trainU = pickle.load(fp)
-            #self.trainNU = pickle.load(fp)
+        with open(os.path.join(self.modelPath, self.pdeMode, f'trainXTUNU_{self.dataMode}.pkl'), 'rb') as fp:
+            self.trainX = pickle.load(fp)
+            self.trainT = pickle.load(fp)
+            self.trainU = pickle.load(fp)
+            self.trainNU = pickle.load(fp)
         
         # test data
-        #with open(os.path.join(self.modelPath, self.pdemode, f'test{datamode}'), 'rb') as fp:
-            #testX = pickle.load(fp)
-            #testT = pickle.load(fp)
-            #testU = pickle.load(fp)
-            #testNU = pickle.load(fp)
-        
-    
-        trainXY = [trainx, t, trainOBS, trXT[:,0,None], trXT[:,1,None], traininvOBS]
-        #testXY = [starXT, starOBS]
-        testXY = [starXT[:,0,None], starXT[:,1,None], OBS, starOBS]
-        xt = [x, t]
-        
-        pdb.set_trace()
-        return trainXY, testXY, xt
+        with open(os.path.join(self.modelPath, self.pdeMode, f'testXTUNU_{self.dataMode}.pkl'), 'rb') as fp:
+            testX = pickle.load(fp)
+            testT = pickle.load(fp)
+            testU = pickle.load(fp)
+            testNU = pickle.load(fp)
+       
+        return testX, testT, testU, testNU
     # ----
         
     # ----
     def nextBatch(self, index):
-        '''
-        batchX: eq.intervals. [data, max of eq.length, 5(cell)]
-        batchY: paramb
-        batchSeq: length of maximum eq.intervals
-        batchYear: eq.years (onehot)
-        '''
-        #pdb.set_trace()
-        batchX = self.trainX[index]
-        batchSeq = self.trainT[index]
-        batchY = self.trainU[index]
-        batchYear = self.onehotyearTrain[index]
         
-        batchXY = [batchX, batchSeq, batchY, batchYear]
+        batchU = self.trainU[index]
+        batchNU = self.trainNU[index]
         
-        return batchXY
+        return self.trainX, self.trainT, batchU, batchNU
     # ----
     
-myData = pdeData()
+#myData = pdeData(datamode='small')
 #trainXY, testXY, xt = myData.Loadingburgers()
-trainXY, testXY, xt = myData.burgers()
-myData.saveXTU()
-myData.savetraintest()
-myData.traintest()
+#trainXY, testXY, xt = myData.burgers()
+#myData.saveXTU()
+
+#Size = [10, 50, 100]
+#Name = ['large','middle','small']
+
+#for size, name in zip(Size,Name):
+    #myData.savetraintest(size=size, savepklname=name)
+
+#myData.traintest()
 #myPlot = plot.Plot(figurepath='figure', trialID=0)
 #myPlot.udata(xt, trainXY, testXY[1], testXY, testXY)
