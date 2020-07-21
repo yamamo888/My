@@ -114,7 +114,7 @@ class ParamNN:
     # ----
     def lambdaNN(self, x, rate=0.0, reuse=False):
         
-        nHidden = 64
+        nHidden = 128
         
         with tf.compat.v1.variable_scope('lambdaNN') as scope:  
             if reuse:
@@ -129,10 +129,21 @@ class ParamNN:
             h1 = self.fc_relu(x,w1,bias1,rate)
             
             # 2nd layer
-            w2 = self.weight_variable('w2',[nHidden, dOutput])
-            bias2 = self.bias_variable('bias2',[dOutput])
+            w2 = self.weight_variable('w2',[nHidden, nHidden])
+            bias2 = self.bias_variable('bias2',[nHidden])
+            h2 = self.fc_relu(h1,w2,bias2,rate)
+            
+            # 3nd layer
+            w3 = self.weight_variable('w3',[nHidden, nHidden])
+            bias3 = self.bias_variable('bias3',[nHidden])
+            h3 = self.fc_relu(h2,w3,bias3,rate)
+            
+            # 4nd layer
+            w4 = self.weight_variable('w4',[nHidden, dOutput])
+            bias4 = self.bias_variable('bias4',[dOutput])
+            
             # nu
-            y = self.fc(h1,w2,bias2,rate)
+            y = self.fc(h3,w4,bias4,rate)
         
             return y
     # ----
