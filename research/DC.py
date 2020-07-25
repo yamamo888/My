@@ -90,7 +90,7 @@ def loadABLV(logFullPath):
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
-def convV2YearlyData(V,isPlot=False):
+def convV2YearlyData(V):
     # 初めの観測した年
     sYear = np.floor(V[0,yInd])
     yV = np.zeros([nYear,nCell])
@@ -112,17 +112,7 @@ def convV2YearlyData(V,isPlot=False):
     yV = np.concatenate((yV[np.newaxis,0],deltaV),0)
     # shape=[8000,3]
     yV = np.concatenate((yV[stateYear:,2,np.newaxis],yV[stateYear:,4,np.newaxis],yV[stateYear:,5,np.newaxis]),1)
-    
-    # plot --------------------------------------------------------------
-    if isPlot:
-        fig, figInds = plt.subplots(nrows=3, sharex=True)
-        for figInd in np.arange(len(figInds)):
-            figInds[figInd].plot(np.arange(yV.shape[0]), yV[:,figInd])
-        
-        plt.savefig(os.path.join("deltaU.png"))
-        plt.close()
-    # -------------------------------------------------------------------
-    
+
     return yV
 # -----------------------------------------------------------------------------
 
@@ -155,17 +145,293 @@ def convV2IntervalData(V):
 # -----------------------------------------------------------------------------
     
 # 全間隔 ----------------------------------------------------------------------
-def MinErrorNankai(pred,mode=2,isPlot=False):
-    
+def MinErrorNankai(gt, pred, mode=3, label='test', isPlot=False):
+
     # ----
     # 真値の地震発生年数
     gYear_nk = np.where(gt[:,0] > slip)[0]
     gYear_tnk = np.where(gt[:,1] > slip)[0]
     gYear_tk = np.where(gt[:,2] > slip)[0]
     # ----
-    #pdb.set_trace()
-    # 閾値 & 二乗誤差 順番
-    if mode == 3:
+    
+    # reverse var. [84,]
+    gYear_nk_re = np.abs(gYear_nk-1400)
+    gYear_tnk_re = np.abs(gYear_tnk-1400)
+    gYear_tk_re = np.abs(gYear_tk-1400)
+    
+    # Num. of gt eq
+    gNum_nk = gYear_nk.shape[0]
+    gNum_tnk = gYear_tnk.shape[0]
+    gNum_tk = gYear_tk.shape[0]
+
+    # ----
+    # part of gt eq. (after 761 year, start 761 = 0 year) [761,898,1005,...]->[0,137,24,...]
+    part_nk = gYear_nk[4:] - 761
+    part_tnk = gYear_tnk[4:] - 761
+    part_tk = gYear_tk[4:] - 761
+    # ----
+    
+    # reverse var.
+    part_nk_re = gYear_nk_re[4:]
+    part_tnk_re = gYear_tnk_re[4:]
+    part_tk_re = gYear_tk_re[4:]
+    
+    partNum_nk = part_nk.shape[0] # 5
+    partNum_tnk = part_tnk.shape[0] # 5
+    partNum_tk = part_tk.shape[0] # 3
+    
+    # 1 対 1 (part & reverse) ----
+    if mode == 7:
+        
+        flag = False
+        
+        # pred
+        nk = np.where(pred[:,0]>1)[0]
+        tnk = np.where(pred[:,1]>1)[0]
+        tk = np.where(pred[:,2]>1)[0]
+        
+        lastyear = np.max([np.max(nk),np.max(tnk),np.max(tk)])
+       
+        for sYear in np.arange(8000-lastyear):
+             
+            # 閾値以上の予測した地震年数
+            pYear_nk = (np.abs(nk[(nk<8000-sYear) & (nk>8000-761-sYear)] - 8000) -sYear)[-partNum_nk:]
+            pYear_tnk = (np.abs(tnk[(tnk<8000-sYear) & (tnk>8000-761-sYear)] - 8000) -sYear)[-partNum_tnk:]
+            pYear_tk =  (np.abs(tk[(tk<8000-sYear) & (tk>8000-761-sYear)] - 8000) -sYear)[-partNum_tk:]
+            
+            #pdb.set_trace()
+            # pred < gt
+            if pYear_nk.shape[0] < partNum_nk:
+                # 真値より少ない場合は、600年(+600)以降で合わせる、同じ数になるように
+                pYear_nk = (np.abs(nk[nk<8000-sYear] - 8000) -sYear)[-partNum_nk:]
+                
+                if pYear_nk.shape[0] < partNum_nk:
+                     
+                     pYear_nk = np.insert(pYear_nk, 0, np.tile(10000, partNum_nk-pYear_nk.shape[0]))
+                 
+            if pYear_tnk.shape[0] < partNum_tnk:
+               
+                pYear_tnk = (np.abs(tnk[tnk<8000-sYear] - 8000) -sYear)[-partNum_tnk:]
+            
+                if pYear_tnk.shape[0] < partNum_tnk:
+            
+                    pYear_tnk = np.insert(pYear_tnk, 0, np.tile(10000, partNum_tnk-pYear_tnk.shape[0]))
+            
+            if pYear_tk.shape[0] < partNum_tk:
+                
+                pYear_tk = (np.abs(tk[tk<8000-sYear] - 8000) -sYear)[-partNum_tk:]
+                
+                if pYear_tk.shape[0] < partNum_tk:
+           
+                    pYear_tk = np.insert(pYear_tk, 0, np.tile(10000, partNum_tk-pYear_tk.shape[0]))
+            #pdb.set_trace()
+            ndist_nk = gauss(part_nk_re,pYear_nk,mode=3)
+            ndist_tnk = gauss(part_tnk_re,pYear_tnk,mode=3)
+            ndist_tk = gauss(part_tk_re,pYear_tk,mode=3)
+            
+            # 真値に合わせて二乗誤差
+            yearError_nk = np.sum(ndist_nk)
+            yearError_tnk = np.sum(ndist_tnk)
+            yearError_tk = np.sum(ndist_tk)
+            
+            yearError = yearError_nk + yearError_tnk + yearError_tk
+            
+            if not flag:
+                yearErrors = yearError
+                flag = True
+            else:
+                yearErrors = np.hstack([yearErrors,yearError])  
+        
+        sInd = np.argmin(yearErrors) 
+    # ----
+   
+    # 1 対 1 (part & normal) ----
+    if mode == 6:
+            
+        flag = False
+        
+        for sYear in np.arange(8000-600):
+            #pdb.set_trace()
+            eYear = sYear + 600
+                
+            # 閾値以上の予測した地震年数
+            pYear_nk = np.where(pred[sYear:eYear,0] > th)[0][:partNum_nk]
+            pYear_tnk = np.where(pred[sYear:eYear,1] > th)[0][:partNum_tnk]
+            pYear_tk = np.where(pred[sYear:eYear,2] > th)[0][:partNum_tk]
+            
+             # pred < gt
+            if pYear_nk.shape[0] < partNum_nk:
+                # 真値より少ない場合は、1400年以降で合わせる、同じ数になるように
+                pYear_nk = np.where(pred[sYear:,0] > th)[0][:partNum_nk]
+                 
+                if pYear_nk.shape[0] < partNum_nk:
+                     
+                     pYear_nk = np.hstack([pYear_nk, np.tile(10000, partNum_nk-pYear_nk.shape[0])])
+                 
+            if pYear_tnk.shape[0] < partNum_tnk:
+               
+                pYear_tnk = np.where(pred[sYear:,1] > th)[0][:partNum_tnk]
+            
+                if pYear_tnk.shape[0] < partNum_tnk:
+            
+                    pYear_tnk = np.hstack([pYear_tnk, np.tile(10000, partNum_tnk-pYear_tnk.shape[0])])
+            
+            if pYear_tk.shape[0] < partNum_tk:
+                
+                pYear_tk = np.where(pred[sYear:,2] > th)[0][:partNum_tk]
+          
+                if pYear_tk.shape[0] < partNum_tk:
+           
+                    pYear_tk = np.hstack([pYear_tk, np.tile(10000, partNum_tk-pYear_tk.shape[0])])
+        
+            # [9,]
+            ndist_nk = gauss(part_nk,pYear_nk,mode=3)
+            ndist_tnk = gauss(part_tnk,pYear_tnk,mode=3)
+            ndist_tk = gauss(part_tk,pYear_tk,mode=3)
+            
+            # 真値に合わせて二乗誤差
+            yearError_nk = np.sum(ndist_nk)
+            yearError_tnk = np.sum(ndist_tnk)
+            yearError_tk = np.sum(ndist_tk)
+            
+            yearError = yearError_nk + yearError_tnk + yearError_tk
+            
+            if not flag:
+                yearErrors = yearError
+                flag = True
+            else:
+                yearErrors = np.hstack([yearErrors,yearError])  
+         
+        sInd = np.argmin(yearErrors) 
+    # ----
+   
+    # 1　対 1 (reverse) ----
+    if mode == 5:
+    
+        flag = False
+        
+        # pred
+        nk = np.where(pred[:,0]>1)[0]
+        tnk = np.where(pred[:,1]>1)[0]
+        tk = np.where(pred[:,2]>1)[0]
+        
+        lastyear = np.max([np.max(nk),np.max(tnk),np.max(tk)])
+        
+        for sYear in np.arange(8000-lastyear):
+            
+            # 8000年から手間に1400年分シフト(-sYear)していく
+            # -8000することで小さい年数が大きい年数になり逆順になる
+            pYear_nk = (np.abs(nk[(nk<8000-sYear) & (nk>8000-aYear-sYear)] - 8000) -sYear)[-gNum_nk:]
+            pYear_tnk = (np.abs(tnk[(tnk<8000-sYear) & (tnk>8000-aYear-sYear)] - 8000) -sYear)[-gNum_tnk:]
+            pYear_tk = (np.abs(tk[(tk<8000-sYear) & (tk>8000-aYear-sYear)] - 8000) -sYear)[-gNum_tk:]
+             
+            # pred < gt
+            if pYear_nk.shape[0] < gNum_nk:
+                # 真値より少ない場合は、1400年以降で合わせる、同じ数になるように
+                pYear_nk = (np.abs(nk[nk<8000-sYear] - 8000) -sYear)[-gNum_nk:]
+                 
+                if pYear_nk.shape[0] < gNum_nk:
+                     # 先頭から10000足す
+                     pYear_nk = np.insert(pYear_nk, 0, np.tile(10000, gNum_nk-pYear_nk.shape[0]))
+                 
+            if pYear_tnk.shape[0] < gNum_tnk:
+               
+                pYear_tnk = (np.abs(tnk[tnk<8000-sYear] - 8000) -sYear)[-gNum_tnk:]
+            
+                if pYear_tnk.shape[0] < gNum_tnk:
+            
+                    pYear_tnk = np.insert(pYear_tnk, 0, np.tile(10000, gNum_tnk-pYear_tnk.shape[0]))
+            
+            if pYear_tk.shape[0] < gNum_tk:
+              
+                pYear_tk = (np.abs(tk[tk<8000-sYear] - 8000) -sYear)[-gNum_tk:]
+          
+                if pYear_tk.shape[0] < gNum_tk:
+           
+                    pYear_tk = np.insert(pYear_tk, 0, np.tile(10000, gNum_tk-pYear_tk.shape[0]))
+            #pdb.set_trace()
+            
+            ndist_nk = gauss(gYear_nk_re,pYear_nk,mode=3)
+            ndist_tnk = gauss(gYear_tnk_re,pYear_tnk,mode=3)
+            ndist_tk = gauss(gYear_tk_re,pYear_tk,mode=3)
+            
+            # 真値に合わせて二乗誤差
+            yearError_nk = np.sum(ndist_nk)
+            yearError_tnk = np.sum(ndist_tnk)
+            yearError_tk = np.sum(ndist_tk)
+            
+            yearError = yearError_nk + yearError_tnk + yearError_tk
+            
+            if not flag:
+                yearErrors = yearError
+                flag = True
+            else:
+                yearErrors = np.hstack([yearErrors,yearError])  
+        
+        sInd = np.argmin(yearErrors)
+    # ----
+    
+    # 1 対 1 (normal) ----
+    if mode == 4:
+        
+        flag = False
+        # Slide each one year 
+        for sYear in np.arange(8000-aYear): 
+            eYear = sYear + aYear
+                
+            # 閾値以上の予測した地震年数
+            pYear_nk = np.where(pred[sYear:eYear,0] > th)[0][:gNum_nk]
+            pYear_tnk = np.where(pred[sYear:eYear,1] > th)[0][:gNum_tnk]
+            pYear_tk = np.where(pred[sYear:eYear,2] > th)[0][:gNum_tk]
+        
+            # pred < gt
+            if pYear_nk.shape[0] < gNum_nk:
+                # 真値より少ない場合は、1400年以降で合わせる、同じ数になるように
+                pYear_nk = np.where(pred[sYear:,0] > th)[0][:gNum_nk]
+                 
+                if pYear_nk.shape[0] < gNum_nk:
+                     
+                     pYear_nk = np.hstack([pYear_nk, np.tile(10000, gNum_nk-pYear_nk.shape[0])])
+                 
+            if pYear_tnk.shape[0] < gNum_tnk:
+               
+                pYear_tnk = np.where(pred[sYear:,1] > th)[0][:gNum_tnk]
+            
+                if pYear_tnk.shape[0] < gNum_tnk:
+            
+                    pYear_tnk = np.hstack([pYear_tnk, np.tile(10000, gNum_tnk-pYear_tnk.shape[0])])
+            
+            if pYear_tk.shape[0] < gNum_tk:
+               
+                pYear_tk = np.where(pred[sYear:,2] > th)[0][:gNum_tk]
+          
+                if pYear_tk.shape[0] < gNum_tk:
+           
+                    pYear_tk = np.hstack([pYear_tk, np.tile(10000, gNum_tk-pYear_tk.shape[0])])
+        
+            # [9,]
+            ndist_nk = gauss(gYear_nk,pYear_nk,mode=3)
+            ndist_tnk = gauss(gYear_tnk,pYear_tnk,mode=3)
+            ndist_tk = gauss(gYear_tk,pYear_tk,mode=3)
+            
+            # 真値に合わせて二乗誤差
+            yearError_nk = np.sum(ndist_nk)
+            yearError_tnk = np.sum(ndist_tnk)
+            yearError_tk = np.sum(ndist_tk)
+            
+            yearError = yearError_nk + yearError_tnk + yearError_tk
+            #pdb.set_trace()
+            if not flag:
+                yearErrors = yearError
+                flag = True
+            else:
+                yearErrors = np.hstack([yearErrors,yearError])  
+         
+        sInd = np.argmin(yearErrors)    
+    # ----
+           
+    # 閾値 & 二乗誤差 順番 ----
+    elif mode == 3:
         flag = False
         # Slide each one year 
         for sYear in np.arange(8000-aYear): 
@@ -219,112 +485,49 @@ def MinErrorNankai(pred,mode=2,isPlot=False):
                
         # 最小誤差開始修了年数(1400年)取得
         sInd = np.argmin(yearErrors)
-        
-        '''
-        # if slip velocity plot
-        sns.set_style("dark")
-  
         #pdb.set_trace()
-        predVnk = pred[sInd:sInd+1400,0]
-        predVtnk = pred[sInd:sInd+1400,1]
-        predVtk = pred[sInd:sInd+1400,2]
+        # ----
+        if isPlot:
+            # if slip velocity plot
+            sns.set_style("dark")
+      
+            nk = pred[sInd:sInd+1400,0]
+            tnk = pred[sInd:sInd+1400,1]
+            tk = pred[sInd:sInd+1400,2]
+            
+            predVnk,predVtnk,predVtk = np.zeros(1400),np.zeros(1400),np.zeros(1400)
+            
+            # V > 1
+            predVnk[np.where(nk>1)[0].tolist()] = nk[nk>1]
+            predVtnk[np.where(tnk>1)[0].tolist()] = tnk[tnk>1]
+            predVtk[np.where(tk>1)[0].tolist()] = tk[tk>1]
+            
+            colors = ["coral","skyblue","coral","skyblue","coral","skyblue"]
+            
+            # scalling var.
+            gtV = np.zeros([1400,3])
+            gtV[gYear_nk.tolist(),ntI] = 5
+            gtV[gYear_tnk.tolist(),tntI] = 5
+            gtV[gYear_tk,ttI] = 5
+           
+            plot_data = [gtV[:,ntI],predVnk,gtV[:,tntI],predVtnk,gtV[:,ttI],predVtk]
+            
+            fig = plt.figure()
+            fig, axes = plt.subplots(nrows=6,sharex="col")
+            for row,(color,data) in enumerate(zip(colors,plot_data)):
+                axes[row].plot(np.arange(1400), data, color=color)
+            
+            plt.suptitle(f'{int(np.min(yearErrors))}')
+            plt.savefig(os.path.join('images','bayes',f'{label}.png'))
+            plt.close()
+        # ----
         
-        colors = ["coral","skyblue","coral","skyblue","coral","skyblue"]
-        
-        # scalling var.
-        gtV = np.zeros([1400,3])
-        gtV[gYear_nk.tolist(),ntI] = 5
-        gtV[gYear_tnk.tolist(),tntI] = 5
-        gtV[gYear_tk,ttI] = 5
-       
-        plot_data = [gtV[:,ntI],predVnk,gtV[:,tntI],predVtnk,gtV[:,ttI],predVtk]
-        
-        fig = plt.figure()
-        fig, axes = plt.subplots(nrows=6,sharex="col")
-        for row,(color,data) in enumerate(zip(colors,plot_data)):
-            axes[row].plot(np.arange(1400), data, color=color)
             
-        plt.savefig('test_1.png')
-        plt.close()
-        '''
-
-    # 閾値 & 二乗誤差
-    elif mode == 2:
-       
-        flag = False
-        # Slide each one year 
-        for sYear in np.arange(8000-aYear): 
-            eYear = sYear + aYear
-
-            # 閾値以上の予測した地震年数
-            pYear_nk = np.where(pred[sYear:eYear,0] > th)[0]
-            pYear_tnk = np.where(pred[sYear:eYear,1] > th)[0]
-            pYear_tk = np.where(pred[sYear:eYear,2] > th)[0]
-            
-            ndist_nk = gauss(gYear_nk,pYear_nk.T)
-            ndist_tnk = gauss(gYear_tnk,pYear_tnk.T)
-            ndist_tk = gauss(gYear_tk,pYear_tk.T)
-            
-            # 真値に合わせて二乗誤差
-            yearError_nk = np.sum(np.min(ndist_nk,1))
-            yearError_tnk = np.sum(np.min(ndist_tnk,1))
-            yearError_tk = np.sum(np.min(ndist_tk,1))
-            
-            yearError = yearError_nk + yearError_tnk + yearError_tk
-              
-            if not flag:
-                yearErrors = yearError
-                flag = True
-            else:
-                yearErrors = np.hstack([yearErrors,yearError])
-               
-        # 最小誤差開始修了年数(1400年)取得
-        sInd = np.argmin(yearErrors)
-        
-    elif mode == 0:
-   
-        flag = False
-        # Slide each one year 
-        for sYear in np.arange(8000-aYear): 
-            # 予測した地震の年数 + 1400
-            eYear = sYear + aYear
-
-            # 予測した地震年数 only one-cell
-            pYear_nk = np.where(pred[sYear:eYear,0] > slip)[0]
-            pYear_tnk = np.where(pred[sYear:eYear,1] > slip)[0]
-            pYear_tk = np.where(pred[sYear:eYear,2] > slip)[0]
-            
-            # gaussian distance for year of gt - year of pred (gYears.shape, pred.shape)
-            # for each cell
-            ndist_nk = gauss(gYear_nk,pYear_nk.T)
-            ndist_tnk = gauss(gYear_tnk,pYear_tnk.T)
-            ndist_tk = gauss(gYear_tk,pYear_tk.T)
-
-            # 予測誤差の合計, 回数で割ると当てずっぽうが小さくなる
-            # for each cell
-            yearError_nk = sum(ndist_nk.max(1)/pYear_nk.shape[0])
-            yearError_tnk = sum(ndist_tnk.max(1)/pYear_tnk.shape[0])
-            yearError_tk = sum(ndist_tk.max(1)/pYear_tk.shape[0])
-            
-            # for all cell
-            yearError = yearError_nk + yearError_tnk + yearError_tk
-   
-            if not flag:
-                yearErrors = yearError
-                flag = True
-            else:
-                yearErrors = np.hstack([yearErrors,yearError])
-        
-        # 最小誤差開始修了年数(1400年)取得
-        sInd = np.argmax(yearErrors)
-
     # 最小誤差確率　
     maxSim = yearErrors[sInd]
-   
-    if isPlot:
-        return maxSim, pred[sInd:sInd+aYear]
-    else:
-        return maxSim
+    print(maxSim)
+    
+    return maxSim
         
 # -----------------------------------------------------------------------------
 
@@ -361,25 +564,19 @@ def gauss(gtY,predY,sigma=100,mode=3):
 if __name__ == "__main__":
     
     # ---- command ---- #
-    mode = int(sys.argv[1]) # 0:全探索 gauss var 2:全探索 vecter var 3:全探索 順番 var
+    mode = int(sys.argv[1]) # 3: 全探索 順番 var, 4:
     # ----------------- #
 
     # ---- bool ---- #
     # 3.
-    isplotbestPath = True
+    isplotbestPath = False
     # 2. best 100 txt
     ismakingbestPath = False
     # 1. all research
-    ismakingminPath = False
+    ismakingminPath = True
     isPlot = False
     # -------------- #
     
-    # -------------------------------------------------------------------------
-    # loading nankai trough (ground truth)
-    with open(os.path.join(featurePath,"nankairireki.pkl"),'rb') as fp:
-        gts = pickle.load(fp)
-    # -------------------------------------------------------------------------
-  
     # -------------------------------------------------------------------------
     if isplotbestPath:    
         # ---------------------------------------------------------------------
@@ -394,14 +591,14 @@ if __name__ == "__main__":
             
             V,B = loadABLV(logfile)
             yV = convV2YearlyData(V)
-            maxSim, pred = MinErrorNankai(gts[190,:,:],yV)
+            maxSim, pred = MinErrorNankai(gt,yV)
             # eq. of pred
             predeq_nk = np.where(pred[:,ntI]>th)[0]
             predeq_tnk = np.where(pred[:,tntI]>th)[0]
             predeq_tk = np.where(pred[:,ttI]>th)[0]
             
             # plot gt & pred rireki
-            myPlot.Rireki(gts[190,:,:],pred,title=f"{predeq_nk}\n{predeq_tnk}\n{predeq_tk}",label=f"{maxSim}_{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}")
+            myPlot.Rireki(gt,pred,title=f"{predeq_nk}\n{predeq_tnk}\n{predeq_tk}",label=f"{maxSim}_{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}")
             
             if not flag:
                 Bs = B
@@ -458,44 +655,41 @@ if __name__ == "__main__":
         # --------------------------------------------------------------
         #pdb.set_trace()
         # 全間隔 ---------------------------------------------------------------
-        if mode == 0 or mode == 2 or mode == 3:
-            cnt = 0
-            for tfID in [190]:
-                
-                # 全領域と確実領域の南海トラフ巨大地震履歴
-                gtyV = gts[tfID,:,:]
+        if mode == 3 or mode == 4 or mode == 5 or mode == 6 or mode == 7:
             
-                flag = False
-                for file in files:
-                    # simulation ------
-                    print(file)
-                    print(len(files)-cnt)
-                    # loading logs B:[3,]
-                    V,B = loadABLV(file)    
-                    # V -> yV 
-                    yV = convV2YearlyData(V)
-                    # -----------------
+            cnt = 0
+            
+            flag = False
+            for file in files:
+                # simulation ------
+                print(file)
+                print(len(files)-cnt)
+                # loading logs B:[3,]
+                V,B = loadABLV(file)    
+                # V -> yV 
+                yV = convV2YearlyData(V)
+                # -----------------
 
-                    # maxSim : Degree of Similatery
-                    maxSim, _ = MinErrorNankai(gtyV,yV)
-                    
-                    if not flag:
-                        maxSims = maxSim
-                        paths = file
-                        flag = True
-                    else:
-                        maxSims = np.hstack([maxSims,maxSim])
-                        paths = np.hstack([paths,file])
-                    
-                    cnt += 1
+                # maxSim : Degree of Similatery
+                maxSim = MinErrorNankai(gt,yV,mode=mode)
                 
-                # min error top 100
-                maxSimInds = np.argsort(maxSims)[:100]
-                # path for reading
-                maxpaths = paths[maxSimInds]
-                # sort degree of similatery 
-                maxSims = maxSims[maxSimInds]
-                        
+                if not flag:
+                    maxSims = maxSim
+                    paths = file
+                    flag = True
+                else:
+                    maxSims = np.hstack([maxSims,maxSim])
+                    paths = np.hstack([paths,file])
+                
+                cnt += 1
+            
+            # min error top 100
+            maxSimInds = np.argsort(maxSims)[:100]
+            # path for reading
+            maxpaths = paths[maxSimInds]
+            # sort degree of similatery 
+            maxSims = maxSims[maxSimInds]
+                    
             for line in maxpaths:
                 # output csv for path
                 with open(f"path_{dataPath}_{mode}.txt","a") as f:  
