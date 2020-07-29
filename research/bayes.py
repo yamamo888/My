@@ -12,11 +12,15 @@ from decimal import Decimal
 import pdb
 
 import numpy as np
+import pandas as pd
+import seaborn as sns
 import matplotlib.pylab as plt
-from bayes_opt import BayesianOptimization
+
+# ※ not sklearn
+from myBayesianOptimization.bayes_opt import BayesianOptimization
+#import bayes_opt as BayesianOptimization
 
 import DC as myData
-import makingDataPF as myDataPF
 import PlotPF as myPlot
 
 import warnings
@@ -29,13 +33,24 @@ parser.add_argument('--itrNum', type=int, default=100)
 # Num. of traial
 parser.add_argument('--trID', type=int, default=0)
 # mode
-parser.add_argument('--mode', required=True, choices=['paramb','Kij','ABL'])
+parser.add_argument('--mode', required=True, choices=['paramb','Kij','ABL','shift_time','shift_mean'])
+# kappa for ucb mean + kappa * sigma
+parser.add_argument('--kappa', type=float, default=2.5)
+# kappa decay % for ucb (default:None)
+# smaller decay % -> more decrease
+parser.add_argument('--kDecay', type=float, default=1)
+# kappa decay delay for ucb (default:None)
+parser.add_argument('--kitr', type=int, default=0)
+
 # 引数展開
 args = parser.parse_args()
 
 itrNum = args.itrNum
 trID = args.trID
 mode = args.mode
+kappa = args.kappa
+kDecay = args.kDecay
+kitr = args.kitr
 # -----------------------------------------------------------------------------
 
 # path ------------------------------------------------------------------------
@@ -48,10 +63,7 @@ savedirPath = f'BO_{trID}'
 # for logs
 savedlogPath = f'savedPD_{trID}'
 paramCSV = 'bayesParam.csv'
-if mode == 'ABL':
-    batFile = 'PyToCBayesABL.bat'
-else:
-    batFile = 'PyToCBayes.bat'
+
 filePath = '*txt'
 Kijfile = 'K8_AV2.txt'
 # -----------------------------------------------------------------------------
@@ -63,10 +75,10 @@ aYear = 1400
 ntI,tntI,ttI = 0,1,2
 nCell = 3
 # num.of epoch
-nEpoch = 10
+nEpoch = 5
 # range b
 mt = 1000000
-
+cnt = 0
 ## for researching Kij (default) ##
 #K32min, K32max = -139157.4154072-60000, -139157.4154072+30000
 #K23min, K23max = -140041.1031088-50000, -140041.1031088+40000
@@ -82,20 +94,25 @@ defaultA = [[amin,amax],[amin,amax],[amin,amax]]
 
 ## for researching for param b (default) ##
 # range of under & over in parameter
-#bnkmin,bnkmax = 0.014449,0.015499
-#btnkmin,btnkmax = 0.012,0.014949
-#btkmin,btkmax = 0.012,0.0135
+bnkmin,bnkmax = 0.014449,0.015499
+btnkmin,btnkmax = 0.012,0.014949
+btkmin,btkmax = 0.012,0.0135
 # for all search
-bnkmin,bnkmax = 0.011,0.0165
-btnkmin,btnkmax = 0.011,0.0165
-btkmin,btkmax = 0.011,0.0170
+#bnkmin,bnkmax = 0.011,0.0165
+#btnkmin,btnkmax = 0.011,0.0165
+#btkmin,btkmax = 0.011,0.0170
 
 defaultB = [[bnkmin,bnkmax],[btnkmin,btnkmax],[btkmin,btkmax]]
 
 ## for researching for param L (default) ##
-Lmin,Lmax = 0.01,0.05
+Lmin,Lmax = 0.0005,0.01
 
 defaultL = [[Lmin,Lmax],[Lmin,Lmax],[Lmin,Lmax]]
+
+
+with open(os.path.join(featuresPath,"nankairireki.pkl"), "rb") as fp:
+    nkfiles = pickle.load(fp)
+gt = nkfiles[190,:,:]
 
 ##
 
@@ -111,17 +128,34 @@ def isDirectory(fpath):
 #------------------------------------------------------------------------------
 
 # Prior distribution ----------------------------------------------------------
-def setPriorDistribution(pd):
+def setPriorDistribution(pd, pname='paramb'):
     '''
     pd: searching parameter
+    pname: parameter
     '''
-    if mode == 'paramb':
+    if pname == 'parama':
+        nkmin,nkmax = pd[ntI][0],pd[ntI][1]
+        tnkmin,tnkmax = pd[tntI][0],pd[tntI][1]
+        tkmin,tkmax = pd[ttI][0],pd[ttI][1]
+        
+        # 連続値の場合は、事前分布指定可（default:連続一様分布、対数一様分布も指定可）
+        pbounds = {"a1":(nkmin,nkmax),"a2":(tnkmin,tnkmax),"a3":(tkmin,tkmax)}
+    
+    elif pname == 'paramb':
         nkmin,nkmax = pd[ntI][0],pd[ntI][1]
         tnkmin,tnkmax = pd[tntI][0],pd[tntI][1]
         tkmin,tkmax = pd[ttI][0],pd[ttI][1]
         
         # 連続値の場合は、事前分布指定可（default:連続一様分布、対数一様分布も指定可）
         pbounds = {"b1":(nkmin,nkmax),"b2":(tnkmin,tnkmax),"b3":(tkmin,tkmax)}
+    
+    elif pname == 'paramL':
+        nkmin,nkmax = pd[ntI][0],pd[ntI][1]
+        tnkmin,tnkmax = pd[tntI][0],pd[tntI][1]
+        tkmin,tkmax = pd[ttI][0],pd[ttI][1]
+        
+        # 連続値の場合は、事前分布指定可（default:連続一様分布、対数一様分布も指定可）
+        pbounds = {"L1":(nkmin,nkmax),"L2":(tnkmin,tnkmax),"L3":(tkmin,tkmax)}
     
     elif mode == 'Kij':
         
@@ -163,10 +197,14 @@ def readlogsFiles():
 # -----------------------------------------------------------------------------
 
 # making logs (paramb) --------------------------------------------------------
-def makeLog(b1=np.array(0.011),b2=np.array(0.011),b3=np.array(0.011)):
+def makeLog(p1=np.array(0.011),p2=np.array(0.011),p3=np.array(0.011)):
+    '''
+    one kind of parameter(a,b,L)
+    '''
+    
     #pdb.set_trace()
     # save param b ------------------------------------------------------------
-    params = np.concatenate((b1[np.newaxis],b2[np.newaxis],b3[np.newaxis]),0)[:,np.newaxis]
+    params = np.concatenate((p1[np.newaxis],p2[np.newaxis],p3[np.newaxis]),0)[:,np.newaxis]
     np.savetxt(paramCSV,params.T*mt,delimiter=",",fmt="%.0f")
     # -------------------------------------------------------------------------
     
@@ -194,13 +232,19 @@ def callSimulation():
     '''
     Do bat (making logs)
     '''
+    
+    if mode == 'ABL' or mode == 'shift_time':
+        batFile = 'PyToCBayesABL.bat'
+    elif mode == 'paramb':
+        batFile = 'PyToCBayes.bat'
+    
     #pdb.set_trace()
     # call bat ----------------------------------------------------------------
     lockPath = "Lock.txt"
     lock = str(1)
     with open(lockPath,"w") as fp:
         fp.write(lock)
-    
+
     os.system(batFile)
     
     sleepTime = 3
@@ -221,8 +265,8 @@ def objective():
     # U:[None,10], B:[3,]
     U,B = myData.loadABLV(logfile)
     deltaU = myData.convV2YearlyData(U)
-    # each mse var.
-    maxSim = myData.MinErrorNankai(deltaU,mode=3)
+    # one : one (※MSE) mode==4(normal) mode==5(reverse)
+    maxSim = myData.MinErrorNankai(gt, deltaU, mode=4)
     maxSim = 1/maxSim
     
     # Delate logfile
@@ -231,17 +275,83 @@ def objective():
     return maxSim
 # -----------------------------------------------------------------------------
 
+# function (parama) -----------------------------------------------------------
+def afunc(a1,a2,a3):
+    
+    b, L = paramStock(pname='parama')
+    b1,b2,b3 = b[0],b[1],b[2]
+    L1, L2, L3 = L[0],L[1],L[2]
+    
+    # simulation
+    makeLogABL(a1=a1,a2=a2,a3=a3,
+               b1=b1,b2=b2,b3=b3,
+               L1=L1,L2=L2,L3=L3)
+
+    func = objective()
+    
+    return func
+# -----------------------------------------------------------------------------
+    
 # function (paramb) -----------------------------------------------------------
 def bfunc(b1,b2,b3):
     
+    a, L = paramStock(pname='paramb')
+    
+    a1, a2, a3 = a[0],a[1],a[2]
+    L1, L2, L3 = L[0],L[1],L[2] 
+    
     # simulation
-    makeLog(b1=b1,b2=b2,b3=b3)
+    makeLogABL(a1=a1,a2=a2,a3=a3,
+               b1=b1,b2=b2,b3=b3,
+               L1=L1,L2=L2,L3=L3)
     
     func = objective()
     
     return func
 # -----------------------------------------------------------------------------
         
+# function (paramL) -----------------------------------------------------------
+def Lfunc(L1,L2,L3):
+    
+    a, b = paramStock(pname='paramL')
+    
+    a1, a2, a3 = a[0],a[1],a[2]
+    b1,b2,b3 = b[0],b[1],b[2]
+    
+    # simulation
+    makeLogABL(a1=a1,a2=a2,a3=a3,
+               b1=b1,b2=b2,b3=b3,
+               L1=L1,L2=L2,L3=L3)
+    
+    func = objective()
+    
+    return func
+# -----------------------------------------------------------------------------
+    
+# other parameter -------------------------------------------------------------
+def paramStock(pname='paramb'):
+    '''
+    load two param file (not update by bayes)
+    '''
+    
+    if pname == 'parama':
+        
+        otherparams1 = np.loadtxt(os.path.join('params','updateparamb.csv'), delimiter=',')    
+        otherparams2 = np.loadtxt(os.path.join('params','updateparamL.csv'), delimiter=',')    
+    
+    elif pname == 'paramb':
+        
+        otherparams1 = np.loadtxt(os.path.join('params','updateparama.csv'), delimiter=',')    
+        otherparams2 = np.loadtxt(os.path.join('params','updateparamL.csv'), delimiter=',')    
+        
+    elif pname == 'paramL':
+        
+        otherparams1 = np.loadtxt(os.path.join('params','updateparama.csv'), delimiter=',')    
+        otherparams2 = np.loadtxt(os.path.join('params','updateparamb.csv'), delimiter=',')    
+    
+    return otherparams1, otherparams2
+# -----------------------------------------------------------------------------
+    
 # function (parama,paramb,paramL) ---------------------------------------------   
 def ABLfunc(a1,a2,a3,b1,b2,b3,L1,L2,L3):
 
@@ -312,6 +422,7 @@ for epoch in np.arange(nEpoch):
     
         # Start Bayes ---------------------------------------------------------
         # verbose: 学習過程表示 0:無し, 1:すべて, 2:最大値更新時
+        #opt = myBayesianOptimization(f=bfunc,pbounds=pbounds,verbose=1)
         opt = BayesianOptimization(f=bfunc,pbounds=pbounds,verbose=1)
         
     # Kij #####################################################################
@@ -339,6 +450,7 @@ for epoch in np.arange(nEpoch):
     
         # Start Bayes ---------------------------------------------------------
         # verbose: 学習過程表示 0:無し, 1:すべて, 2:最大値更新時
+        #opt = myBayesianOptimization(f=ABLfunc,pbounds=pbounds,verbose=1)
         opt = BayesianOptimization(f=ABLfunc,pbounds=pbounds,verbose=1)
    
     # ABL #####################################################################
@@ -351,14 +463,68 @@ for epoch in np.arange(nEpoch):
     
         # Start Bayes ---------------------------------------------------------
         # verbose: 学習過程表示 0:無し, 1:すべて, 2:最大値更新時
+        #opt = myBayesianOptimization(f=ABLfunc,pbounds=pbounds,verbose=1)
         opt = BayesianOptimization(f=ABLfunc,pbounds=pbounds,verbose=1)
+   
+    # b -> a -> L -> K? -> a-b? ###############################################
+    elif mode == 'shift_time':
+        
+        # parama
+        if epoch == 1 or epoch == 4 or epoch == 7:
        
+            pname = 'parama'
+            
+            # reading parameter
+            tmp = np.loadtxt(os.path.join('params','pdparama.csv'), delimiter=',')    
+            pd = [tmp[:,0],tmp[:,1],tmp[:,2]]
+           
+            # prior distribution parameter a 
+            pbounds = setPriorDistribution(pd, pname=pname)
+        
+            # Start Bayes -----------------------------------------------------
+            #opt = myBayesianOptimization(f=afunc,pbounds=pbounds,verbose=1)
+            opt = BayesianOptimization(f=afunc,pbounds=pbounds,verbose=1)
+        
+        # paramb
+        if epoch == 0 or epoch == 3 or epoch == 6:
+            
+            pname = 'paramb'
+            
+            # reading parameter
+            tmp = np.loadtxt(os.path.join('params','pdparamb.csv'), delimiter=',')    
+            pd = [tmp[:,0],tmp[:,1],tmp[:,2]]
+            
+            # prior distribution parameter b
+            pbounds = setPriorDistribution(pd, pname=pname)
+        
+            # Start Bayes -----------------------------------------------------
+            #opt = myBayesianOptimization(f=bfunc,pbounds=pbounds,verbose=1)
+            opt = BayesianOptimization(f=bfunc,pbounds=pbounds,verbose=2)
+        
+        # paramL
+        if epoch == 2 or epoch == 5 or epoch == 8:
+        
+            pname = 'paramL'
+            
+            # reading parameter
+            tmp = np.loadtxt(os.path.join('params','pdparamL.csv'), delimiter=',')    
+            pd = [tmp[:,0],tmp[:,1],tmp[:,2]]
+            
+            # prior distribution parameter L
+            pbounds = setPriorDistribution(pd, pname=pname)
+        
+            # Start Bayes -----------------------------------------------------
+            #opt = myBayesianOptimization(f=Lfunc,pbounds=pbounds,verbose=1)
+            opt = BayesianOptimization(f=Lfunc,pbounds=pbounds,verbose=1)
+        
+    ###########################################################################
+    #pdb.set_trace()
     
     # init_points:最初に取得するf(x)の数、ランダムに選択される
-    # n_iter:試行回数(default:25パターンのパラメータで学習)
-    opt.maximize(init_points=5,n_iter=itrNum,acq='ucb',kappa=10)
+    # n_iter:試行回数(default:5パターンのパラメータで学習)
+    opt.maximize(init_points=5, n_iter=itrNum, acq='ucb', kappa=kappa, kappa_decay=kDecay, kappa_decay_delay=kitr)
     # -------------------------------------------------------------------------
-    #pdb.set_trace()
+         
     # Result ------------------------------------------------------------------
     res = opt.res # all
     best_res = opt.max # max optimize
@@ -445,9 +611,86 @@ for epoch in np.arange(nEpoch):
         np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{trID}_a.txt"),paramas,fmt=f"%d")
         np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{trID}_b.txt"),parambs,fmt=f"%d")
         np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{trID}_L.txt"),paramLs,fmt=f"%d")
-      
-# -----------------------------------------------------------------------------
+    
+    elif mode == 'shift_time':
         
+        flag = False
+        for line in sort_res:
+            
+            # directory -> numpy [1,] [3,]
+            target = np.array([line['target']])
+            
+            if pname == 'parama':
+            
+                param = np.concatenate((np.array([line['params']['a1']]),np.array([line['params']['a2']]),np.array([line['params']['a3']])),0)
+                
+                if not flag:
+                    targets = target
+                    params = param * mt
+                    flag = True
+                else:
+                    targets = np.vstack([targets,target])
+                    params = np.vstack([params,param * mt])
+        
+            elif pname == 'paramb':
+            
+                param = np.concatenate((np.array([line['params']['b1']]),np.array([line['params']['b2']]),np.array([line['params']['b3']])),0)
+          
+                if not flag:
+                    targets = target
+                    params = param * mt
+                    flag = True
+                else:
+                    targets = np.vstack([targets,target])
+                    params = np.vstack([params,param * mt])
+        
+                
+            elif pname == 'paramL':
+            
+                param = np.concatenate((np.array([line['params']['L1']]),np.array([line['params']['L2']]),np.array([line['params']['L3']])),0)
+            
+                if not flag:
+                    targets = target
+                    params = param * mt
+                    flag = True
+                else:
+                    targets = np.vstack([targets,target])
+                    params = np.vstack([params,param * mt])
+        
+        #pdb.set_trace()
+        
+        # best 1&2 param (sort)
+        best1param = params[-1]
+        best2param = params[-2]
+        
+        # fot next pd, [b1min,b2min,b3min| b1max,b2max,b3max]
+        best12param = np.sort(np.vstack([best1param,best2param]),0)
+        
+        # write update best target of param ex) a1, a2, a3
+        if pname == 'parama':
+            # for other param
+            np.savetxt(os.path.join('params','updateparama.csv'), best1param[np.newaxis]/mt, fmt='%5f', delimiter=',')
+            # for pd
+            np.savetxt(os.path.join('params','pdparama.csv'), best12param/mt, fmt='%5f', delimiter=',')
+            
+        elif pname == 'paramb':
+            # for other param
+            np.savetxt(os.path.join('params','updateparamb.csv'), best1param[np.newaxis]/mt, fmt='%5f', delimiter=',')
+            # for pd
+            np.savetxt(os.path.join('params','pdparama.csv'), best12param/mt, fmt='%5f', delimiter=',')
+           
+        elif pname == 'paramL':
+            # for other param
+            np.savetxt(os.path.join('params','updateparamL.csv'), best1param[np.newaxis]/mt, fmt='%5f', delimiter=',')
+            # for pd
+            np.savetxt(os.path.join('params','pdparamL.csv'), best12param/mt, fmt='%5f', delimiter=',')
+        
+        # optimized rate
+        np.savetxt(os.path.join(savedirPath,f"BO_target_{epoch}_{itrNum}_{pname}_{trID}.txt"),targets)
+        # parameter b
+        np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{pname}_{trID}.txt"),params,fmt=f"%d")
+# -----------------------------------------------------------------------------
+
 """
 # Make best csv ---------------------------------------------------------------
 # Get best paramter b
@@ -457,26 +700,80 @@ targetfiles = glob.glob(targetfullPath)
 paramfullPath = os.path.join(savedirPath,f'BO_{mode}_*')
 paramfiles = glob.glob(paramfullPath)
 
-flag = False
-# ファイル文
-for targetfile,paramfile in zip(targetfiles,paramfiles):
-    target = np.loadtxt(targetfile)
-    param = np.loadtxt(paramfile)
+paramafullPath = os.path.join(savedirPath,f'*_a.csv')
+paramafiles = glob.glob(paramafullPath)    
+paramBfullPath = os.path.join(savedirPath,f'*_b.csv')
+paramBfiles = glob.glob(paramBfullPath)    
+paramLfullPath = os.path.join(savedirPath,f'*_L.csv')
+paramLfiles = glob.glob(paramLfullPath)
+
+targeta = np.loadtxt(paramafiles[0],delimiter=',')
+targetb = np.loadtxt(paramBfiles[0],delimiter=',')
+targetl = np.loadtxt(paramLfiles[0],delimiter=',')
+
+targets = np.concatenate([targeta,targetb,targetl],1)
+
+np.savetxt(os.path.join(savedirPath,f'best100_ABL.csv'),targets,delimiter=',',fmt='%d')
+ 
+pdb.set_trace()
    
-    if not flag:
-        targets = target
-        params = param
-        flag = True
-    else:
-        #pdb.set_trace()
-        targets = np.hstack([targets,target])
-        # for paramb
-        #params = np.vstack([params,param])
-        # for Kij
-        params = np.hstack([params,param])
+if mode == 'ABL':
+    paramAfullPath = os.path.join(savedirPath,f'*_a.txt')
+    paramAfiles = glob.glob(paramAfullPath)    
+    paramBfullPath = os.path.join(savedirPath,f'*_b.txt')
+    paramBfiles = glob.glob(paramBfullPath)    
+    paramLfullPath = os.path.join(savedirPath,f'*_L.txt')
+    paramLfiles = glob.glob(paramLfullPath)
+    
+    flag = False
+    for targetfile,paramAfile,paramBfile,paramLfile in zip(targetfiles,paramAfiles,paramBfiles,paramLfiles):
+        target = np.loadtxt(targetfile)
+        paramA = np.loadtxt(paramAfile)
+        paramB = np.loadtxt(paramBfile)
+        paramL = np.loadtxt(paramLfile)
+       
+        if not flag:
+            targets = target
+            paramsA = paramA
+            paramsB = paramB
+            paramsL = paramL
+            flag = True
+        else:
+            targets = np.hstack([targets,target])
+            paramsA = np.vstack([paramsA,paramA])
+            paramsB = np.vstack([paramsB,paramB])
+            paramsL = np.vstack([paramsL,paramL])
+            
+     # select 100 best targets(maxSim) & parameter
+    best100ind = np.argsort(targets)[::-1][:100]
+    best100target = targets[best100ind]
+    best100paramA = paramsA[best100ind.tolist()]
+    best100paramB = paramsB[best100ind.tolist()]
+    best100paramL = paramsL[best100ind.tolist()]
+    
+    # save target & param
+    np.savetxt(os.path.join(savedirPath,f'best100_target.txt'),best100target)
+    # for bat
+    np.savetxt(os.path.join(savedirPath,f'best100_{mode}_{trID}_a.csv'),best100paramA,delimiter=',',fmt='%d')
+    np.savetxt(os.path.join(savedirPath,f'best100_{mode}_{trID}_b.csv'),best100paramB,delimiter=',',fmt='%d')
+    np.savetxt(os.path.join(savedirPath,f'best100_{mode}_{trID}_L.csv'),best100paramL,delimiter=',',fmt='%d')
 
 if mode == 'paramb':
 
+    flag = False
+    # ファイル文
+    for targetfile,paramfile in zip(targetfiles,paramfiles):
+        target = np.loadtxt(targetfile)
+        param = np.loadtxt(paramfile)
+       
+        if not flag:
+            targets = target
+            params = param
+            flag = True
+        else:
+            targets = np.hstack([targets,target])
+            params = np.vstack([params,param])
+            
     # del multiple parameter b
     parambs = [params[0]]
     index = [0]
@@ -485,7 +782,6 @@ if mode == 'paramb':
             parambs.append(line)
             index.append(ind)
     
-       
     # del multiple targets
     maxsims = targets[index]
     # list -> numpy
@@ -495,22 +791,41 @@ if mode == 'paramb':
     best100target = targets[best100ind]
     best100param = params[best100ind.tolist()]
 
+    # save target & param
+    np.savetxt(os.path.join(savedirPath,f'best100_target.txt'),best100target)
+    # for bat
+    np.savetxt(os.path.join(savedirPath,f'best100_b_{trID}.csv'),best100param,delimiter=',',fmt='%d')
+
 elif mode == 'Kij':
-    #pdb.set_trace()
+    flag = False
+    # ファイル文
+    for targetfile,paramfile in zip(targetfiles,paramfiles):
+        target = np.loadtxt(targetfile)
+        param = np.loadtxt(paramfile)
+       
+        if not flag:
+            targets = target
+            params = param
+            flag = True
+        else:
+            targets = np.hstack([targets,target])
+            params = np.vstack([params,param])
+    
+    # select 100 best targets(maxSim) & parameter
     best100ind = np.argsort(targets)[::-1][:100]
     best100target = targets[best100ind]
     best100param = params[best100ind.tolist()]
-
-# save target & param
-np.savetxt(os.path.join(savedirPath,f'best100_target.txt'),best100target)
-# for bat
-np.savetxt(os.path.join(savedirPath,f'best100_b_{trID}.csv'),best100param,delimiter=',',fmt='%d')
+    
+    # save target & param
+    np.savetxt(os.path.join(savedirPath,f'best100_target.txt'),best100target)
+    # for bat
+    np.savetxt(os.path.join(savedirPath,f'best100_{mode}_{trID}.csv'),best100param,delimiter=',')
 # -----------------------------------------------------------------------------
 """
 # after featureV.bat
 """
 # Plot rireki -----------------------------------------------------------------
-logsfullPath = os.path.join(logsPath,f'sortbayes_{trID}',filePath)
+logsfullPath = os.path.join(logsPath,f'bayes',filePath)
 logsfile = glob.glob(logsfullPath)
 
 with open(os.path.join(featuresPath,"nankairireki.pkl"), "rb") as fp:
@@ -524,32 +839,25 @@ for iS in np.arange(len(logsfile)):
     file = os.path.basename(logsfile[iS])
     print(file)
     # Num. of file for sort index
-    fID = int(file.split("_")[-1].split(".")[0])
-   
-    U, th, V, B = myDataPF.loadABLV(logsPath,f'sortbayes_{trID}',file)
-    B = np.concatenate([B[2,np.newaxis],B[4,np.newaxis],B[5,np.newaxis]],0)
-    deltaU, _, _, _ = myDataPF.convV2YearlyData(U,th,V,nYear=10000,cnt=0,isLast=True)
-    deltaU = np.concatenate((deltaU[:,2,np.newaxis],deltaU[:,4,np.newaxis],deltaU[:,5,np.newaxis]),1)
-    maxSim, pred = myData.MinErrorNankai(deltaU,mode=3,isPlot=True)
-    
-    pJ_all = [np.where(pred[:,ntI]>1)[0],np.where(pred[:,tntI]>1)[0],np.where(pred[:,ttI]>1)[0]]
-    predV = [pJ_all[ntI]-int(U[0,1]),pJ_all[tntI]-int(U[0,1]),pJ_all[ttI]-int(U[0,1])]
-    gtV = [np.where(gt[:,ntI]>0)[0],np.where(gt[:,tntI]>0)[0],np.where(gt[:,ttI]>0)[0]]
+    #fID = int(file.split("_")[-1].split(".")[0])
+    fID = file.split("_")[0]
     #pdb.set_trace()
-    # plot & mae eq. of predict & gt
-    myPlot.Rireki(gtV,predV,path=f"bayes_{trID}",label=f"{iS}_{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}",title=f'{int(maxSim)}\n{predV[0].tolist()}\n{predV[1].tolist()}\n{predV[2].tolist()}',iseach=True)
-
+    # B:[3,]
+    U,_ = myData.loadABLV(logsfile[iS])
+    deltaU = myData.convV2YearlyData(U)
+    maxSim = myData.MinErrorNankai(deltaU,mode=3,label=fID,isPlot=True)
+    
     if not flag:
         maxSims = maxSim
         flag = True
     else:
         maxSims = np.hstack([maxSims,maxSim])
-    
+
 sort_maxSims = np.sort(maxSims)
 index = np.argsort(maxSims)
 
-np.savetxt(os.path.join(f"bayes_{trID}",'maxsim.txt'),sort_maxSims,fmt='%d')
-np.savetxt(os.path.join(f"bayes_{trID}",'index.txt'),index,fmt='%d')
+np.savetxt(os.path.join(savedirPath,'maxsim.txt'),sort_maxSims,fmt='%d')
+np.savetxt(os.path.join(savedirPath,'index.txt'),index,fmt='%d')
 # -----------------------------------------------------------------------------
 """
 """
@@ -575,8 +883,9 @@ sigmavar = np.var(1/var)
 muvar = np.mean(1/var)
 
 myPlot.scatter3D_heatmap(x,y,z,var,rangeP=rangeb,path=os.path.join('images','allsearch','sort_ucb_kappa10'),title=f'top100',label=f"heatmap_sort_ucb_kappa10")
-"""
+
 # -----------------------------------------------------------------------------
+"""
 """
 # Plot scatter parameter b ----------------------------------------------------
 
@@ -599,3 +908,66 @@ rangeb = [[nkmin*1000000,tnkmin*1000000,tkmin*1000000],[nkmax*1000000,tnkmax*100
 myPlot.scatter3D(x,y,z,rangeP=rangeb,path=os.path.join('images','allsearch','sort_ucb_kappa10'),title='top100',label='sort_ucb_kappa10')    
 # -----------------------------------------------------------------------------
 """
+'''
+sns.set()
+
+# gt
+xnk = [84,287,499,761,898,1005,1107,1254,1346]
+# pred (all search)
+ynk1 = [79,285,491,702,866,1075,1285,1285,1285]
+# pred (bayes)
+ynk2 = [84,288,491,697,871,1063,1272,1272,1272]
+
+ynklabel = [0,30,60,180]
+subnk1 = np.abs(np.array(xnk)-np.array(ynk1))
+subnk2 = np.abs(np.array(xnk)-np.array(ynk2))
+
+xtnk = [84,287,496,761,898,1005,1107,1254,1344]
+ytnk1 = [79,285,491,702,925,1004,1099,1263,1285]
+ytnk2 = [84,288,491,697,899,1026,1082,1250,1272]
+
+ytnklabel = [0,30,60]
+subtnk1 = np.abs(np.array(xtnk)-np.array(ytnk1))
+subtnk2 = np.abs(np.array(xtnk)-np.array(ytnk2))
+
+xtk = [84,287,496,761,898,1107,1254]
+ytk1 = [79,285,491,702,925,1099,1285]
+ytk2 = [84,288,491,697,913,1082,1272]
+
+ytklabel = [0,30,60]
+subtk1 = np.abs(np.array(xtk)-np.array(ytk1))
+subtk2 = np.abs(np.array(xtk)-np.array(ytk2))
+
+pdb.set_trace()
+'''
+'''
+gts = [xnk,xtnk,xtk]
+preds = [ynk,ytnk,ytk]
+subs = [subnk,subtnk,subtk]
+ylabels = [ynklabel,ytnklabel,ytklabel]
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+
+fig, figInds = plt.subplots(nrows=3)
+for figInd,(label,gt,pred,sub) in enumerate(zip(ylabels,gts,preds,subs)):
+    figInds[figInd].plot(np.array(gt), sub, marker='o', alpha=0.5, color="black")
+    # gt目盛り
+    figInds[figInd].set_xticks(gt)
+    figInds[figInd].set_yticks(label)
+    
+plt.show()
+plt.close()
+
+sns.set_style('dark')
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+
+subs = np.concatenate([subnk,subtnk,subtk],0)
+data = [subnk,subtnk,subtk,subs]
+sns.boxplot(data=data, palette='Set3', width=0.5)
+
+ax.set_xticklabels(['nankai','tonankai','tokai','all'])
+plt.show()
+'''
