@@ -68,14 +68,19 @@ class ParamNN:
         
         # PDE ----
         # output: u
-        self.predu, self.predparam, self.a,self.b,self.c,self.phi,self.dphi = self.pde(self.x, self.t, self.inobs, nData=self.nBatch)
+        #self.predu, self.predparam, self.a,self.b,self.c,self.phi,self.dphi,self = self.pde(self.x, self.t, self.inobs, nData=self.nBatch)
+        self.predu, self.predparam = self.pde(self.x, self.t, self.inobs, nData=self.nBatch)
         # ※ testデータサイズは手動
-        self.predu_test, self.predparam_test, self.a_test,self.b_test,self.c_test,self.phi_test,self.dphi_test = self.pde(self.x, self.t, self.inobs, nData=150, reuse=True)
+        #self.predu_test, self.predparam_test, self.a_test,self.b_test,self.c_test,self.phi_test,self.dphi_test,tmp_test = self.pde(self.x, self.t, self.inobs, nData=150, reuse=True)
+        self.predu_test, self.predparam_test = self.pde(self.x, self.t, self.inobs, nData=150, reuse=True)
         # ----
         #pdb.set_trace()
         # loss ----
-        self.loss = tf.reduce_mean(tf.square(self.outobs - self.predu))
-        self.loss_test = tf.reduce_mean(tf.square(self.outobs - self.predu_test))
+        #self.loss = tf.reduce_mean(tf.square(self.outobs - self.predu))
+        #self.loss_test = tf.reduce_mean(tf.square(self.outobs - self.predu_test))
+        
+        self.loss = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu),2),1))
+        self.loss_test = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu_test),2),1))
         # ----
         
         # Optimizer ----
@@ -145,7 +150,8 @@ class ParamNN:
             # nu
             y = self.fc(h3,w4,bias4,rate)
         
-            return y
+            #return y
+            return y + 0.00001
     # ----
     
     # ----
@@ -179,9 +185,10 @@ class ParamNN:
             phi = tf.exp(- a * a / c) + tf.exp(- b * b / c)
             dphi = - 2.0 * a * tf.exp(- a * a / c ) / c - 2.0 * b * tf.exp(- b * b / c) / c
 
-            u = 4.0 - 2.0 * tf.expand_dims(tf.expand_dims(param,1),1) * dphi / phi
-            
-            return u,param,a,b,c,phi,dphi
+            invu = 4.0 - 2.0 * tf.expand_dims(param,1) * dphi / phi
+
+            #return u,param,a,b,c,phi,dphi
+            return invu, param
     # ----
     
     # ----
@@ -219,13 +226,21 @@ class ParamNN:
             
             feed_dict = {self.x:batchX, self.t:batchT, self.inobs:batchinU, self.outobs:batchU}
            
-            _, trainParam, trainPred, trainULoss, traina,trainb,trainc,trainphi,traindphi =\
-            self.sess.run([self.opt, self.predparam, self.predu, self.loss, self.a, self.b, self.c,self.phi,self.dphi], feed_dict)
+            _, trainParam, trainPred, trainULoss =\
+            self.sess.run([self.opt, self.predparam, self.predu, self.loss], feed_dict)
+            
+            #_, trainParam, trainPred, trainULoss, traina,trainb,trainc,trainphi,traindphi,aac =\
+            #self.sess.run([self.opt, self.predparam, self.predu, self.loss, self.a, self.b, self.c,self.phi,self.dphi,self.tmp], feed_dict)
             
             #pdb.set_trace()
-
             trainPLoss = np.mean(np.square(batchNU - trainParam))
-
+            '''
+            print('itr: %d, trainULoss:%f, trainPLoss:%f' % (itr, trainULoss, trainPLoss))
+            print(trainParam[:5])
+            print(trainPred[0,0,:])
+            print(batchU[0,0,:])
+            pdb.set_trace()
+            '''
 
             if eInd + self.nBatch > nTrain:
                 batchCnt = 0
@@ -240,6 +255,8 @@ class ParamNN:
                 
                 print('----')
                 print('itr: %d, trainULoss:%f, trainPLoss:%f' % (itr, trainULoss, trainPLoss))
+                print(f'train exact: {batchNU[:5]}')
+                print(f'train pred: {trainParam[:5]}')
                 
                 # u loss 
                 trL = np.append(trL,trainULoss)
@@ -268,8 +285,10 @@ class ParamNN:
 
         self.testPLoss = np.mean(np.square(self.testNU-self.testParam))
 
-
+        #pdb.set_trace()
         print('itr: %d, testULoss:%f, testPLoss:%f' % (itr, self.testULoss, self.testPLoss))
+        print(f'test exact: {self.testNU[:5]}')
+        print(f'test pred: {self.testParam[:5]}')
        
     # ----
     
