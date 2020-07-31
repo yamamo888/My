@@ -37,12 +37,13 @@ class ParamNN:
         self.nBatch = nBatch
         self.trialID = trialID
         self.uInput = self.xDim * int(tDim/10)   
+        self.yDim = 3
         # ----
         
         # Dataset ----
         self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
         
-        testx, testt, testu, self.testNU = self.myData.traintest()
+        _, _, testu, self.testNU = self.myData.traintest()
         
         # [1000,100,256] -> [1000,100,xDim]
         idx = np.random.choice(testu.shape[-1], self.xDim, replace=False)
@@ -51,36 +52,19 @@ class ParamNN:
         # input u [1000,uInput], [t,x]=[int(tDim/10),xdim]
         idt = np.random.choice(testu.shape[1], int(tDim/10), replace=False)
         self.testinU = np.reshape(self.testU[:,idt,:], [-1, self.uInput])
-        
-        # [testdata, 256] -> [testdata, xdim]
-        self.testX = np.reshape(np.tile(testx[idx], testt.shape[0]), [-1, self.xDim])
-        self.testT = np.reshape(np.tile(testt, self.xDim), [-1, testt.shape[0]])
         # ----
         
         # Placeholder ----
-        # u
+        # output param b
+        self.y = tf.compat.v1.placeholder(tf.float32,shape=[None, self.yDim])
+        # input u
         self.inobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.uInput])
-        self.outobs = tf.compat.v1.placeholder(tf.float32,shape=[None, tDim, self.xDim])
-        # x,t
-        self.x = tf.compat.v1.placeholder(tf.float32,shape=[tDim, self.xDim])
-        self.t = tf.compat.v1.placeholder(tf.float32,shape=[self.xDim, tDim])
         # ----
         
-        # PDE ----
-        # output: u
-        #self.predu, self.predparam, self.a,self.b,self.c,self.phi,self.dphi,self = self.pde(self.x, self.t, self.inobs, nData=self.nBatch)
-        self.predu, self.predparam = self.pde(self.x, self.t, self.inobs, nData=self.nBatch)
-        # ※ testデータサイズは手動
-        #self.predu_test, self.predparam_test, self.a_test,self.b_test,self.c_test,self.phi_test,self.dphi_test,tmp_test = self.pde(self.x, self.t, self.inobs, nData=150, reuse=True)
-        self.predu_test, self.predparam_test = self.pde(self.x, self.t, self.inobs, nData=150, reuse=True)
-        # ----
-        #pdb.set_trace()
         # loss ----
-        #self.loss = tf.reduce_mean(tf.square(self.outobs - self.predu))
-        #self.loss_test = tf.reduce_mean(tf.square(self.outobs - self.predu_test))
-        
-        self.loss = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu),2),1))
-        self.loss_test = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu_test),2),1))
+        # param loss
+        self.loss = tf.reduce_mean(tf.square(self.y - self.predy))
+        self.loss_test = tf.reduce_mean(tf.square(self.y - self.predy_test))
         # ----
         
         # Optimizer ----
@@ -126,7 +110,6 @@ class ParamNN:
                 scope.reuse_variables()
             
             dInput = x.get_shape().as_list()[-1]
-            dOutput = 1
             
             # 1st layer
             w1 = self.weight_variable('w1',[dInput, nHidden])
@@ -144,52 +127,16 @@ class ParamNN:
             h3 = self.fc_relu(h2,w3,bias3,rate)
             
             # 4nd layer
-            w4 = self.weight_variable('w4',[nHidden, dOutput])
-            bias4 = self.bias_variable('bias4',[dOutput])
+            w4 = self.weight_variable('w4',[nHidden, self.yDim])
+            bias4 = self.bias_variable('bias4',[self.yDim])
             
             # nu
             y = self.fc(h3,w4,bias4,rate)
         
-            #return y
-            return y + 0.00001
+            return y
+            
     # ----
     
-    # ----
-    def pde(self, x, t, u, nData=100, reuse=False):
-        
-        pi = 3.14
-        
-        with tf.compat.v1.variable_scope('pde') as scope:  
-            if reuse:
-                scope.reuse_variables()
-            
-            #pdb.set_trace()
-            
-            # pred nu [ndata,]
-            param = self.lambdaNN(u, reuse=reuse)
-            
-            # a,bは、すべての u で共通
-            tmpa = x - 4.0 * tf.transpose(t) # [t.shape, x.shape]
-            tmpb = x - 4.0 * tf.transpose(t) - 2.0 * pi
-            # データ数分の t [ndata, t.shape]
-            ts = tf.tile(tf.expand_dims(t[0], 0), [nData, 1])
-            # データごと(param)に計算 [ndata, t.shape]
-            tmpc = 4.0 * param * (ts + 1.0)
-            
-            # + N dimention [nBatch, t.shape, x.shape]
-            a = tf.tile(tf.expand_dims(tmpa, 0), [nData, 1, 1])
-            b = tf.tile(tf.expand_dims(tmpb, 0), [nData, 1, 1])
-            c = tf.tile(tf.expand_dims(tmpc, -1), [1, 1, self.xDim])
-            
-            # [nBatch, t.shape, x.shape]
-            phi = tf.exp(- a * a / c) + tf.exp(- b * b / c)
-            dphi = - 2.0 * a * tf.exp(- a * a / c ) / c - 2.0 * b * tf.exp(- b * b / c) / c
-
-            invu = 4.0 - 2.0 * tf.expand_dims(param,1) * dphi / phi
-
-            #return u,param,a,b,c,phi,dphi
-            return invu, param
-    # ----
     
     # ----
     def train(self, nItr=1000):
@@ -197,12 +144,11 @@ class ParamNN:
         # parameters ----
         testPeriod = 100
         batchCnt = 0
-        nTrain = 3995
+        nTrain = 10
         batchRandInd = np.random.permutation(nTrain)
         # ----
         
         # Start training
-        trL,teL = [],[]
         trPL,tePL = [],[]
         flag = False
         for itr in range(nItr):
@@ -213,35 +159,19 @@ class ParamNN:
             index = batchRandInd[sInd:eInd]
             # Get train data
             # [x.shape], [100,], [nbatch, t.shape, x.shape]
-            batchx, batcht, batchU, batchNU = self.myData.nextBatch(index)
-            
-            # [nbatch,100] -> [nbathc, x.shape]
-            batchX = np.reshape(np.tile(batchx, batcht.shape[0]), [-1, batchx.shape[0]])
-            batchT = np.reshape(np.tile(batcht, batchx.shape[0]), [-1, batcht.shape[0]])
-            
+            _, _, batchU, batchNU = self.myData.nextBatch(index)
+             
             # ※ 工夫の余地あり(input)
             # random u(t) for feature (data増やしたいときは第二引数+) 
             idt = np.random.choice(batchU.shape[1], 10, replace=False)
             batchinU = np.reshape(batchU[:,idt,:], [-1, self.uInput])
             
-            feed_dict = {self.x:batchX, self.t:batchT, self.inobs:batchinU, self.outobs:batchU}
-           
-            _, trainParam, trainPred, trainULoss =\
-            self.sess.run([self.opt, self.predparam, self.predu, self.loss], feed_dict)
+            # y: prameter b
+            feed_dict = {self.y:batchNU, self.inobs:batchinU}
             
-            #_, trainParam, trainPred, trainULoss, traina,trainb,trainc,trainphi,traindphi,aac =\
-            #self.sess.run([self.opt, self.predparam, self.predu, self.loss, self.a, self.b, self.c,self.phi,self.dphi,self.tmp], feed_dict)
+            _, trainParam, trainLoss =\
+            self.sess.run([self.opt, self.predy, self.loss], feed_dict)
             
-            #pdb.set_trace()
-            trainPLoss = np.mean(np.square(batchNU - trainParam))
-            '''
-            print('itr: %d, trainULoss:%f, trainPLoss:%f' % (itr, trainULoss, trainPLoss))
-            print(trainParam[:5])
-            print(trainPred[0,0,:])
-            print(batchU[0,0,:])
-            pdb.set_trace()
-            '''
-
             if eInd + self.nBatch > nTrain:
                 batchCnt = 0
                 batchRandInd = np.random.permutation(nTrain)
@@ -254,39 +184,32 @@ class ParamNN:
                 self.test(itr=itr)
                 
                 print('----')
-                print('itr: %d, trainULoss:%f, trainPLoss:%f' % (itr, trainULoss, trainPLoss))
+                print('itr: %d, trainLoss:%f' % (itr, trainLoss))
                 print(f'train exact: {batchNU[:5]}')
                 print(f'train pred: {trainParam[:5]}')
                 
-                # u loss 
-                trL = np.append(trL,trainULoss)
-                teL = np.append(teL,self.testULoss)
                 
                 # param loss
-                trPL = np.append(trPL,trainPLoss)
-                tePL = np.append(tePL,self.testPLoss)
+                trPL = np.append(trPL,trainLoss)
+                tePL = np.append(tePL,self.testLoss)
 
                 # Save model
                 #self.saver.save(self.sess, os.path.join('model', 'burgers', 'first'), global_step=itr)
         
         paramloss = [trPL,tePL]
-        ulosses = [trL, teL]
     
-        return ulosses, paramloss
+        return paramloss
     # ----
     
     # ----
     def test(self,itr=0):
         
-        feed_dict={self.x:self.testX, self.t:self.testT, self.inobs:self.testinU, self.outobs:self.testU}    
+        feed_dict={self.y: self.testNU, self.inobs:self.testinU}    
         
-        self.testParam, self.testPred, self.testULoss =\
-        self.sess.run([self.predparam_test, self.predu_test, self.loss_test], feed_dict)
+        self.testParam, self.testLoss =\
+        self.sess.run([self.predy_test, self.loss_test], feed_dict)
 
-        self.testPLoss = np.mean(np.square(self.testNU-self.testParam))
-
-        #pdb.set_trace()
-        print('itr: %d, testULoss:%f, testPLoss:%f' % (itr, self.testULoss, self.testPLoss))
+        print('itr: %d, testPLoss:%f' % (itr, self.tesPLoss))
         print(f'test exact: {self.testNU[:5]}')
         print(f'test pred: {self.testParam[:5]}')
        
@@ -329,12 +252,11 @@ if __name__ == "__main__":
     
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, nBatch=nBatch, trialID=trialID, dataMode=dataMode)
-    ulosses, plosses = model.train(nItr=nItr)
+    plosses = model.train(nItr=nItr)
     # ----
     
     # Plot ----
     myPlot = pdeplot.Plot(trialID=trialID)
-    myPlot.pLoss(ulosses, labels=['train','test'], savename='u')
     myPlot.pLoss(plosses, labels=['train','test'], savename='param')
     # ----
  
