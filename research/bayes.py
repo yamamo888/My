@@ -88,7 +88,7 @@ cnt = 0
 ##
 
 ## for researching for param a (default) ##
-amin,amax = 0.01,0.02
+amin,amax = 0.01,0.020
 
 defaultA = [[amin,amax],[amin,amax],[amin,amax]]
 
@@ -134,6 +134,7 @@ def setPriorDistribution(pd, pname='paramb'):
     pname: parameter
     '''
     if pname == 'parama':
+        
         nkmin,nkmax = pd[ntI][0],pd[ntI][1]
         tnkmin,tnkmax = pd[tntI][0],pd[tntI][1]
         tkmin,tkmax = pd[ttI][0],pd[ttI][1]
@@ -142,6 +143,7 @@ def setPriorDistribution(pd, pname='paramb'):
         pbounds = {"a1":(nkmin,nkmax),"a2":(tnkmin,tnkmax),"a3":(tkmin,tkmax)}
     
     elif pname == 'paramb':
+        
         nkmin,nkmax = pd[ntI][0],pd[ntI][1]
         tnkmin,tnkmax = pd[tntI][0],pd[tntI][1]
         tkmin,tkmax = pd[ttI][0],pd[ttI][1]
@@ -150,6 +152,7 @@ def setPriorDistribution(pd, pname='paramb'):
         pbounds = {"b1":(nkmin,nkmax),"b2":(tnkmin,tnkmax),"b3":(tkmin,tkmax)}
     
     elif pname == 'paramL':
+        
         nkmin,nkmax = pd[ntI][0],pd[ntI][1]
         tnkmin,tnkmax = pd[tntI][0],pd[tntI][1]
         tkmin,tkmax = pd[ttI][0],pd[ttI][1]
@@ -261,12 +264,29 @@ def objective():
     
     # reading gt & logs
     logfile = readlogsFiles()[0]
-    print(logfile)
-    # U:[None,10], B:[3,]
-    U,B = myData.loadABLV(logfile)
-    deltaU = myData.convV2YearlyData(U)
-    # one : one (※MSE) mode==4(normal) mode==5(reverse)
-    maxSim = myData.MinErrorNankai(gt, deltaU, mode=4)
+    
+    tmpA = os.path.basename(logfile).split('_')[:3]
+    tmpB = os.path.basename(logfile).split('_')[3:6]
+    
+    tmpA = np.array(tmpA).astype(int)
+    tmpB = np.array(tmpB).astype(int)
+
+    AB = tmpA - tmpB
+    print(f'nk:{AB[0]} tnk:{AB[1]} tk:{AB[2]}')
+    
+    # OK a-b<0
+    if all(AB<0):
+    
+        # U:[None,10], B:[3,]
+        U,B = myData.loadABLV(logfile)
+        deltaU = myData.convV2YearlyData(U)
+        # one : one (※MSE) mode==4(normal) mode==5(reverse)
+        maxSim = myData.MinErrorNankai(gt, deltaU, mode=4)
+        
+    else:
+        # out value
+        maxSim = 100000000
+    
     maxSim = 1/maxSim
     
     # Delate logfile
@@ -331,7 +351,9 @@ def Lfunc(L1,L2,L3):
 # other parameter -------------------------------------------------------------
 def paramStock(pname='paramb'):
     '''
-    load two param file (not update by bayes)
+    load other two parameter file (not update by bayes)
+    if paramb optimize -> loading a & L
+    !! first epoch time a=0.01, L=0.01 (manual)
     '''
     
     if pname == 'parama':
@@ -474,9 +496,27 @@ for epoch in np.arange(nEpoch):
        
             pname = 'parama'
             
-            # reading parameter
-            tmp = np.loadtxt(os.path.join('params','pdparama.csv'), delimiter=',')    
-            pd = [tmp[:,0],tmp[:,1],tmp[:,2]]
+            paramb = np.loadtxt(os.path.join('params','updateparamb.csv'), delimiter=',')
+            
+            # reading parameter a
+            tmpa = np.loadtxt(os.path.join('params','pdparama.csv'), delimiter=',')    
+            
+            #pdb.set_trace()
+            
+            # ok: max parama < paramb
+            if paramb[0] < tmpa[1][0]:
+                # min
+                tmpa[0][0] = paramb[0] - 0.002
+                # max
+                tmpa[1][0] = paramb[0] - 0.001
+            if paramb[1] < tmpa[1][1]:
+                tmpa[0][1] = paramb[1] - 0.002
+                tmpa[1][1] = paramb[1] - 0.001
+            if paramb[2] < tmpa[1][2]:
+                tmpa[0][2] = paramb[2] - 0.002
+                tmpa[1][2] = paramb[2] - 0.001
+            
+            pd = [tmpa[:,0],tmpa[:,1],tmpa[:,2]]
            
             # prior distribution parameter a 
             pbounds = setPriorDistribution(pd, pname=pname)
@@ -496,6 +536,8 @@ for epoch in np.arange(nEpoch):
             
             # prior distribution parameter b
             pbounds = setPriorDistribution(pd, pname=pname)
+            
+            #pdb.set_trace()
         
             # Start Bayes -----------------------------------------------------
             #opt = myBayesianOptimization(f=bfunc,pbounds=pbounds,verbose=1)
@@ -523,6 +565,8 @@ for epoch in np.arange(nEpoch):
     # init_points:最初に取得するf(x)の数、ランダムに選択される
     # n_iter:試行回数(default:5パターンのパラメータで学習)
     opt.maximize(init_points=5, n_iter=itrNum, acq='ucb', kappa=kappa, kappa_decay=kDecay, kappa_decay_delay=kitr)
+    #opt.maximize(init_points, n_iter, acq, kappa, kappa_decay, kappa_decay_delay)
+    
     # -------------------------------------------------------------------------
          
     # Result ------------------------------------------------------------------
@@ -673,22 +717,42 @@ for epoch in np.arange(nEpoch):
             # for pd
             np.savetxt(os.path.join('params','pdparama.csv'), best12param/mt, fmt='%5f', delimiter=',')
             
+            # other param, update
+            b,L = paramStock(pname=pname)
+            # other two param
+            np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{pname}_{trID}_b.txt"), b*mt, fmt='%d', delimiter=',')
+            np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{pname}_{trID}_L.txt"), L*mt, fmt='%d', delimiter=',')
+                
         elif pname == 'paramb':
             # for other param
             np.savetxt(os.path.join('params','updateparamb.csv'), best1param[np.newaxis]/mt, fmt='%5f', delimiter=',')
             # for pd
-            np.savetxt(os.path.join('params','pdparama.csv'), best12param/mt, fmt='%5f', delimiter=',')
+            np.savetxt(os.path.join('params','pdparamb.csv'), best12param/mt, fmt='%5f', delimiter=',')
            
+            # other param, update
+            a,L = paramStock(pname=pname)
+            # other two param
+            np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{pname}_{trID}_a.txt"), a*mt, fmt='%d', delimiter=',')
+            np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{pname}_{trID}_L.txt"), L*mt, fmt='%d', delimiter=',')
+            
         elif pname == 'paramL':
             # for other param
             np.savetxt(os.path.join('params','updateparamL.csv'), best1param[np.newaxis]/mt, fmt='%5f', delimiter=',')
             # for pd
             np.savetxt(os.path.join('params','pdparamL.csv'), best12param/mt, fmt='%5f', delimiter=',')
-        
+         
+            # other param, update
+            a,b = paramStock(pname=pname)
+            # other two param
+            np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{pname}_{trID}_a.txt"), a*mt, fmt='%d', delimiter=',')
+            np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{pname}_{trID}_b.txt"), b*mt, fmt='%d', delimiter=',')
+            
+        #pdb.set_trace()
         # optimized rate
         np.savetxt(os.path.join(savedirPath,f"BO_target_{epoch}_{itrNum}_{pname}_{trID}.txt"),targets)
-        # parameter b
-        np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{pname}_{trID}.txt"),params,fmt=f"%d")
+        # update param
+        np.savetxt(os.path.join(savedirPath,f"BO_{mode}_{epoch}_{itrNum}_{pname}_{trID}.txt"),params,fmt="%d")
+    
 # -----------------------------------------------------------------------------
 
 """
