@@ -122,10 +122,11 @@ class pdeData:
         '''
         
         with open(os.path.join(self.modelPath, self.pdeMode, 'XTUNU.pkl'), 'rb') as fp:
-            X = pickle.load(fp)
-            T = pickle.load(fp)
-            U = pickle.load(fp)
-            NU = pickle.load(fp)
+            X = pickle.load(fp) # [256,1]
+            T = pickle.load(fp) # [256,1]
+            # 画像サイズが
+            U = pickle.load(fp) # [500, 371, 498, 3]
+            NU = pickle.load(fp) # [500]
             
         # train data
         # Num.of data
@@ -184,11 +185,65 @@ class pdeData:
         
     # ----
     
+    # ----
+    def maketraintest(self):
+        
+        ind = np.ones(496, dtype=bool)
+        # train data index
+        trainidx = np.random.choice(496, int(496*0.8), replace=False).tolist()
+        ind[trainidx] = False
+        vec = np.arange(496)
+        # test data index
+        testidx = vec[ind]
+        
+        imgspath = glob.glob(os.path.join('model','burgers','IMG*'))
+        
+        flag = False
+        for imgpath in imgspath:
+            with open(imgpath, 'rb') as fp:
+                X = pickle.load(fp)
+                T = pickle.load(fp)
+                U = pickle.load(fp)
+                NU = pickle.load(fp)
+            
+            trU = U[trainidx,:371,:498,:]
+            teU = U[testidx,:371,:498,:]
+            trNU = NU[trainidx]
+            teNU = NU[testidx]
+            
+            if not flag:
+                trUs = trU
+                trNUs = trNU
+                teUs = teU
+                teNUs = teNU
+                flag = True
+            else:
+                trUs = np.vstack([trUs,trU])
+                trNUs = np.vstack([trNUs,trNU])
+                teUs = np.vstack([teUs,teU])
+                teNUs = np.vstack([teNUs,teNU])
+        
+        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtrainXTUNU.pkl'), 'wb') as fp:
+            pickle.dump(X, fp)
+            pickle.dump(T, fp)
+            pickle.dump(trUs, fp)
+            pickle.dump(trNUs, fp)
+            
+        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtestXTUNU.pkl'), 'wb') as fp:
+            pickle.dump(X, fp)
+            pickle.dump(T, fp)
+            pickle.dump(teUs, fp)
+            pickle.dump(teNUs, fp)
+        
+    
     # ----    
     def traintest(self):
         
+        pdb.set_trace()
+        
         # train data
-        with open(os.path.join(self.modelPath, self.pdeMode, f'trainXTUNU_{self.dataMode}.pkl'), 'rb') as fp:
+        #with open(os.path.join(self.modelPath, self.pdeMode, f'trainXTUNU_{self.dataMode}.pkl'), 'rb') as fp:
+        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtrainXTUNU.pkl'), 'rb') as fp:
             self.trainX = pickle.load(fp)
             self.trainT = pickle.load(fp)
             self.trainU = pickle.load(fp)
@@ -196,7 +251,8 @@ class pdeData:
         
         # test data
         # testX,testT: 同じX,Tがtestデータ分
-        with open(os.path.join(self.modelPath, self.pdeMode, f'testXTUNU_{self.dataMode}.pkl'), 'rb') as fp:
+        #with open(os.path.join(self.modelPath, self.pdeMode, f'testXTUNU_{self.dataMode}.pkl'), 'rb') as fp:
+        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtestXTUNU.pkl'), 'rb') as fp:
             testX = pickle.load(fp)
             testT = pickle.load(fp)
             testU = pickle.load(fp)
@@ -206,7 +262,7 @@ class pdeData:
         return self.trainU, self.trainNU, testX[0], testT[0], testU, testNU
     
     # ----
-    
+
     # ----
     def makeImg(self,x,t,u,label='test'):
             
@@ -258,6 +314,68 @@ class pdeData:
 
         return delimg
 
+     # ----
+    def weight_variable(self,name,shape,trainable=True):
+         return tf.compat.v1.get_variable(name,shape,initializer=tf.random_normal_initializer(stddev=0.1),trainable=trainable)
+    # ----
+    # ----
+    def bias_variable(self,name,shape,trainable=True):
+         return tf.compat.v1.get_variable(name,shape,initializer=tf.constant_initializer(0.1),trainable=trainable)
+    # ----
+    # ----
+    def conv2d(self, x, W, b, strides=1):
+        x = tf.nn.conv2d(x, W, strides=[1, strides, strides, 1], padding='SAME')
+        x = tf.nn.bias_add(x, b)
+        return tf.nn.relu(x)
+    # ----
+    # ----
+    def maxpool2d(self, x, k=2):
+        return tf.nn.max_pool(x, ksize=[1, k, k, 1], strides=[1, k, k, 1],padding='SAME')
+    # ----
+    # ----
+    def fc_relu(self,inputs,w,b,rate=0.0):
+        relu = tf.matmul(inputs,w) + b
+        relu = tf.nn.dropout(relu, rate=rate)
+        relu = tf.nn.relu(relu)
+        return relu
+    # ----
+    
+    # ----
+    def CNNfeature(self, x, reuse=False):
+        
+        with tf.compat.v1.variable_scope("CNN") as scope:
+            if reuse:
+                scope.reuse_variables()
+        
+            x = tf.reshape(x, shape=[-1, 28, 28, 1])
+    
+            # 1st conv layer
+            w1 = self.weight_variable('w1', [5,5,3,36])
+            b1 = self.bias_variable('b1', [36])
+            conv1 = self.conv2d(x, w1, b1, strides=[1,2,2,1], padding='SAME')
+        
+            conv1 = self.maxpool2d(conv1)
+        
+            # 2nd conv layer
+            w2 = self.weight_variable('w2', [5,5,36,36])
+            b2 = self.bias_variable('b2', [36])
+            conv2 = self.conv2d(conv1, w2, b2, strides=[1,2,2,1], padding='SAME')
+        
+            conv2 = self.maxpool2d(conv2)
+            
+            pdb.set_trace()
+            
+            w3 = self.weight_variable('w3', [5*5*36,1024])
+            b3 = self.bias_variable('b3', [1024])
+            
+            # 1st full-layer
+            reshape_conv2 = tf.reshape(conv2, [-1, w3.get_shape().as_list()[0]])
+            
+            fc1 = self.fc_relu(reshape_conv2,w3,b3)
+            
+            return fc1
+    # ----
+    
     # ----
     def nextBatch(self, index):
 
@@ -279,16 +397,9 @@ class pdeData:
 
 #for size, name in zip(Size,Name):
     #myData.savetraintest(size=size, savepklname=name)
-#myData = pdeData(dataMode='small')
+myData = pdeData(dataMode='small')
+myData.maketraintest()
 #trU, trNU, teX, teT, teU, teNU = myData.traintest()
-
-with open(os.path.join('model','burgers','IMGXTUNU_0500.pkl'), 'rb') as fp:
-    X = pickle.load(fp)
-    T = pickle.load(fp)
-    U = pickle.load(fp)
-    NU = pickle.load(fp)
-
-pdb.set_trace()
 
 '''
 num1 = 1500
