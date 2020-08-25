@@ -37,14 +37,15 @@ class ParamNN:
         self.nBatch = nBatch
         self.trialID = trialID
         self.uInput = self.xDim * int(tDim/10)   
-        self.yDim = 3
+        self.yDim = 1
         # ----
         
         # Dataset ----
         self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
         
-        _, _, testu, self.testNU = self.myData.traintest()
+        _, _, testu, testnu = self.myData.traintest()
         
+        self.testNU = testnu[:,np.newaxis]
         # [1000,100,256] -> [1000,100,xDim]
         idx = np.random.choice(testu.shape[-1], self.xDim, replace=False)
         self.testU = testu[:,:,idx]
@@ -59,6 +60,11 @@ class ParamNN:
         self.y = tf.compat.v1.placeholder(tf.float32,shape=[None, self.yDim])
         # input u
         self.inobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.uInput])
+        # ----
+
+        # Neural Network ----
+        self.predy = self.lambdaNN(self.inobs)
+        self.predy_test = self.lambdaNN(self.inobs, reuse=True)
         # ----
         
         # loss ----
@@ -144,7 +150,7 @@ class ParamNN:
         # parameters ----
         testPeriod = 100
         batchCnt = 0
-        nTrain = 10
+        nTrain = 3995
         batchRandInd = np.random.permutation(nTrain)
         # ----
         
@@ -154,12 +160,17 @@ class ParamNN:
         for itr in range(nItr):
             
             # index
-            sInd = self.nBatch * batchCnt
-            eInd = sInd + self.nBatch
-            index = batchRandInd[sInd:eInd]
+            #sInd = self.nBatch * batchCnt
+            #eInd = sInd + self.nBatch
+            #index = batchRandInd[sInd:eInd]
+            
+            index = np.random.choice(nTrain, 1, replace=False)
+
             # Get train data
             # [x.shape], [100,], [nbatch, t.shape, x.shape]
             _, _, batchU, batchNU = self.myData.nextBatch(index)
+            
+            #pdb.set_trace()
              
             # ※ 工夫の余地あり(input)
             # random u(t) for feature (data増やしたいときは第二引数+) 
@@ -167,17 +178,18 @@ class ParamNN:
             batchinU = np.reshape(batchU[:,idt,:], [-1, self.uInput])
             
             # y: prameter b
-            feed_dict = {self.y:batchNU, self.inobs:batchinU}
+            #feed_dict = {self.y:batchNU[:,np.newaxis], self.inobs:batchinU}
+            feed_dict = {self.y:np.tile(batchNU,10)[:,np.newaxis], self.inobs:batchinU}
             
             _, trainParam, trainLoss =\
             self.sess.run([self.opt, self.predy, self.loss], feed_dict)
-            
+            ''' 
             if eInd + self.nBatch > nTrain:
                 batchCnt = 0
                 batchRandInd = np.random.permutation(nTrain)
             else:
                 batchCnt += 1
-            
+            '''
             # Test
             if itr % testPeriod == 0:
 
@@ -204,12 +216,12 @@ class ParamNN:
     # ----
     def test(self,itr=0):
         
-        feed_dict={self.y: self.testNU, self.inobs:self.testinU}    
+        feed_dict={self.y:self.testNU, self.inobs:self.testinU}    
         
         self.testParam, self.testLoss =\
         self.sess.run([self.predy_test, self.loss_test], feed_dict)
 
-        print('itr: %d, testPLoss:%f' % (itr, self.tesPLoss))
+        print('itr: %d, testLoss:%f' % (itr, self.testLoss))
         print(f'test exact: {self.testNU[:5]}')
         print(f'test pred: {self.testParam[:5]}')
        
@@ -229,7 +241,7 @@ if __name__ == "__main__":
     parser.add_argument('--dataMode', required=True, choices=['large', 'middle', 'small'])
     # trial ID
     parser.add_argument('--trialID', type=int, default=0)    
-    
+     
     # 引数展開
     args = parser.parse_args()
     
@@ -239,6 +251,9 @@ if __name__ == "__main__":
     dataMode = args.dataMode
     # ----
     
+    
+
+
     # path ----
     modelPath = "model"
     figurePath = "figure"
