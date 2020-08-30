@@ -127,7 +127,7 @@ class pdeData:
             # 画像サイズが
             U = pickle.load(fp) # [500, 371, 498, 3]
             NU = pickle.load(fp) # [500]
-            
+        pdb.set_trace()
         # train data
         # Num.of data
         nData = X.shape[0]
@@ -183,7 +183,6 @@ class pdeData:
             pickle.dump(testT, fp)
             pickle.dump(testU, fp)
             pickle.dump(testNU, fp)
-        
     # ----
     
     # ----
@@ -426,7 +425,7 @@ class pdeData:
     # ----
     
 
-#myData = pdeData(dataMode='small')
+myData = pdeData(dataMode='small')
 #myData.maketraintest()
 #trainXY, testXY, xt = myData.Loadingburgers()
 #trainXY, testXY, xt = myData.burgers()
@@ -441,7 +440,7 @@ class pdeData:
 
 #trU, trNU, teX, teT, teU, teNU = myData.traintest()
 
-'''
+
 num1 = 4500
 num2 = 4500
 name = 'large'
@@ -459,7 +458,7 @@ elif name == 'middle':
     xSize = 20
 elif name == 'small':
     xSize = 2
-#pdb.set_trace()
+pdb.set_trace()
 idx = np.random.choice(X[0].shape[0], xSize, replace=False)
 print(name)
 flag = False
@@ -469,29 +468,36 @@ for i in np.arange(NU.shape[0])[num1:]:
     label = NU[i].astype(str)
     print(label)
     print(i)
-    
-    myData.makeImg(X[0,idx,np.newaxis],T[0,:,np.newaxis],U[i,:,idx].T,label=label,name=name)
+    #pdb.set_trace()
+    #myData.makeImg(X[0,idx,np.newaxis],T[0,:,np.newaxis],U[i,:,idx].T,label=label,name=name)
     #myData.makeImg(X[idx,:,np.newaxis],T[0,:,np.newaxis],U[i],label=label,name=name)
     #pdb.set_trace()
-    imgpath = glob.glob(os.path.join('figure',f'burgers_{name}','*png'))
-    img = [s for s in imgpath if label in s]
+    #imgpath = glob.glob(os.path.join('figure',f'burgers_{name}','*png'))
+    #img = [s for s in imgpath if label in s]
     #pdb.set_trace()
-    tmpimg = myData.delSpace(img)
+    #tmpimg = myData.delSpace(img)
 
     if not flag:
-        Img = tmpimg[np.newaxis]
+        #Img = tmpimg[np.newaxis]
+        Us = U[i,:,idx] # [x,t]
         flag = True
     else:
-        Img = np.vstack([Img,tmpimg[np.newaxis]])
+        #Img = np.vstack([Img,tmpimg[np.newaxis]])
+        Us = np.vstack([Us,U[i,:,idx]])
 
+# あとあとで、
 #pdb.set_trace()
-with open(os.path.join('model',f'burgers_{name}',f'IMGXTUNU_{name}_{num1}{num2}.pkl'), 'wb') as fp:
-    pickle.dump(X[0,:,np.newaxis], fp)
-    pickle.dump(T[0,:,np.newaxis], fp)
-    pickle.dump(Img, fp)
+with open(os.path.join('model',f'burgers_{name}_01',f'IMGXTUNU_{name}_{num1}{num2}.pkl'), 'wb') as fp:
+#with open(os.path.join('model',f'burgers_{name}',f'IMGXTUNU_{name}_{num1}{num2}.pkl'), 'wb') as fp:
+    #pickle.dump(X[0,:,np.newaxis], fp)
+    #pickle.dump(T[0,:,np.newaxis], fp)
+    #pickle.dump(Img, fp)
     #pickle.dump(NU[num1:num2], fp)
+    pickle.dump(X[0,idx,np.newaxis], fp)
+    pickle.dump(T[0,:,np.newaxis], fp)
+    pickle.dump(Us, fp)
     pickle.dump(NU[num1:], fp)
-'''
+
 #myPlot = plot.Plot(figurepath='figure', trialID=0)
 #myPlot.udata(xt, trainXY, testXY[1], testXY, testXY)
 
