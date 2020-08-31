@@ -18,7 +18,7 @@ import tensorflow as tf
 
 
 # ----    
-def burgersPy(x,t,nu):
+def burgersPy(x,t,nu, xNum=256,tNum=100):
     
     # observation
     obsu = np.zeros([xNum, tNum])
@@ -39,10 +39,11 @@ def burgersPy(x,t,nu):
 # ----
 
 # ----        
-def burgersTensor(nData=1,xDim=256, x,t,nu):
+def burgersTensor(x,t,nu, nData=1,xDim=256):
+    
+    #pdb.set_trace()
     
     pi = 3.14
-        
     # a,bは、すべての u で共通
     tmpa = x - 4.0 * tf.transpose(t) # [t.shape, x.shape]
     tmpb = x - 4.0 * tf.transpose(t) - 2.0 * pi
@@ -84,7 +85,7 @@ def plotImg(x,t,u,label='test',dirname='exact'):
     plt.tick_params(bottom=False,left=False,right=False,top=False)
     plt.axis('off')
     
-    plt.savefig(os.path.join('figure', dirname, f'{label}.png'))    
+    plt.savefig(os.path.join('figure', f'burgers_{dirname}', f'{label}.png'))    
 # ----
 
     
@@ -120,44 +121,67 @@ if __name__ == "__main__":
     xMax = 2.0 * np.pi
     # space
     X = np.linspace(xMin, xMax, xNum) # [256,]
+    
+    # Num.of data
+    nData = len(NUs)
     # ----
+    '''
+    with open(os.path.join('model','burgers','XTUNU.pkl'), 'rb') as fp:
+        X_ = pickle.load(fp)
+        T_ = pickle.load(fp)
+        U_ = pickle.load(fp)
+        NU_ = pickle.load(fp)
+    
+    X = X_[0,:,np.newaxis]
+    T = T_[0,:,np.newaxis]
+    U = burgersPy(X,T,NU_[0], xNum=xNum,tNum=tNum)
+   
+    plotImg(X,T,U.T,dirname=mode,label='test')
+    pdb.set_trace()
+    
+    '''
     
     # Call burgers by python or tensorflow ----
     if mode == 'python':
         
+        flag = False
         for NU in NUs:
-            
-            U = burgersPy(nData=NUs.shape[0],xDim=xNum, X,T,NU)
-            
+            print(f'>>> start burgers py var nu={NU}')
+            # [x.shape,t.shape]
+            U = burgersPy(X,T,NU, xNum=xNum,tNum=tNum)
+            #pdb.set_trace()
             if not flag:
-                Us = U[np.newaxis]
+                Us = U.T[np.newaxis]
                 flag = True
             else:
-                Us = np.vstack([Us, U[np.newaxis]])
+                Us = np.vstack([Us, U.T[np.newaxis]])
     
     elif mode == 'tensorflow':
         
         # graph ----
         # placeholder
-        x = tf.compat.v1.placeholder(tf.float32,shape=[tDim, xDim])
-        t = tf.compat.v1.placeholder(tf.float32,shape=[xDim, tDim])
-        nu = tf.compat.v1.placeholder()
+        x = tf.compat.v1.placeholder(tf.float32,shape=[tNum, xNum])
+        t = tf.compat.v1.placeholder(tf.float32,shape=[xNum, tNum])
+        nu = tf.compat.v1.placeholder(tf.float32,shape=[nData,1])
         
         # u = PDE(x,t,nu)
-        u_op = burgersTensor(x,t,nu)
+        u_op = burgersTensor(x,t,nu, nData=nData,xDim=xNum)
         
         config = tf.compat.v1.ConfigProto(gpu_options=tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.1,allow_growth=True)) 
         sess = tf.compat.v1.Session(config=config)
         sess.run(tf.compat.v1.global_variables_initializer())
         # ----
-        pdb.set_trace()
-        feed_dict = {x:X, t:T, nu:NUs}
+        #pdb.set_trace()
+        X = np.reshape(np.tile(X,tNum), [-1, xNum])
+        T = np.reshape(np.tile(T, xNum), [-1, tNum])
+           
+        feed_dict = {x:X, t:T, nu:np.array([NUs]).T}
         Us = sess.run(u_op, feed_dict)
     # ----
-    
+    #pdb.set_trace()
     # Plot ----
-    for ni in np.arange(NUs.shape[0]):
-        print(f'>>> plot {nu[ni]}')
+    for ni in np.arange(len(NUs)):
+        print(f'>>> plot nu={NUs[ni]}')
         plotImg(X,T,Us[ni],dirname=mode,label=NUs[ni])
     # ----
     
