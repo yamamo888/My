@@ -63,12 +63,15 @@ def loadABLV(logFullPath):
     
     data = open(logFullPath).readlines()
     
+    #A = np.zeros(nCell)
     B = np.zeros(nCell)
     
     for i in np.arange(1,nCell+1):
         tmp = np.array(data[i].strip().split(",")).astype(np.float32)
+        #A[i-1] = tmp[0]
         B[i-1] = tmp[1]
     
+    #A = np.concatenate((A[2,np.newaxis],A[4,np.newaxis],A[5,np.newaxis]),0)
     B = np.concatenate((B[2,np.newaxis],B[4,np.newaxis],B[5,np.newaxis]),0)
     
     # Vの開始行取得
