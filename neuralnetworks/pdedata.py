@@ -80,8 +80,10 @@ class pdeData:
         '''
         # default
         defaultnu = 0.01
-        minnu = 0.005 # minnu < 0.0004　は対応できません(理由不明)
-        maxnu = 5.001
+        #minnu = 0.05 # minnu < 0.0004　は対応できません(理由不明)
+        minnu = 0.01
+        maxnu = 0.015
+        #maxnu = 5.001
         swnu = 0.001
         #swnu = 1.0
         # 一様分布
@@ -95,70 +97,89 @@ class pdeData:
             # x:[256,] t:[100,] obsu:[256,100]
             x, t, obsu = self.burgers(nu=nu)
             
-            if not flag:
-                X = x
-                T = t
-                U = obsu.T[np.newaxis]
-                NU = np.array([nu])
-                flag = True
+            if nu == defaultnu:
+                with open(os.path.join(self.modelPath, self.pdeMode, 'burgeres_default001.pkl'), 'wb') as fp:
+                    pickle.dump(x, fp)
+                    pickle.dump(t, fp)
+                    pickle.dump(obsu, fp)
+                    pickle.dump(nu, fp)
             else:
-                X = np.vstack([X, x]) # [data, 256]
-                T = np.vstack([T, t]) # [data, 100]
-                U = np.vstack([U, obsu.T[np.newaxis]]) # [data, 100, 256]
-                NU = np.hstack([NU, np.array([nu])]) # [data,]
+                if not flag:
+                    X = x
+                    T = t
+                    U = obsu.T[np.newaxis]
+                    NU = np.array([nu])
+                    flag = True
+                else:
+                    X = np.vstack([X, x]) # [data, 256]
+                    T = np.vstack([T, t]) # [data, 100]
+                    U = np.vstack([U, obsu.T[np.newaxis]]) # [data, 100, 256]
+                    NU = np.hstack([NU, np.array([nu])]) # [data,]
         
         # X,T: 全データ数分同じデータconcat
         with open(os.path.join(self.modelPath, self.pdeMode, 'XTUNU.pkl'), 'wb') as fp:
-            pickle.dump(X, fp)
-            pickle.dump(T, fp)
-            pickle.dump(U, fp)
+            pickle.dump(X[0], fp) #[256,]
+            pickle.dump(T[0], fp) #[100,]
+            pickle.dump(U, fp) 
             pickle.dump(NU, fp)
     # ----
         
-    
     # ----
-    def maketraintest(self):
-        
-        ind = np.ones(4996, dtype=bool)
+    def maketraintest(self, name):
+        pdb.set_trace()
+    
+        nData = 4950
+        ind = np.ones(nData, dtype=bool)
         # train data index
-        trainidx = np.random.choice(4996, int(4996*0.8), replace=False).tolist()
+        trainidx = np.random.choice(nData, int(nData*0.8), replace=False).tolist()
         ind[trainidx] = False
-        vec = np.arange(4996)
+        vec = np.arange(nData)
         # test data index
         testidx = vec[ind]
         
-        imgspath = glob.glob(os.path.join('model','burgers_small_01','IMG*'))
+        imgpath = glob.glob(os.path.join('model','burgers','IMGXTUNU_{name}.pkl'))
         
-        flag = False
+        # space data, 256 -> xDim
         with open(imgpath, 'rb') as fp:
             X = pickle.load(fp)
             T = pickle.load(fp)
             U = pickle.load(fp)
             NU = pickle.load(fp)
+            
+        with open(os.path.join(self.modelPath, self.pdeMode, 'XTUNU.pkl'), 'rb') as fp:
+            allX = pickle.load(fp)
+            _ = pickle.load(fp)
+            allU = pickle.load(fp)
+            _ = pickle.load(fp)
         
         trU = U[trainidx,:]
         teU = U[testidx,:]
+        allteU = allU[testidx,:]
         trNU = NU[trainidx]
         teNU = NU[testidx]
-        #pdb.set_trace() 
         
-        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtrainXTUNU_small_01.pkl'), 'wb') as fp:
+        pdb.set_trace()
+        
+        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtrainXTUNU_{name}.pkl'), 'wb') as fp:
             pickle.dump(X, fp)
             pickle.dump(T, fp)
             pickle.dump(trU, fp)
             pickle.dump(trNU, fp)
             
-        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtestXTUNU_small_01.pkl'), 'wb') as fp:
-            pickle.dump(X, fp)
+        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtestXTUNU_{name}.pkl'), 'wb') as fp:
+            pickle.dump(allX, fp)
             pickle.dump(T, fp)
-            pickle.dump(teU, fp)
+            pickle.dump(allteU, fp)
             pickle.dump(teNU, fp)
+            pickle.dump(X, fp)
+            pickle.dump(teU, fp)
+    # ----
     
     # ----    
     def traintest(self):
         
         # train data
-        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtrainXTUNU_{self.dataMode}_01.pkl'), 'rb') as fp:
+        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtrainXTUNU_{self.dataMode}.pkl'), 'rb') as fp:
             self.trainX = pickle.load(fp)
             self.trainT = pickle.load(fp)
             self.trainU = pickle.load(fp)
@@ -166,14 +187,22 @@ class pdeData:
         
         # test data
         # testX,testT: 同じX,Tがtestデータ分
-        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtestXTUNU_{self.dataMode}_01.pkl'), 'rb') as fp:
+        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtestXTUNU_{self.dataMode}.pkl'), 'rb') as fp:
             testX = pickle.load(fp)
             testT = pickle.load(fp)
             testU = pickle.load(fp)
             testNU = pickle.load(fp)
         
-        #pdb.set_trace() 
-        return testX, testT, testU, testNU
+        # varidation data
+        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGvarXTUNU_{self.dataMode}.pkl'), 'rb') as fp:
+            varX = pickle.load(fp)
+            varT = pickle.load(fp)
+            varU = pickle.load(fp)
+            varNU = pickle.load(fp)
+    
+        pdb.set_trace()
+        
+        return testX, testT, testU, testNU, varX, varT, varU, varNU
     # ----
 
     # ----
@@ -278,14 +307,28 @@ class pdeData:
         return batchX, batchT, batchU, batchNU
     # ----
     
+    # ----
+    def Batch(self):
+        
+        batchX = self.trainX
+        batchT = self.trainT
+        batchU = self.trainU
+        batchNU = self.trainNU
+        
+        return batchX, batchT, batchU, batchNU
+    # ----
+        
+    
 
-#myData = pdeData(dataMode='small')
+myData = pdeData(dataMode='small')
+#[1]
+myData.saveXTU()
+#[3]
 #myData.maketraintest()
 
-'''
-num1 = 0
-num2 = 500
+#[2]
 name = 'small'
+print(name)
 
 with open(os.path.join('model','burgers','XTUNU.pkl'), 'rb') as fp:
     X = pickle.load(fp)
@@ -295,17 +338,18 @@ with open(os.path.join('model','burgers','XTUNU.pkl'), 'rb') as fp:
 
 # making space X (large, middle small)
 if name == 'large':
-    xSize = 25
+    xSize = 50
 elif name == 'middle':
-    xSize = 20
+    xSize = 25
 elif name == 'small':
-    xSize = 2
-#pdb.set_trace()
-idx = np.random.choice(X[0].shape[0], xSize, replace=False)
-print(name)
+    xSize = 10
+
+idx = np.random.choice(X.shape[0], xSize, replace=False)
+
+# for train & test
 flag = False
 for i in np.arange(NU.shape[0]):
-    #pdb.set_trace()
+  
     label = NU[i].astype(str)
     print(label)
 
@@ -314,13 +358,30 @@ for i in np.arange(NU.shape[0]):
         flag = True
     else:
         Us = np.vstack([Us,U[i,:,idx][np.newaxis]])
+        
+# for varidation
+with open(os.path.join('model','burgers','burgeres_default001.pkl'), 'rb') as fp:
+    varX = pickle.load(fp)
+    varT = pickle.load(fp)
+    varU = pickle.load(fp)
+    varNU = pickle.load(fp)
+   
+pdb.set_trace()
 
-with open(os.path.join('model',f'burgers_{name}_01',f'IMGXTUNU_{name}.pkl'), 'wb') as fp:
-    pickle.dump(X[0,idx,np.newaxis], fp)
-    pickle.dump(T[0,:,np.newaxis], fp)
+with open(os.path.join('model','burgers',f'IMGvarXTUNU_{name}.pkl'), 'wb') as fp:
+    pickle.dump(varX, fp)
+    pickle.dump(varT[:,np.newaxis], fp)
+    pickle.dump(varU, fp)
+    pickle.dump(NU, fp)
+    pickle.dump(varX[idx,np.newaxis], fp)
+    pickle.dump(varU[idx], fp)
+    
+with open(os.path.join('model','burgers',f'IMGXTUNU_{name}.pkl'), 'wb') as fp:
+    pickle.dump(X[idx,np.newaxis], fp)
+    pickle.dump(T[:,np.newaxis], fp)
     pickle.dump(Us, fp)
     pickle.dump(NU, fp)
-'''
+
 #myPlot = plot.Plot(figurepath='figure', trialID=0)
 #myPlot.udata(xt, trainXY, testXY[1], testXY, testXY)
 
