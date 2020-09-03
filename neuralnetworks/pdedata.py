@@ -136,39 +136,32 @@ class pdeData:
         # test data index
         testidx = vec[ind]
         
-        imgpath = glob.glob(os.path.join('model','burgers',f'IMGXTUNU_{name}.pkl'))
+        imgpath = glob.glob(os.path.join('model','burgers',f'maskIMGXTUNU_{name}.pkl'))
         #pdb.set_trace()
         # space data, 256 -> xDim
         with open(imgpath[0], 'rb') as fp:
-            X = pickle.load(fp)
+            allX = pickle.load(fp)
             T = pickle.load(fp)
             U = pickle.load(fp)
             NU = pickle.load(fp)
-            
-        with open(os.path.join(self.modelPath, self.pdeMode, 'XTUNU.pkl'), 'rb') as fp:
-            allX = pickle.load(fp)
-            _ = pickle.load(fp)
-            allU = pickle.load(fp)
-            _ = pickle.load(fp)
-        
+            X = pickle.load(fp)
+             
         trU = U[trainidx,:]
         teU = U[testidx,:]
-        allteU = allU[testidx,:]
         trNU = NU[trainidx]
         teNU = NU[testidx]
         
-        #pdb.set_trace()
+        pdb.set_trace()
         
-        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtrainXTUNU_{name}.pkl'), 'wb') as fp:
+        with open(os.path.join(self.modelPath, self.pdeMode, f'maskIMGtrainXTUNU_{name}.pkl'), 'wb') as fp:
             pickle.dump(X, fp)
             pickle.dump(T, fp)
             pickle.dump(trU, fp)
             pickle.dump(trNU, fp)
             
-        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtestXTUNU_{name}.pkl'), 'wb') as fp:
+        with open(os.path.join(self.modelPath, self.pdeMode, f'maskIMGtestXTUNU_{name}.pkl'), 'wb') as fp:
             pickle.dump(allX, fp)
             pickle.dump(T, fp)
-            pickle.dump(allteU, fp)
             pickle.dump(teNU, fp)
             pickle.dump(X, fp)
             pickle.dump(teU, fp)
@@ -203,7 +196,63 @@ class pdeData:
         
         return testX, testT, testU, testNU, varX, varT, varU, varNU
     # ----
-
+    
+    # ----
+    def maskImg(self,name):
+        
+        if name == 'large':
+            xSize = 50
+        elif name == 'middle':
+            xSize = 25
+        elif name == 'small':
+            xSize = 10
+    
+        # U path        
+        trteimgpath = glob.glob(os.path.join('model','burgers',f'XTUNU.pkl'))
+        varimgpath = glob.glob(os.path.join('model','burgers','burgers_default001.pkl'))
+      
+        # for train test
+        with open(trteimgpath[0], 'rb') as fp:
+            X = pickle.load(fp)
+            T = pickle.load(fp) 
+            U = pickle.load(fp) 
+            NU = pickle.load(fp) 
+        
+        # not masking x data
+        idx = np.random.choice(X.shape[0], xSize, replace=False)
+        pdb.set_trace()
+        # making mask image
+        mask = np.zeros((U.shape[0],256,U.shape[-1],1))
+        for i in idx:
+            mask[:,i,:] = U[:,i,:,np.newaxis]
+        
+        with open(os.path.join(self.modelPath, self.pdeMode, f'maskIMGXTUNU_{name}.pkl'), 'wb') as fp:
+            pickle.dump(X[:,np.newaxis], fp)
+            pickle.dump(T[:,np.newaxis], fp)
+            pickle.dump(mask, fp)
+            pickle.dump(NU, fp)
+            pickle.dump(X[idx,:,np.newaxis], fp)
+            
+        # for varidation
+        with open(varimgpath[0], 'rb') as fp:
+            X = pickle.load(fp) #[256]
+            T = pickle.load(fp) #[100]
+            U = pickle.load(fp) #[256,100]
+            NU = pickle.load(fp) #()
+        
+        mask = np.zeros((U.shape[0],U.shape[1],1))
+        for i in idx:
+            mask[i,:] = U[i,:,np.newaxis]
+        
+        with open(os.path.join(self.modelPath, self.pdeMode, f'maskIMGXTUNU_{name}.pkl'), 'wb') as fp:
+            pickle.dump(X[:,np.newaxis], fp)
+            pickle.dump(T[:,np.newaxis], fp)
+            pickle.dump(mask, fp)
+            pickle.dump(NU, fp)
+            pickle.dump(X[idx,:,np.newaxis], fp)
+        
+    # ----
+        
     # ----
     def makeImg(self,x,t,u,label='test',name='large'):
             
@@ -319,8 +368,9 @@ class pdeData:
         
     
 
-#name = 'large'
-#myData = pdeData(dataMode='small')
+name = 'small'
+myData = pdeData(dataMode='small')
+myData.maskImg(name=name)
 '''
 #[1]
 myData.saveXTU()
