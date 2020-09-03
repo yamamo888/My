@@ -33,37 +33,29 @@ class ParamNN:
             # x,t
             self.xDim = 2
         
-        tDim = 100
+        self.tDim = 100
         self.nBatch = nBatch
         self.trialID = trialID
-        self.uInput = self.xDim * int(tDim/10)   
+        self.uInput = self.xDim * int(self.tDim/10)   
         # ----
         
         # Dataset ----
         self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
         # [xDim,1], [100,1], [data, xDim, 100], [data,] 
-        testx, testt, testu, self.testNU = self.myData.traintest()
-        
-        pdb.set_trace()
-        # [1000,100,256] -> [1000,100,xDim]
-        #idx = np.random.choice(testu.shape[-1], self.xDim, replace=False)
-        #self.testU = testu[:,:,idx]
-        # input u [1000,uInput], [t,x]=[int(tDim/10),xdim]
-        idt = np.random.choice(testu.shape[1], int(tDim/10), replace=False)
-        self.testinU = np.reshape(self.testU[:,idt,:], [-1, self.uInput])
-        
+        testx, testt, self.testU, self.testNU = self.myData.traintest()
+         
         # [testdata, 256] -> [testdata, xdim]
-        self.testX = np.reshape(np.tile(testx[idx], testt.shape[0]), [-1, self.xDim])
-        self.testT = np.reshape(np.tile(testt, self.xDim), [-1, testt.shape[0]])
+        self.testX = np.reshape(np.tile(testx, self.tDim), [-1, self.xDim])
+        self.testT = np.reshape(np.tile(testt, self.xDim), [-1, self.tDim])
         # ----
          
         # Placeholder ----
         # u
-        self.inobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDIm, tDim, 1])
-        self.outobs = tf.compat.v1.placeholder(tf.float32,shape=[None, tDim, self.xDim])
+        self.inobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDIm, self.tDim, 1])
+        self.outobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.tDim, self.xDim])
         # x,t
-        self.x = tf.compat.v1.placeholder(tf.float32,shape=[tDim, self.xDim])
-        self.t = tf.compat.v1.placeholder(tf.float32,shape=[self.xDim, tDim])
+        self.x = tf.compat.v1.placeholder(tf.float32,shape=[self.tDim, self.xDim])
+        self.t = tf.compat.v1.placeholder(tf.float32,shape=[self.xDim, self.tDim])
         # ----
         
         # Restore neural network ----
@@ -198,9 +190,8 @@ class ParamNN:
             if reuse:
                 scope.reuse_variables()
             
-            #pdb.set_trace()
-            
-            
+            pdb.set_trace()
+        
             # a,bは、すべての u で共通
             tmpa = x - 4.0 * tf.transpose(t) # [t.shape, x.shape]
             tmpb = x - 4.0 * tf.transpose(t) - 2.0 * pi
@@ -249,22 +240,15 @@ class ParamNN:
             batchx, batcht, batchU, batchNU = self.myData.nextBatch(index)
             
             # [nbatch,100] -> [nbathc, x.shape]
-            batchX = np.reshape(np.tile(batchx, batcht.shape[0]), [-1, batchx.shape[0]])
-            batchT = np.reshape(np.tile(batcht, batchx.shape[0]), [-1, batcht.shape[0]])
+            batchX = np.reshape(np.tile(batchx, self.tDim), [-1, self.xDim])
+            batchT = np.reshape(np.tile(batcht, self.xDim), [-1, self.tDim])
             
-            # ※ 工夫の余地あり(input)
-            # random u(t) for feature (data増やしたいときは第二引数+) 
-            idt = np.random.choice(batchU.shape[1], 10, replace=False)
-            batchinU = np.reshape(batchU[:,idt,:], [-1, self.uInput])
-            feed_dict = {self.x:batchX, self.t:batchT, self.inobs:batchinU, self.outobs:batchU}
+            feed_dict = {self.x:batchX, self.t:batchT, self.inobs:batchU[:,:,:,np.newaxis], self.outobs:batchU}
            
             _, trainParam, trainPred, trainULoss, grad =\
             self.sess.run([self.opt, self.predparam, self.predu, self.loss, self.grad], feed_dict)
             
-            #_, trainParam, trainPred, trainULoss, traina,trainb,trainc,trainphi,traindphi,aac =\
-            #self.sess.run([self.opt, self.predparam, self.predu, self.loss, self.a, self.b, self.c,self.phi,self.dphi,self.tmp], feed_dict)
             
-            #pdb.set_trace()
             trainPLoss = np.mean(np.square(batchNU - trainParam))
             '''
             print('itr: %d, trainULoss:%f, trainPLoss:%f' % (itr, trainULoss, trainPLoss))
@@ -289,6 +273,8 @@ class ParamNN:
                 print('itr: %d, trainULoss:%f, trainPLoss:%f' % (itr, trainULoss, trainPLoss))
                 print(f'train exact: {batchNU[:5]}')
                 print(f'train pred: {trainParam[:5]}')
+                print(grad)
+                print()
                 
                 # u loss 
                 trL = np.append(trL,trainULoss)
@@ -310,7 +296,7 @@ class ParamNN:
     # ----
     def test(self,itr=0):
         
-        feed_dict={self.x:self.testX, self.t:self.testT, self.inobs:self.testinU, self.outobs:self.testU}    
+        feed_dict={self.x:self.testX, self.t:self.testT, self.inobs:self.testU[:,:,:,np.newaxis], self.outobs:self.testU}    
         
         self.testParam, self.testPred, self.testULoss =\
         self.sess.run([self.predparam_test, self.predu_test, self.loss_test], feed_dict)
