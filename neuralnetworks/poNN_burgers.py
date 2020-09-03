@@ -101,13 +101,17 @@ class ParamNN:
         self.opt = tf.compat.v1.train.AdamOptimizer(lr).minimize(self.loss)
         # ----
         
-        # ----
-        config = tf.compat.v1.ConfigProto(gpu_options=tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.1,allow_growth=True)) 
-        self.sess = tf.compat.v1.Session(config=config)
-        self.sess.run(tf.compat.v1.global_variables_initializer())
-        self.saver = tf.compat.v1.train.Saver()
-        # ----
+        lambdaVars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES,scope='updatelambdaNN') 
+        pdeVars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES,scope='pde')
+        lambdaVars.append(pdeVars)
+        self.opt = tf.compat.v1.train.AdamOptimizer(lr).minimize(self.loss, var_list=lambdaVars)
         
+        # ----
+        uninitialized = self.sess.run([tf.compat.v1.is_variable_initialized(var) for var in tf.compat.v1.global_variables()])
+        uninitializedVars =[v for (v, f) in zip(tf.compat.v1.global_variables(), uninitialized) if not f]
+        self.sess.run(tf.compat.v1.variables_initializer(uninitializedVars))
+        # ----
+      
     # ----
     def weight_variable(self, name, shape, trainable=True):
          return tf.compat.v1.get_variable(name,shape,initializer=tf.random_normal_initializer(stddev=0.1),trainable=trainable)
@@ -246,7 +250,7 @@ class ParamNN:
             feed_dict = {self.x:batchX, self.t:batchT, self.inobs:batchU[:,:,:,np.newaxis], self.outobs:batchU}
            
             _, trainParam, trainPred, trainULoss, grad =\
-            self.sess.run([self.opt, self.predparam, self.predu, self.loss, self.grad], feed_dict)
+            self.sess.run([self.opt, self.predparam, self.predu, self.loss, self.gradu], feed_dict)
             
             
             trainPLoss = np.mean(np.square(batchNU - trainParam))
