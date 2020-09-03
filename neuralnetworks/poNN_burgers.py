@@ -51,7 +51,7 @@ class ParamNN:
          
         # Placeholder ----
         # u
-        self.inobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDIm, self.tDim, 1])
+        self.inobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDim, self.tDim, 1])
         self.outobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.tDim, self.xDim])
         # x,t
         self.x = tf.compat.v1.placeholder(tf.float32,shape=[self.tDim, self.xDim])
@@ -69,7 +69,7 @@ class ParamNN:
         self.saver = tf.compat.v1.train.Saver()
         self.sess = tf.compat.v1.Session(config=config)
         # ----
-        pdb.set_trace()
+        
         # Restore model ----
         ckptpath = os.path.join('model', f'{dataMode}burgers')
         ckpt = tf.train.get_checkpoint_state(ckptpath)
@@ -94,10 +94,9 @@ class ParamNN:
         self.loss = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu),2),1))
         self.loss_test = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu_test),2),1))
         # ----
-        
         # gradient
-        self.grad = tf.gradients(self.loss)[0]
-        
+        self.gradu = tf.gradients(self.loss, self.inobs)[0]
+
         # Optimizer ----
         self.opt = tf.compat.v1.train.AdamOptimizer(lr).minimize(self.loss)
         # ----
@@ -148,7 +147,7 @@ class ParamNN:
             # 1st layer
             w1 = self.weight_variable('w1',[dInput, nHidden], trainable=trainable)
             bias1 = self.bias_variable('bias1',[nHidden], trainable=trainable)
-            h1 = self.fc_relu(x,w1,bias1,rate)
+            h1 = self.fc_relu(xcnn,w1,bias1,rate)
             
             # 2nd layer
             w2 = self.weight_variable('w2',[nHidden, nHidden], trainable=trainable)
@@ -167,14 +166,15 @@ class ParamNN:
     def lambdaNN(self, x, rate=0.0, reuse=False, trainable=True):
         
         nHidden = 128
+        dOutput = 1
         
         with tf.compat.v1.variable_scope('updatelambdaNN') as scope:
             if reuse:
                 scope.reuse_variables()
                 
             # 4th layer
-            w4_reg = self.weight_variable('w4_reg',[nHidden, self.dOutput], trainable=trainable)
-            bias4_reg = self.bias_variable('bias4_reg',[self.dOutput], trainable=trainable)
+            w4_reg = self.weight_variable('w4_reg',[nHidden, dOutput], trainable=trainable)
+            bias4_reg = self.bias_variable('bias4_reg',[dOutput], trainable=trainable)
         
             y = self.fc(x,w4_reg,bias4_reg,rate)
         
@@ -190,7 +190,7 @@ class ParamNN:
             if reuse:
                 scope.reuse_variables()
             
-            pdb.set_trace()
+            #pdb.set_trace()
         
             # a,bは、すべての u で共通
             tmpa = x - 4.0 * tf.transpose(t) # [t.shape, x.shape]
@@ -274,7 +274,6 @@ class ParamNN:
                 print(f'train exact: {batchNU[:5]}')
                 print(f'train pred: {trainParam[:5]}')
                 print(grad)
-                print()
                 
                 # u loss 
                 trL = np.append(trL,trainULoss)
