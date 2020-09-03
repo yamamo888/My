@@ -82,10 +82,10 @@ class pdeData:
         defaultnu = 0.01
         #minnu = 0.05 # minnu < 0.0004　は対応できません(理由不明)
         minnu = 0.01
-        maxnu = 0.015
-        #maxnu = 5.001
+        #maxnu = 0.015
+        maxnu = 5.001
         swnu = 0.001
-        #swnu = 1.0
+        
         # 一様分布
         samplenu = np.arange(minnu, maxnu, swnu)
         
@@ -126,8 +126,7 @@ class pdeData:
         
     # ----
     def maketraintest(self, name):
-        pdb.set_trace()
-    
+        
         nData = 4950
         ind = np.ones(nData, dtype=bool)
         # train data index
@@ -323,8 +322,6 @@ class pdeData:
 myData = pdeData(dataMode='small')
 #[1]
 myData.saveXTU()
-#[3]
-#myData.maketraintest()
 
 #[2]
 name = 'small'
@@ -346,7 +343,7 @@ elif name == 'small':
 
 idx = np.random.choice(X.shape[0], xSize, replace=False)
 
-# for train & test
+# for train & test ----
 flag = False
 for i in np.arange(NU.shape[0]):
   
@@ -358,29 +355,32 @@ for i in np.arange(NU.shape[0]):
         flag = True
     else:
         Us = np.vstack([Us,U[i,:,idx][np.newaxis]])
-        
-# for varidation
-with open(os.path.join('model','burgers','burgeres_default001.pkl'), 'rb') as fp:
-    varX = pickle.load(fp)
-    varT = pickle.load(fp)
-    varU = pickle.load(fp)
-    varNU = pickle.load(fp)
-   
-pdb.set_trace()
 
-with open(os.path.join('model','burgers',f'IMGvarXTUNU_{name}.pkl'), 'wb') as fp:
-    pickle.dump(varX, fp)
-    pickle.dump(varT[:,np.newaxis], fp)
-    pickle.dump(varU, fp)
-    pickle.dump(NU, fp)
-    pickle.dump(varX[idx,np.newaxis], fp)
-    pickle.dump(varU[idx], fp)
-    
 with open(os.path.join('model','burgers',f'IMGXTUNU_{name}.pkl'), 'wb') as fp:
     pickle.dump(X[idx,np.newaxis], fp)
     pickle.dump(T[:,np.newaxis], fp)
     pickle.dump(Us, fp)
     pickle.dump(NU, fp)
+# ----
+        
+# for varidation ----
+with open(os.path.join('model','burgers','burgeres_default001.pkl'), 'rb') as fp:
+    varX = pickle.load(fp) #[256,]
+    varT = pickle.load(fp) #[100,]
+    varU = pickle.load(fp) #[256,100]
+    varNU = pickle.load(fp) # 0.01
+    
+with open(os.path.join('model','burgers',f'IMGvarXTUNU_{name}.pkl'), 'wb') as fp:
+    pickle.dump(varX[:,np.newaxis], fp)
+    pickle.dump(varT[:,np.newaxis], fp)
+    pickle.dump(varU, fp)
+    pickle.dump(varNU, fp)
+    pickle.dump(varX[idx,np.newaxis], fp)
+    pickle.dump(varU[idx], fp)
+# ----
+
+#[3]
+myData.maketraintest()
 
 #myPlot = plot.Plot(figurepath='figure', trialID=0)
 #myPlot.udata(xt, trainXY, testXY[1], testXY, testXY)
