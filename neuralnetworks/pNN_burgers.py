@@ -36,8 +36,6 @@ class ParamNN:
         tDim = 100
         self.nBatch = nBatch
         self.trialID = trialID
-        self.uInput = self.xDim * int(tDim/10)   
-        #self.yDim = 3
         self.yDim = 1
         # ----
         
@@ -45,34 +43,26 @@ class ParamNN:
         self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
         
         _, _, self.testU, self.testNU = self.myData.traintest()
-        #pdb.set_trace()
-        '''
-        # [1000,100,256] -> [1000,100,xDim]
-        idx = np.random.choice(testu.shape[-1], self.xDim, replace=False)
-        self.testU = testu[:,:,idx]
-        #pdb.set_trace()
-        # input u [1000,uInput], [t,x]=[int(tDim/10),xdim]
-        idt = np.random.choice(testu.shape[1], int(tDim/10), replace=False)
-        self.testinU = np.reshape(self.testU[:,idt,:], [-1, self.uInput])
-        # ----
-        '''
-        #pdb.set_trace()
+        self.testU = self.testU[:,:,:,np.newaxis]
+        self.testNU = self.testNU[:,np.newaxis]
+
         # Placeholder ----
         # output param b
         self.y = tf.compat.v1.placeholder(tf.float32,shape=[None, self.yDim])
         # input u
-        #self.inobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.uInput])
-        self.inobs = tf.compat.v1.placeholder(tf.float32,shape=[None, 371, 498, 3])
+        self.inobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDim, tDim, 1])
         # ----
         
-        self.predy = self.lambdaNN(self.inobs)
-        self.predy_test = self.lambdaNN(self.inobs, reuse=True)
+        #self.predy = self.lambdaNN(self.inobs)
+        self.predy, self.cnnfeature = self.lambdaNN(self.inobs)
+        self.predy_test, self.cnnfeature_test = self.lambdaNN(self.inobs, reuse=True)
 
         # loss ----
         # param loss
         self.loss = tf.reduce_mean(tf.square(self.y - self.predy))
         self.loss_test = tf.reduce_mean(tf.square(self.y - self.predy_test))
         # ----
+        #pdb.set_trace()
         
         # Optimizer ----
         self.opt = tf.compat.v1.train.AdamOptimizer(lr).minimize(self.loss)
@@ -143,8 +133,9 @@ class ParamNN:
             # nu
             # static fc
             y = self.fc(h3,w4,bias4,rate)
-        
-            return y
+            #pdb.set_trace() 
+            #return y
+            return y,xcnn
             
     # ----
     
@@ -172,16 +163,8 @@ class ParamNN:
             # Get train data
             # [x.shape], [100,], [nbatch, t.shape, x.shape]
             _, _, batchU, batchNU = self.myData.nextBatch(index)
-            #pdb.set_trace() 
-            # ※ 工夫の余地あり(input)
-            # random u(t) for feature (data増やしたいときは第二引数+) 
-            #idt = np.random.choice(batchU.shape[1], 10, replace=False)
-            #batchinU = np.reshape(batchU[:,idt,:], [-1, self.uInput])
-            #batchinU = batchU[idt]
-            
             # y: prameter b
-            #feed_dict = {self.y:batchNU, self.inobs:batchinU}
-            feed_dict = {self.y:batchNU[:,np.newaxis], self.inobs:batchU}
+            feed_dict = {self.y:batchNU[:,np.newaxis], self.inobs:batchU[:,:,:,np.newaxis]}
             
             _, trainParam, trainLoss =\
             self.sess.run([self.opt, self.predy, self.loss], feed_dict)
@@ -202,13 +185,12 @@ class ParamNN:
                 print(f'train exact: {batchNU[:5]}')
                 print(f'train pred: {trainParam[:5]}')
                 
-                
                 # param loss
                 trPL = np.append(trPL,trainLoss)
                 tePL = np.append(tePL,self.testLoss)
 
                 # Save model
-                #self.saver.save(self.sess, os.path.join('model', 'burgers', 'first'), global_step=itr)
+                self.saver.save(self.sess, os.path.join('model', f'{dataMode}burgers', f'first_{dataMode}'), global_step=itr)
         
         paramloss = [trPL,tePL]
     
@@ -218,8 +200,7 @@ class ParamNN:
     # ----
     def test(self,itr=0):
         #pdb.set_trace() 
-        #feed_dict={self.y: self.testNU, self.inobs:self.testinU}    
-        feed_dict={self.y: self.testNU[:,np.newaxis], self.inobs:self.testU}    
+        feed_dict={self.y: self.testNU, self.inobs:self.testU}    
         
         self.testParam, self.testLoss =\
         self.sess.run([self.predy_test, self.loss_test], feed_dict)
