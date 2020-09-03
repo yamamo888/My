@@ -127,7 +127,7 @@ class pdeData:
     # ----
     def maketraintest(self, name):
         
-        nData = 4950
+        nData = 4990
         ind = np.ones(nData, dtype=bool)
         # train data index
         trainidx = np.random.choice(nData, int(nData*0.8), replace=False).tolist()
@@ -136,10 +136,10 @@ class pdeData:
         # test data index
         testidx = vec[ind]
         
-        imgpath = glob.glob(os.path.join('model','burgers','IMGXTUNU_{name}.pkl'))
-        
+        imgpath = glob.glob(os.path.join('model','burgers',f'IMGXTUNU_{name}.pkl'))
+        #pdb.set_trace()
         # space data, 256 -> xDim
-        with open(imgpath, 'rb') as fp:
+        with open(imgpath[0], 'rb') as fp:
             X = pickle.load(fp)
             T = pickle.load(fp)
             U = pickle.load(fp)
@@ -157,7 +157,7 @@ class pdeData:
         trNU = NU[trainidx]
         teNU = NU[testidx]
         
-        pdb.set_trace()
+        #pdb.set_trace()
         
         with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtrainXTUNU_{name}.pkl'), 'wb') as fp:
             pickle.dump(X, fp)
@@ -175,7 +175,7 @@ class pdeData:
     # ----
     
     # ----    
-    def traintest(self):
+    def traintestvaridation(self):
         
         # train data
         with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtrainXTUNU_{self.dataMode}.pkl'), 'rb') as fp:
@@ -260,7 +260,7 @@ class pdeData:
         with tf.compat.v1.variable_scope("CNN") as scope:
             if reuse:
                 scope.reuse_variables()
-    
+            pdb.set_trace() 
             # 1st conv layer
             w1 = self.weight_variable('w1', [5,5,1,24])
             b1 = self.bias_variable('b1', [24])
@@ -294,7 +294,7 @@ class pdeData:
     # ----
     
     # ----
-    def nextBatch(self, index):
+    def miniBatch(self, index):
         
         #pdb.set_trace()
 
@@ -319,12 +319,13 @@ class pdeData:
         
     
 
-myData = pdeData(dataMode='small')
+#name = 'large'
+#myData = pdeData(dataMode='small')
+'''
 #[1]
 myData.saveXTU()
 
 #[2]
-name = 'small'
 print(name)
 
 with open(os.path.join('model','burgers','XTUNU.pkl'), 'rb') as fp:
@@ -378,9 +379,9 @@ with open(os.path.join('model','burgers',f'IMGvarXTUNU_{name}.pkl'), 'wb') as fp
     pickle.dump(varX[idx,np.newaxis], fp)
     pickle.dump(varU[idx], fp)
 # ----
-
+'''
 #[3]
-myData.maketraintest()
+#myData.maketraintest(name=name)
 
 #myPlot = plot.Plot(figurepath='figure', trialID=0)
 #myPlot.udata(xt, trainXY, testXY[1], testXY, testXY)
