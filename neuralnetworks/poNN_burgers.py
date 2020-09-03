@@ -57,7 +57,6 @@ class ParamNN:
         self.x = tf.compat.v1.placeholder(tf.float32,shape=[self.tDim, self.xDim])
         self.t = tf.compat.v1.placeholder(tf.float32,shape=[self.xDim, self.tDim])
         # ----
-        
         # Restore neural network ----
         # pred nu [ndata,]
         hidden = self.RestorelambdaNN(self.inobs)
@@ -87,7 +86,7 @@ class ParamNN:
         # output: u
         self.predu, self.predparam = self.pde(self.x, self.t, self.param, nData=self.nBatch)
         # ※ testデータサイズは手動
-        self.predu_test, self.predparam_test = self.pde(self.x, self.t, self.param_test, nData=150, reuse=True)
+        self.predu_test, self.predparam_test = self.pde(self.x, self.t, self.param_test, nData=self.testNU.shape[0], reuse=True)
         # ----
         #pdb.set_trace()
         # loss ----   
@@ -247,20 +246,13 @@ class ParamNN:
             batchX = np.reshape(np.tile(batchx, self.tDim), [-1, self.xDim])
             batchT = np.reshape(np.tile(batcht, self.xDim), [-1, self.tDim])
             
-            feed_dict = {self.x:batchX, self.t:batchT, self.inobs:batchU[:,:,:,np.newaxis], self.outobs:batchU}
+            feed_dict = {self.x:batchX, self.t:batchT, self.inobs:batchU[:,:,:,np.newaxis], self.outobs:batchU.transpose(0,2,1)}
            
             _, trainParam, trainPred, trainULoss, grad =\
             self.sess.run([self.opt, self.predparam, self.predu, self.loss, self.gradu], feed_dict)
             
             
             trainPLoss = np.mean(np.square(batchNU - trainParam))
-            '''
-            print('itr: %d, trainULoss:%f, trainPLoss:%f' % (itr, trainULoss, trainPLoss))
-            print(trainParam[:5])
-            print(trainPred[0,0,:])
-            print(batchU[0,0,:])
-            pdb.set_trace()
-            '''
 
             if eInd + self.nBatch > nTrain:
                 batchCnt = 0
@@ -272,12 +264,11 @@ class ParamNN:
             if itr % testPeriod == 0:
 
                 self.test(itr=itr)
-                
                 print('----')
                 print('itr: %d, trainULoss:%f, trainPLoss:%f' % (itr, trainULoss, trainPLoss))
                 print(f'train exact: {batchNU[:5]}')
                 print(f'train pred: {trainParam[:5]}')
-                print(grad)
+                print(np.mean(grad))
                 
                 # u loss 
                 trL = np.append(trL,trainULoss)
@@ -289,7 +280,7 @@ class ParamNN:
 
                 # Save model
                 #self.saver.save(self.sess, os.path.join('model', 'burgers', 'first'), global_step=itr)
-        
+        #pdb.set_trace()
         paramloss = [trPL,tePL]
         ulosses = [trL, teL]
     
@@ -299,7 +290,8 @@ class ParamNN:
     # ----
     def test(self,itr=0):
         
-        feed_dict={self.x:self.testX, self.t:self.testT, self.inobs:self.testU[:,:,:,np.newaxis], self.outobs:self.testU}    
+        #pdb.set_trace() 
+        feed_dict={self.x:self.testX, self.t:self.testT, self.inobs:self.testU[:,:,:,np.newaxis], self.outobs:self.testU.transpose(0,2,1)}    
         
         self.testParam, self.testPred, self.testULoss =\
         self.sess.run([self.predparam_test, self.predu_test, self.loss_test], feed_dict)
