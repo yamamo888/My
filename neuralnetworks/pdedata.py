@@ -227,7 +227,7 @@ class pdeData:
     # ----
     
     # ----
-    def CNNfeature(self, x, reuse=False):
+    def CNNfeature(self, x, reuse=False, trainable=True):
         
         with tf.compat.v1.variable_scope("CNN") as scope:
             if reuse:
@@ -250,16 +250,16 @@ class pdeData:
             #pdb.set_trace() 
             
             #w3 = self.weight_variable('w3', [24*32*24, 32])
-            w3 = self.weight_variable('w3', [conv2.get_shape().as_list()[1]*conv2.get_shape().as_list()[2]*conv2.get_shape().as_list()[3], 32])
-            b3 = self.bias_variable('b3', [32])
+            w3 = self.weight_variable('w3', [conv2.get_shape().as_list()[1]*conv2.get_shape().as_list()[2]*conv2.get_shape().as_list()[3], 32], trainable=trainable)
+            b3 = self.bias_variable('b3', [32], trainable=trainable)
             
             # 1st full-layer
             reshape_conv2 = tf.reshape(conv2, [-1, w3.get_shape().as_list()[0]])
             
             fc1 = self.fc_relu(reshape_conv2,w3,b3)
             
-            w4 = self.weight_variable('w4', [32, 32])
-            b4 = self.bias_variable('b4', [32])
+            w4 = self.weight_variable('w4', [32, 32], trainable=trainable)
+            b4 = self.bias_variable('b4', [32], trainable=trainable)
             fc2 = self.fc_relu(fc1,w4,b4)
             
             return fc2

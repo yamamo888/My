@@ -59,31 +59,52 @@ class ParamNN:
          
         # Placeholder ----
         # u
-        self.inobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.uInput])
+        self.inobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDIm, tDim, 1])
         self.outobs = tf.compat.v1.placeholder(tf.float32,shape=[None, tDim, self.xDim])
         # x,t
         self.x = tf.compat.v1.placeholder(tf.float32,shape=[tDim, self.xDim])
         self.t = tf.compat.v1.placeholder(tf.float32,shape=[self.xDim, tDim])
         # ----
         
+        # Restore neural network ----
         # pred nu [ndata,]
-        param = self.lambdaNN(u, reuse=reuse)
+        hidden = self.RestorelambdaNN(self.inobs)
+        hidden_test = self.RestorelambdaNN(self.inobs, reuse=True)
+        # ----
+        
+        # optimizer ----
+        config = tf.compat.v1.ConfigProto(gpu_options=tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.1,allow_growth=True)) 
+        self.saver = tf.compat.v1.train.Saver()
+        self.sess = tf.compat.v1.Session(config=config)
+        # ----
+        pdb.set_trace()
+        # Restore model ----
+        ckptpath = os.path.join('model', f'{dataMode}burgers')
+        ckpt = tf.train.get_checkpoint_state(ckptpath)
+        
+        lastmodel = ckpt.model_checkpoint_path
+        self.saver.restore(self.sess, lastmodel)
+        print('>>> Restore model')
+        # ----
+        
+        # neural network (nu) ----
+        self.param = self.lambdaNN(hidden)
+        self.param_test = self.lambdaNN(hidden_test, reuse=True)
+        
         # PDE ----
         # output: u
-        #self.predu, self.predparam, self.a,self.b,self.c,self.phi,self.dphi,self = self.pde(self.x, self.t, self.inobs, nData=self.nBatch)
-        self.predu, self.predparam = self.pde(self.x, self.t, self.inobs, nData=self.nBatch)
+        self.predu, self.predparam = self.pde(self.x, self.t, self.param, nData=self.nBatch)
         # ※ testデータサイズは手動
-        #self.predu_test, self.predparam_test, self.a_test,self.b_test,self.c_test,self.phi_test,self.dphi_test,tmp_test = self.pde(self.x, self.t, self.inobs, nData=150, reuse=True)
-        self.predu_test, self.predparam_test = self.pde(self.x, self.t, self.inobs, nData=150, reuse=True)
+        self.predu_test, self.predparam_test = self.pde(self.x, self.t, self.param_test, nData=150, reuse=True)
         # ----
         #pdb.set_trace()
-        # loss ----
-        #self.loss = tf.reduce_mean(tf.square(self.outobs - self.predu))
-        #self.loss_test = tf.reduce_mean(tf.square(self.outobs - self.predu_test))
-        
+        # loss ----   
         self.loss = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu),2),1))
         self.loss_test = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu_test),2),1))
         # ----
+        
+        # gradient
+        self.grad = tf.gradients(self.loss)[0]
         
         # Optimizer ----
         self.opt = tf.compat.v1.train.AdamOptimizer(lr).minimize(self.loss)
@@ -97,12 +118,12 @@ class ParamNN:
         # ----
         
     # ----
-    def weight_variable(self, name, shape):
-         return tf.compat.v1.get_variable(name,shape,initializer=tf.random_normal_initializer(stddev=0.1))
+    def weight_variable(self, name, shape, trainable=True):
+         return tf.compat.v1.get_variable(name,shape,initializer=tf.random_normal_initializer(stddev=0.1),trainable=trainable)
     # ----
     # ----
-    def bias_variable(self, name, shape):
-         return tf.compat.v1.get_variable(name,shape,initializer=tf.constant_initializer(0.1))
+    def bias_variable(self, name, shape, trainable=True):
+         return tf.compat.v1.get_variable(name,shape,initializer=tf.constant_initializer(0.1),trainable=trainable)
     # ----
     # ----
     def fc_relu(self,inputs,w,b,rate=0.0):
@@ -119,7 +140,7 @@ class ParamNN:
     # ----
     
     # ----
-    def lambdaNN(self, x, rate=0.0, reuse=False):
+    def RestorelambdaNN(self, x, rate=0.0, reuse=False, trainable=False):
         
         nHidden = 128
         
@@ -127,35 +148,47 @@ class ParamNN:
             if reuse:
                 scope.reuse_variables()
             
-            dInput = x.get_shape().as_list()[-1]
-            dOutput = 1
+            # CNN feature
+            xcnn = self.myData.CNNfeature(x, reuse=reuse, trainable=trainable)
             
+            dInput = xcnn.get_shape().as_list()[-1]
+          
             # 1st layer
-            w1 = self.weight_variable('w1',[dInput, nHidden])
-            bias1 = self.bias_variable('bias1',[nHidden])
+            w1 = self.weight_variable('w1',[dInput, nHidden], trainable=trainable)
+            bias1 = self.bias_variable('bias1',[nHidden], trainable=trainable)
             h1 = self.fc_relu(x,w1,bias1,rate)
             
             # 2nd layer
-            w2 = self.weight_variable('w2',[nHidden, nHidden])
-            bias2 = self.bias_variable('bias2',[nHidden])
+            w2 = self.weight_variable('w2',[nHidden, nHidden], trainable=trainable)
+            bias2 = self.bias_variable('bias2',[nHidden], trainable=trainable)
             h2 = self.fc_relu(h1,w2,bias2,rate)
             
             # 3nd layer
-            w3 = self.weight_variable('w3',[nHidden, nHidden])
-            bias3 = self.bias_variable('bias3',[nHidden])
+            w3 = self.weight_variable('w3',[nHidden, nHidden], trainable=trainable)
+            bias3 = self.bias_variable('bias3',[nHidden], trainable=trainable)
             h3 = self.fc_relu(h2,w3,bias3,rate)
             
-            # 4nd layer
-            w4 = self.weight_variable('w4',[nHidden, dOutput])
-            bias4 = self.bias_variable('bias4',[dOutput])
-            
-            # nu
-            y = self.fc(h3,w4,bias4,rate)
-        
-            #return y
-            return y + 0.00001
+            return h3
     # ----
     
+    # ----
+    def lambdaNN(self, x, rate=0.0, reuse=False, trainable=True):
+        
+        nHidden = 128
+        
+        with tf.compat.v1.variable_scope('updatelambdaNN') as scope:
+            if reuse:
+                scope.reuse_variables()
+                
+            # 4th layer
+            w4_reg = self.weight_variable('w4_reg',[nHidden, self.dOutput], trainable=trainable)
+            bias4_reg = self.bias_variable('bias4_reg',[self.dOutput], trainable=trainable)
+        
+            y = self.fc(x,w4_reg,bias4_reg,rate)
+        
+            return y  
+    # ----
+      
     # ----
     def pde(self, x, t, param, nData=100, reuse=False):
         
@@ -225,8 +258,8 @@ class ParamNN:
             batchinU = np.reshape(batchU[:,idt,:], [-1, self.uInput])
             feed_dict = {self.x:batchX, self.t:batchT, self.inobs:batchinU, self.outobs:batchU}
            
-            _, trainParam, trainPred, trainULoss =\
-            self.sess.run([self.opt, self.predparam, self.predu, self.loss], feed_dict)
+            _, trainParam, trainPred, trainULoss, grad =\
+            self.sess.run([self.opt, self.predparam, self.predu, self.loss, self.grad], feed_dict)
             
             #_, trainParam, trainPred, trainULoss, traina,trainb,trainc,trainphi,traindphi,aac =\
             #self.sess.run([self.opt, self.predparam, self.predu, self.loss, self.a, self.b, self.c,self.phi,self.dphi,self.tmp], feed_dict)
