@@ -137,7 +137,7 @@ class pdeData:
         # test data index
         testidx = vec[ind]
         
-        imgpath = glob.glob(os.path.join('model','burgers',f'maskIMGXTUNU_{name}.pkl'))
+        imgpath = glob.glob(os.path.join('model','burgers',f'randommaskIMGXTUNU_{name}.pkl'))
         #pdb.set_trace()
         # space data, 256 -> xDim
         with open(imgpath[0], 'rb') as fp:
@@ -156,13 +156,13 @@ class pdeData:
         
         #pdb.set_trace()
         
-        with open(os.path.join(self.modelPath, self.pdeMode, f'maskIMGtrainXTUNU_{name}.pkl'), 'wb') as fp:
+        with open(os.path.join(self.modelPath, self.pdeMode, f'randommaskIMGtrainXTUNU_{name}.pkl'), 'wb') as fp:
             pickle.dump(X, fp)
             pickle.dump(T, fp)
             pickle.dump(trU, fp)
             pickle.dump(trNU, fp)
             
-        with open(os.path.join(self.modelPath, self.pdeMode, f'maskIMGtestXTUNU_{name}.pkl'), 'wb') as fp:
+        with open(os.path.join(self.modelPath, self.pdeMode, f'randommaskIMGtestXTUNU_{name}.pkl'), 'wb') as fp:
             pickle.dump(allX, fp)
             pickle.dump(T, fp)
             pickle.dump(teU, fp)
@@ -226,15 +226,27 @@ class pdeData:
             U = pickle.load(fp) 
             NU = pickle.load(fp) 
         
-        # not masking x data
-        idx = np.random.choice(X.shape[0], xSize, replace=False)
         # making mask image
         mask = np.zeros((U.shape[0],256,100,1))
+        
+        # random space x ----
+        for i in np.arange(U.shape[0]):
+            idx = np.random.choice(X.shape[0], xSize, replace=False)
+            print(idx)
+            mask[i,idx,:,:] = U.transpose(0,2,1)[i,idx,:,np.newaxis]
+        # ----
+        
+        '''
+        # static space x ----
+        # not masking x data
+        idx = np.random.choice(X.shape[0], xSize, replace=False)
+       
         for i in idx:
             mask[:,i,:,:] = U.transpose(0,2,1)[:,i,:,np.newaxis]
-         
+        # ----
+        '''
         #pdb.set_trace()
-        with open(os.path.join(self.modelPath, self.pdeMode, f'maskIMGXTUNU_{name}.pkl'), 'wb') as fp:
+        with open(os.path.join(self.modelPath, self.pdeMode, f'randommaskIMGXTUNU_{name}.pkl'), 'wb') as fp:
             pickle.dump(X[:,np.newaxis], fp)
             pickle.dump(T[:,np.newaxis], fp)
             pickle.dump(mask, fp)
@@ -248,12 +260,13 @@ class pdeData:
             T = pickle.load(fp) #[100]
             U = pickle.load(fp) #[256,100]
             NU = pickle.load(fp) #()
-        #pdb.set_trace() 
+        
+        idx = np.random.choice(X.shape[0], xSize, replace=False)
         mask = np.zeros((U.shape[0],U.shape[1],1))
         for i in idx:
             mask[i,:] = U[i,:,np.newaxis]
         
-        with open(os.path.join(self.modelPath, self.pdeMode, f'maskIMGvarXTUNU_{name}.pkl'), 'wb') as fp:
+        with open(os.path.join(self.modelPath, self.pdeMode, f'randommaskIMGvarXTUNU_{name}.pkl'), 'wb') as fp:
             pickle.dump(X[:,np.newaxis], fp)
             pickle.dump(T[:,np.newaxis], fp)
             pickle.dump(mask, fp)
@@ -378,12 +391,12 @@ class pdeData:
         
     
 
-#name = 'small'
-#myData = pdeData(dataMode='small')
+name = 'small'
+myData = pdeData(dataMode='small')
 #[3]
 #myData.maketraintest(name=name)
 #[2]
-#myData.maskImg(name=name)
+myData.maskImg(name=name)
 #[1]
 #myData.saveXTU()
 
