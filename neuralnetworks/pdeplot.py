@@ -46,12 +46,13 @@ class Plot:
       # ----
 
       # nu -> u(t,x) ----
-      def paramToU(self, params, xNum=256, tNum=100, savename='exact'):
+      def paramToU(self, params, xNum=256, tNum=100, savename='exact', isPlot=False):
           
           x = params[0]
           t = params[1]
           nus = params[2]
           
+          flag = False
           for nu in nus:
               # observation
               obsu = np.zeros([xNum, tNum])
@@ -67,9 +68,22 @@ class Plot:
                              - 2.0 * b * np.exp ( - b * b / c ) / c
     
                       obsu[i,j] = 4.0 - 2.0 * nu * dphi / phi
-    
-              # plot u
-              self.Uimg(x ,t, obsu, label=nu, savename=savename)
+              
+              if isPlot:
+                  # plot u
+                  self.Uimg(x ,t, obsu, label=nu, savename=savename)
+              # for pNN_burgers
+              else:
+                  
+                  if not flag:
+                      predobsu = obsu[np.newaxis]
+                      flag = True
+                  else:
+                      predobsu = np.vstack([predobsu, obsu[np.newaxis]])
+        
+          if not isPlot:
+              return predobsu
+                  
       # ----
 
       # u(t,x) ----

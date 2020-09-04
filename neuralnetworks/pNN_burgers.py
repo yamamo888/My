@@ -30,6 +30,9 @@ class ParamNN:
         self.yDim = 1
         # ----
         
+        # for plot
+        self.myPlot = pdeplot.Plot(dataMode=dataMode, trialID=trialID)
+    
         # Dataset ----
         self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
         
@@ -146,6 +149,7 @@ class ParamNN:
         
         # Start training
         trPL,tePL,varPL = [],[],[]
+        trUL,teUL,varUL = [],[],[]
         
         for itr in range(nItr):
             
@@ -171,6 +175,13 @@ class ParamNN:
             
             # Test & Varidation
             if itr % testPeriod == 0:
+                
+                # return nu -> u
+                params = [self.testX, self.testT, trainParam]
+                invU = self.myPlot.paramToU(params)
+                
+                trainULoss = np.mean(np.sum(np.sum(np.square(batchU - invU),2),1))
+
 
                 self.test(itr=itr)
                 self.varidation(itr=itr)
@@ -184,6 +195,11 @@ class ParamNN:
                 trPL = np.append(trPL,trainLoss)
                 tePL = np.append(tePL,self.testLoss)
                 varPL = np.append(varPL,self.varLoss)
+                
+                # invu loss
+                trUL = np.append(trUL, trainULoss)
+                teUL = np.append(teUL, self.testULoss)
+                varUL = np.append(varUL, self.varULoss)
 
                 # Save model
                 #self.saver.save(self.sess, os.path.join('model', f'{dataMode}burgers', f'first_{dataMode}'), global_step=itr)
@@ -202,8 +218,15 @@ class ParamNN:
         
         self.testParam, self.testLoss =\
         self.sess.run([self.predy_test, self.loss_test], feed_dict)
+        
+        pdb.set_trace()
+        # return nu -> u
+        params = [self.testX, self.testT, self.testParam]
+        invU = self.myPlot.paramToU(params)
+        
+        self.testULoss = np.mean(np.sum(np.sum(np.square(self.testU - invU),2),1))
 
-        print('itr: %d, testPLoss:%f' % (itr, self.testLoss))
+        print('itr: %d, testPLoss:%f, testULoss:%f' % (itr, self.testLoss, self.testULoss))
         print(f'test exact: {self.testNU[:5]}')
         print(f'test pred: {self.testParam[:5]}')
     # ----
@@ -216,13 +239,17 @@ class ParamNN:
         self.varParam, self.varLoss =\
         self.sess.run([self.predy_test, self.loss_test], feed_dict)
 
-        print('itr: %d, varPLoss:%f' % (itr, self.varLoss))
+        # return nu -> u
+        params = [self.testX, self.testT, self.varParam]
+        invU = self.myPlot.paramToU(params)
+        
+        self.varULoss = np.mean(np.sum(np.sum(np.square(self.varU - invU),2),1))
+        
+        print('itr: %d, varPLoss:%f, varULoss:%f' % (itr, self.varLoss, self.varULoss))
         print(f'varidation exact: {self.varNU}')
         print(f'varidation pred: {self.varParam}')
     # ----
-    
-    
-    
+     
 if __name__ == "__main__":
     
     # command argment ----
@@ -263,11 +290,11 @@ if __name__ == "__main__":
     # ----
     
     # Plot ----
-    myPlot = pdeplot.Plot(dataMode=dataMode, trialID=trialID)
-    myPlot.Loss(plosses, labels=['train','test','varid'], savename='param')
-    myPlot.paramToU(teparams, savename='tepredparam')
-    myPlot.paramToU(varparams, savename='varpredparam')
-    
+    #myPlot = pdeplot.Plot(dataMode=dataMode, trialID=trialID)
+    model.myPlot.Loss(plosses, labels=['train','test','varid'], savename='param')
+    model.myPlot.paramToU(teparams, savename='tepredparam', isPlot=True)
+    model.myPlot.paramToU(varparams, savename='varpredparam', isPlot=True)
     # ----
+    
  
     

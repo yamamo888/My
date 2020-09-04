@@ -23,26 +23,16 @@ class ParamNN:
         
       
         # parameter ----
-        if dataMode == 'large':
-            # x,t
-            self.xDim = 25 
-        elif dataMode == 'middle':
-            # x,t
-            self.xDim = 20
-        elif dataMode == 'small':
-            # x,t
-            self.xDim = 2
-        
+        self.xDim = 256 
         self.tDim = 100
         self.nBatch = nBatch
         self.trialID = trialID
-        self.uInput = self.xDim * int(self.tDim/10)   
         # ----
         
         # Dataset ----
         self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
         # [xDim,1], [100,1], [data, xDim, 100], [data,] 
-        testx, testt, self.testU, self.testNU = self.myData.traintest()
+        testx, testt, self.testU, self.testNU, self.varU, self.varNU = self.myData.traintestvaridation()
          
         # [testdata, 256] -> [testdata, xdim]
         self.testX = np.reshape(np.tile(testx, self.tDim), [-1, self.xDim])
@@ -57,10 +47,12 @@ class ParamNN:
         self.x = tf.compat.v1.placeholder(tf.float32,shape=[self.tDim, self.xDim])
         self.t = tf.compat.v1.placeholder(tf.float32,shape=[self.xDim, self.tDim])
         # ----
+        
         # Restore neural network ----
         # pred nu [ndata,]
         hidden = self.RestorelambdaNN(self.inobs)
         hidden_test = self.RestorelambdaNN(self.inobs, reuse=True)
+        hidden_vard = self.RestorelambdaNN(self.inobs, reuse=True)
         # ----
         
         # optimizer ----
@@ -81,17 +73,20 @@ class ParamNN:
         # neural network (nu) ----
         self.param = self.lambdaNN(hidden)
         self.param_test = self.lambdaNN(hidden_test, reuse=True)
+        self.param_vard = self.lambdaNN(hidden_vard, reuse=True)
+        # ----
         
         # PDE ----
         # output: u
         self.predu, self.predparam = self.pde(self.x, self.t, self.param, nData=self.nBatch)
-        # ※ testデータサイズは手動
         self.predu_test, self.predparam_test = self.pde(self.x, self.t, self.param_test, nData=self.testNU.shape[0], reuse=True)
+        self.predu_vard, self.predparam_vard = self.pde(self.x, self.t, self.param_vard, nData=1, reuse=True)
         # ----
         #pdb.set_trace()
         # loss ----   
         self.loss = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu),2),1))
         self.loss_test = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu_test),2),1))
+        self.loss_vard = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu_vard),2),1))
         # ----
         # gradient
         self.gradu = tf.gradients(self.loss, self.inobs)[0]
@@ -229,9 +224,9 @@ class ParamNN:
         # ----
         
         # Start training
-        trL,teL = [],[]
-        trPL,tePL = [],[]
-        flag = False
+        trL,teL,varL = [],[],[]
+        trPL,tePL,varPL = [],[],[]
+        
         for itr in range(nItr):
             
             # index
@@ -264,6 +259,8 @@ class ParamNN:
             if itr % testPeriod == 0:
 
                 self.test(itr=itr)
+                self.varidation(itr=itr)
+                
                 print('----')
                 print('itr: %d, trainULoss:%f, trainPLoss:%f' % (itr, trainULoss, trainPLoss))
                 print(f'train exact: {batchNU[:5]}')
@@ -273,25 +270,31 @@ class ParamNN:
                 # u loss 
                 trL = np.append(trL,trainULoss)
                 teL = np.append(teL,self.testULoss)
+                varL = np.append(varL,self.varULoss)
                 
                 # param loss
                 trPL = np.append(trPL,trainPLoss)
                 tePL = np.append(tePL,self.testPLoss)
+                varPL = np.append(varPL,self.varPLoss)
 
                 # Save model
                 #self.saver.save(self.sess, os.path.join('model', 'burgers', 'first'), global_step=itr)
+        
         #pdb.set_trace()
-        paramloss = [trPL,tePL]
-        ulosses = [trL, teL]
+        paramloss = [trPL,tePL,varPL]
+        ulosses = [trL, teL, varL]
     
-        return ulosses, paramloss
+        teparams = [self.testX, self.testT, self.testParam]
+        varparams = [self.testX, self.testT, self.varParam]
+        
+        return ulosses, paramloss, teparams, varparams
     # ----
     
     # ----
     def test(self,itr=0):
         
         #pdb.set_trace() 
-        feed_dict={self.x:self.testX, self.t:self.testT, self.inobs:self.testU[:,:,:,np.newaxis], self.outobs:self.testU.transpose(0,2,1)}    
+        feed_dict={self.x:self.testX, self.t:self.testT, self.inobs:self.testU, self.outobs:self.testU.transpose(0,2,1)}    
         
         self.testParam, self.testPred, self.testULoss =\
         self.sess.run([self.predparam_test, self.predu_test, self.loss_test], feed_dict)
@@ -305,6 +308,21 @@ class ParamNN:
        
     # ----
     
+    # ----
+    def varidation(self,itr=0):
+        
+        feed_dict={self.x:self.testX, self.t:self.testT, self.inobs:self.varU, self.outobs:self.varU.transpose(0,2,1)}    
+        
+        self.varParam, self.varPred, self.varULoss =\
+        self.sess.run([self.predy_var, self.predu_var, self.loss_var], feed_dict)
+
+        self.varPLoss = np.mean(np.square(self.varNU-self.varParam))
+
+        print('itr: %d, varPLoss:%f' % (itr, self.varLoss))
+        print(f'varidation exact: {self.varNU}')
+        print(f'varidation pred: {self.varParam}')
+    # ----
+   
     
 if __name__ == "__main__":
     
