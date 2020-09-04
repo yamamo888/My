@@ -43,15 +43,17 @@ class ParamNN:
         self.inobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDim, tDim, 1])
         # ----
         
+        # neural network ----
         self.predy, self.cnnfeature = self.lambdaNN(self.inobs)
-        #self.predy_test, self.cnnfeature_test = self.lambdaNN(self.inobs, reuse=True)
         self.predy_test, self.cnnfeature_test = self.lambdaNN(self.inobs, reuse=True)
-        self.predy_test, self.cnnfeature_test = self.lambdaNN(self.inobs, reuse=True)
+        self.predy_vard, self.cnnfeature_vard = self.lambdaNN(self.inobs, reuse=True)
+        # ----
 
         # loss ----
         # param loss
         self.loss = tf.reduce_mean(tf.square(self.y - self.predy))
         self.loss_test = tf.reduce_mean(tf.square(self.y - self.predy_test))
+        self.loss_vard = tf.reduce_mean(tf.square(self.y - self.predy_vard))
         # ----
         #pdb.set_trace()
         
@@ -143,8 +145,8 @@ class ParamNN:
         # ----
         
         # Start training
-        trPL,tePL = [],[]
-        flag = False
+        trPL,tePL,varPL = [],[],[]
+        
         for itr in range(nItr):
             
             # index
@@ -167,10 +169,11 @@ class ParamNN:
             else:
                 batchCnt += 1
             
-            # Test
+            # Test & Varidation
             if itr % testPeriod == 0:
 
                 self.test(itr=itr)
+                self.varidation(itr=itr)
                 
                 print('----')
                 print('itr: %d, trainLoss:%f' % (itr, trainLoss))
@@ -180,13 +183,16 @@ class ParamNN:
                 # param loss
                 trPL = np.append(trPL,trainLoss)
                 tePL = np.append(tePL,self.testLoss)
+                varPL = np.append(varPL,self.varLoss)
 
                 # Save model
                 #self.saver.save(self.sess, os.path.join('model', f'{dataMode}burgers', f'first_{dataMode}'), global_step=itr)
         
-        paramloss = [trPL,tePL]
-    
-        return paramloss
+        paramloss = [trPL,tePL,varPL]
+        teparams = [self.testX, self.testT, self.testParam]
+        varparams = [self.testX, self.testT, self.varParam]
+        
+        return paramloss, teparams, varparams
     # ----
     
     # ----
@@ -200,8 +206,21 @@ class ParamNN:
         print('itr: %d, testPLoss:%f' % (itr, self.testLoss))
         print(f'test exact: {self.testNU[:5]}')
         print(f'test pred: {self.testParam[:5]}')
-       
     # ----
+    
+    # ----
+    def varidation(self,itr=0):
+        
+        feed_dict={self.y: self.varNU, self.inobs:self.varU}    
+        
+        self.varParam, self.varLoss =\
+        self.sess.run([self.predy_test, self.loss_test], feed_dict)
+
+        print('itr: %d, varPLoss:%f' % (itr, self.varLoss))
+        print(f'varidation exact: {self.varNU}')
+        print(f'varidation pred: {self.varParam}')
+    # ----
+    
     
     
 if __name__ == "__main__":
@@ -240,12 +259,15 @@ if __name__ == "__main__":
     
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, nBatch=nBatch, trialID=trialID, dataMode=dataMode)
-    plosses = model.train(nItr=nItr)
+    plosses, teparams, varparams = model.train(nItr=nItr)
     # ----
     
     # Plot ----
-    myPlot = pdeplot.Plot(trialID=trialID)
-    myPlot.pLoss(plosses, labels=['train','test'], savename='param')
+    myPlot = pdeplot.Plot(dataMode=dataMode, trialID=trialID)
+    myPlot.Loss(plosses, labels=['train','test','varid'], savename='param')
+    myPlot.paramToU(teparams, savename='tepredparam')
+    myPlot.paramToU(varparams, savename='varpredparam')
+    
     # ----
  
     
