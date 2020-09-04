@@ -23,16 +23,7 @@ class ParamNN:
         
       
         # parameter ----
-        if dataMode == 'large':
-            # x,t
-            self.xDim = 25 
-        elif dataMode == 'middle':
-            # x,t
-            self.xDim = 20
-        elif dataMode == 'small':
-            # x,t
-            self.xDim = 2
-        
+        self.xDim = 256
         tDim = 100
         self.nBatch = nBatch
         self.trialID = trialID
@@ -42,9 +33,8 @@ class ParamNN:
         # Dataset ----
         self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
         
-        _, _, self.testU, self.testNU = self.myData.traintest()
-        self.testU = self.testU[:,:,:,np.newaxis]
-        self.testNU = self.testNU[:,np.newaxis]
+        self.testX, self.testT, self.testU, self.testNU, self.varU, self.varNU  = self.myData.traintestvaridation()
+        # ----        
 
         # Placeholder ----
         # output param b
@@ -53,8 +43,9 @@ class ParamNN:
         self.inobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDim, tDim, 1])
         # ----
         
-        #self.predy = self.lambdaNN(self.inobs)
         self.predy, self.cnnfeature = self.lambdaNN(self.inobs)
+        #self.predy_test, self.cnnfeature_test = self.lambdaNN(self.inobs, reuse=True)
+        self.predy_test, self.cnnfeature_test = self.lambdaNN(self.inobs, reuse=True)
         self.predy_test, self.cnnfeature_test = self.lambdaNN(self.inobs, reuse=True)
 
         # loss ----
@@ -98,7 +89,7 @@ class ParamNN:
     # ----
     
     # ----
-    def lambdaNN(self, x, rate=0.0, reuse=False):
+    def lambdaNN(self, x, rate=0.05, reuse=False):
         
         nHidden = 128
         
@@ -107,7 +98,7 @@ class ParamNN:
                 scope.reuse_variables()
             
             xcnn = self.myData.CNNfeature(x, reuse=reuse)
-            
+            #pdb.set_trace()            
             dInput = xcnn.get_shape().as_list()[-1]
             
             # 1st layer
@@ -147,7 +138,7 @@ class ParamNN:
         testPeriod = 500
         batchCnt = 0
         #nTrain = 10
-        nTrain = 3960
+        nTrain = 3991
         batchRandInd = np.random.permutation(nTrain)
         # ----
         
@@ -162,9 +153,10 @@ class ParamNN:
             index = batchRandInd[sInd:eInd]
             # Get train data
             # [x.shape], [100,], [nbatch, t.shape, x.shape]
-            _, _, batchU, batchNU = self.myData.nextBatch(index)
+            _, _, batchU, batchNU = self.myData.miniBatch(index)
+            #pdb.set_trace()
             # y: prameter b
-            feed_dict = {self.y:batchNU[:,np.newaxis], self.inobs:batchU[:,:,:,np.newaxis]}
+            feed_dict = {self.y:batchNU[:,np.newaxis], self.inobs:batchU}
             
             _, trainParam, trainLoss =\
             self.sess.run([self.opt, self.predy, self.loss], feed_dict)
@@ -190,7 +182,7 @@ class ParamNN:
                 tePL = np.append(tePL,self.testLoss)
 
                 # Save model
-                self.saver.save(self.sess, os.path.join('model', f'{dataMode}burgers', f'first_{dataMode}'), global_step=itr)
+                #self.saver.save(self.sess, os.path.join('model', f'{dataMode}burgers', f'first_{dataMode}'), global_step=itr)
         
         paramloss = [trPL,tePL]
     
