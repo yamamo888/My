@@ -30,7 +30,7 @@ featurePath = "nankairirekifeature"
 # for linux var.
 #dataPath = 'b2b3b4b5b60-100'
 #featurePath = "features"
-dsdirPath = "MSE"
+
 fname = '*.txt' 
 # --------------- #
 
@@ -327,7 +327,9 @@ def MinErrorNankai(gt, pred, mode=3, label='test', isPlot=False):
             pYear_nk = (np.abs(nk[(nk<8000-sYear) & (nk>8000-aYear-sYear)] - 8000) -sYear)[-gNum_nk:]
             pYear_tnk = (np.abs(tnk[(tnk<8000-sYear) & (tnk>8000-aYear-sYear)] - 8000) -sYear)[-gNum_tnk:]
             pYear_tk = (np.abs(tk[(tk<8000-sYear) & (tk>8000-aYear-sYear)] - 8000) -sYear)[-gNum_tk:]
-             
+            
+            #pdb.set_trace()
+            
             # pred < gt
             if pYear_nk.shape[0] < gNum_nk:
                 # 真値より少ない場合は、1400年以降で合わせる、同じ数になるように
@@ -365,6 +367,10 @@ def MinErrorNankai(gt, pred, mode=3, label='test', isPlot=False):
             
             yearError = yearError_nk + yearError_tnk + yearError_tk
             
+            if yearError == 2882:
+                print(yearError)
+                #pdb.set_trace()
+            
             if not flag:
                 yearErrors = yearError
                 flag = True
@@ -376,7 +382,7 @@ def MinErrorNankai(gt, pred, mode=3, label='test', isPlot=False):
     
     # 1 対 1 (normal) ----
     if mode == 4:
-        
+       
         flag = False
         # Slide each one year 
         for sYear in np.arange(8000-aYear): 
@@ -489,43 +495,101 @@ def MinErrorNankai(gt, pred, mode=3, label='test', isPlot=False):
         # 最小誤差開始修了年数(1400年)取得
         sInd = np.argmin(yearErrors)
         #pdb.set_trace()
-        # ----
-        if isPlot:
-            # if slip velocity plot
-            sns.set_style("dark")
-      
+    # ----
+    if isPlot:
+        # if slip velocity (not scalling) plot
+        sns.set_style("dark")
+        
+        # ※手動
+        if mode == 4:
+            nk = pred[sInd:,0]
+            tnk = pred[sInd:,1]
+            tk = pred[sInd:,2]
+           
+            predVnk,predVtnk,predVtk = np.zeros(nk.shape[0]),np.zeros(nk.shape[0]),np.zeros(nk.shape[0])
+        
+            # V > 1
+            predVnk[np.where(nk>th)[0].tolist()] = nk[nk>th]
+            predVtnk[np.where(tnk>th)[0].tolist()] = tnk[tnk>th]
+            predVtk[np.where(tk>th)[0].tolist()] = tk[tk>th]
+        
+            gtV = np.zeros([nk.shape[0],3])
+            gtV[gYear_nk.tolist(),ntI] = 5
+            gtV[gYear_tnk.tolist(),tntI] = 5
+            gtV[gYear_tk,ttI] = 5
+        
+            #pdb.set_trace()
+            mae_nk = np.abs(gYear_nk-np.where(nk>1)[0][:len(gYear_nk)])
+            mae_tnk = np.abs(gYear_tnk-np.where(tnk>1)[0][:len(gYear_tnk)])
+            mae_tk = np.abs(gYear_tk-np.where(tk>1)[0][:len(gYear_tk)])
+            
+            
+        # ※手動
+        elif mode == 5:
+            predVnk,predVtnk,predVtk = np.zeros(1400),np.zeros(1400),np.zeros(1400)
+         
+            gtV = np.zeros([1400,3])
+            gtV[gYear_nk.tolist(),ntI] = 5
+            gtV[gYear_tnk.tolist(),tntI] = 5
+            gtV[gYear_tk,ttI] = 5
+            #pdb.set_trace()
+            predVnk[pYear_nk.tolist()] = 5
+            predVtnk[pYear_tnk.tolist()] = 5
+            predVtk[pYear_tk.tolist()] = 5
+            
+            mae_nk = np.abs(np.sort(gYear_nk) - np.sort(pYear_nk))
+            mae_tnk = np.abs(np.sort(gYear_tnk) - np.sort(pYear_tnk))
+            mae_tk = np.abs(np.sort(gYear_tk) - np.sort(pYear_tk))
+           
+        else:
+            
             nk = pred[sInd:sInd+1400,0]
             tnk = pred[sInd:sInd+1400,1]
             tk = pred[sInd:sInd+1400,2]
             
             predVnk,predVtnk,predVtk = np.zeros(1400),np.zeros(1400),np.zeros(1400)
-            
+        
             # V > 1
-            predVnk[np.where(nk>1)[0].tolist()] = nk[nk>1]
-            predVtnk[np.where(tnk>1)[0].tolist()] = tnk[tnk>1]
-            predVtk[np.where(tk>1)[0].tolist()] = tk[tk>1]
-            
-            colors = ["coral","skyblue","coral","skyblue","coral","skyblue"]
-            
+            predVnk[np.where(nk>th)[0].tolist()] = nk[nk>th]
+            predVtnk[np.where(tnk>th)[0].tolist()] = tnk[tnk>th]
+            predVtk[np.where(tk>th)[0].tolist()] = tk[tk>th]
+        
             # scalling var.
             gtV = np.zeros([1400,3])
             gtV[gYear_nk.tolist(),ntI] = 5
             gtV[gYear_tnk.tolist(),tntI] = 5
             gtV[gYear_tk,ttI] = 5
-           
-            plot_data = [gtV[:,ntI],predVnk,gtV[:,tntI],predVtnk,gtV[:,ttI],predVtk]
-            
-            fig = plt.figure()
-            fig, axes = plt.subplots(nrows=6,sharex="col")
-            for row,(color,data) in enumerate(zip(colors,plot_data)):
-                axes[row].plot(np.arange(1400), data, color=color)
-            
-            plt.suptitle(f'{int(np.min(yearErrors))}')
-            plt.savefig(os.path.join('images','bayes',f'{label}.png'))
-            plt.close()
-        # ----
+               
+        colors = ["coral","skyblue","coral","skyblue","coral","skyblue"]
         
-            
+        plot_data = [gtV[:,ntI],predVnk,gtV[:,tntI],predVtnk,gtV[:,ttI],predVtk]
+        
+        fig = plt.figure()
+        fig, axes = plt.subplots(nrows=6,sharex="col")
+        for row,(color,data) in enumerate(zip(colors,plot_data)):
+            axes[row].plot(np.arange(data.shape[0]), data, color=color)
+        
+        plt.suptitle(f'{int(np.min(yearErrors))}')
+        plt.savefig(os.path.join('images','bayes',f'rireki_{label}.png'))
+        
+        plt.close()
+        
+        # 折れ線 ----
+        plot_gdata = [gYear_nk,gYear_tnk,gYear_tk]
+        plot_mdata = [mae_nk,mae_tnk,mae_tk]
+        
+        fig = plt.figure()
+        fig, axes = plt.subplots(nrows=3,sharex="col")
+        for row,(gdata,pdata) in enumerate(zip(plot_gdata,plot_mdata)):
+            axes[row].plot(gdata, pdata, marker='o', color='gray')
+        
+        plt.suptitle(f'{mae_nk}\n {mae_tnk}\n {mae_tk}')
+        plt.savefig(os.path.join('images','bayes',f'mae_{label}.png'))
+        plt.close()
+    
+    # ----
+    
+    #pdb.set_trace()
     # 最小誤差確率　
     maxSim = yearErrors[sInd]
     print(maxSim)
@@ -572,18 +636,21 @@ if __name__ == "__main__":
 
     # ---- bool ---- #
     # 3.
-    isplotbestPath = False
+    isplotbestPath = True
     # 2. best 100 txt
     ismakingbestPath = False
     # 1. all research
-    ismakingminPath = True
+    ismakingminPath = False
     isPlot = False
     # -------------- #
     
+    dsdirPath = f"DS{mode}"
+        
     # -------------------------------------------------------------------------
     if isplotbestPath:    
         # ---------------------------------------------------------------------
-        logfilePath = os.path.join(dsdirPath,"bestMSE","*txt")
+        #logfilePath = os.path.join(dsdirPath,"bestMSE","*txt")
+        logfilePath = os.path.join(f'bestDS{mode}',"*txt")
         
         logfiles = glob.glob(logfilePath)
         # ---------------------------------------------------------------------
@@ -594,21 +661,17 @@ if __name__ == "__main__":
             
             V,B = loadABLV(logfile)
             yV = convV2YearlyData(V)
-            maxSim, pred = MinErrorNankai(gt,yV)
-            # eq. of pred
-            predeq_nk = np.where(pred[:,ntI]>th)[0]
-            predeq_tnk = np.where(pred[:,tntI]>th)[0]
-            predeq_tk = np.where(pred[:,ttI]>th)[0]
+            #maxSim = MinErrorNankai(gt,yV,mode=mode,label=f"{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}",isPlot=False)
             
             # plot gt & pred rireki
-            myPlot.Rireki(gt,pred,title=f"{predeq_nk}\n{predeq_tnk}\n{predeq_tk}",label=f"{maxSim}_{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}")
+            #myPlot.Rireki(gt,pred,path=os.path.join('figure','allresearch'),title=f"{predeq_nk}\n{predeq_tnk}\n{predeq_tk}",label=f"{maxSim}_{np.round(B[ntI],6)}_{np.round(B[tntI],6)}_{np.round(B[ttI],6)}")
             
             if not flag:
                 Bs = B
                 flag = True
             else:
                 Bs = np.vstack([Bs,B])
-        myPlot.scatter3D(Bs[:,ntI],Bs[:,tntI],Bs[:,ttI],rangeP=[np.min(Bs,0),np.max(Bs,0)],title="top 100",label="best100_2")
+        myPlot.scatter3D(Bs[:,ntI],Bs[:,tntI],Bs[:,ttI],rangeP=[np.min(Bs,0),np.max(Bs,0)],title="top 100",label=f"best100_{mode}")
     # -------------------------------------------------------------------------
     
     # -------------------------------------------------------------------------
