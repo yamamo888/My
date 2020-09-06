@@ -11,6 +11,9 @@ from scipy.interpolate import griddata
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.gridspec as gridspec
 
+import warnings
+warnings.simplefilter('ignore')
+
 import pdb
 
 class Plot:
@@ -51,9 +54,12 @@ class Plot:
           x = params[0]
           t = params[1]
           nus = params[2]
+          exactnu = params[3]
           
           flag = False
-          for nu in nus:
+          losses = []
+          for enu, nu in zip(exactnu,nus):
+              print(f'start param nu:{nu} -> inv u')
               # observation
               obsu = np.zeros([xNum, tNum])
     
@@ -70,6 +76,10 @@ class Plot:
                       obsu[i,j] = 4.0 - 2.0 * nu * dphi / phi
               
               if isPlot:
+                  
+                  loss = np.square(enu - nu)
+                  losses = np.append(losses, loss)
+                  
                   # plot u
                   self.Uimg(x ,t, obsu, label=nu, savename=savename)
               # for pNN_burgers
@@ -83,6 +93,10 @@ class Plot:
         
           if not isPlot:
               return predobsu
+          else:
+              exactu_loss = np.hstack([exactnu, losses[:,np.newaxis]])
+              # save loss
+              np.savetxt(os.path.join('result',f'burgers_{savename}_{self.dataMode}.csv'), exactu_loss, fmt='%4f', delimiter=',')
                   
       # ----
 
@@ -97,13 +111,13 @@ class Plot:
           # [100,256]
           U_star = griddata(X_star, u_star.flatten(), (X, T), method='cubic')
 
-          pdb.set_trace()
+          #pdb.set_trace()
 
           img = plt.imshow(U_star.T, interpolation='nearest', cmap='gray',
                            extent=[t.min(), t.max(), x.min(), x.max()],
                            origin='lower', aspect='auto')
 
-          plt.colorvar()
+          #plt.colorbar()
           plt.tick_params(labelbottom=False,labelleft=False,labelright=False,labeltop=False)
           plt.tick_params(bottom=False,left=False,right=False,top=False)
           plt.axis('off')
