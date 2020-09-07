@@ -101,41 +101,46 @@ class Plot:
       
       # u(t,x) ----
       def Uimg(self, x, t, exactu, predu, label='test', savename='u'):
-
+          
           X, T = np.meshgrid(x,t) #[100,256]
 
           X_star = np.hstack((X.flatten()[:,None], T.flatten()[:,None])) # [25600,2]
-          
-          us = [exactu,predu]
-          #pdb.set_trace()
-          fig, axes = plt.subplots(nrows=2,sharex="col")
+      
+          us = [exactu.T,predu.T]
+        
+          # u of exact nu (row0) -> pred nu (row1)
+          fig, axes = plt.subplots(nrows=2)
           for row,u in enumerate(us):
+        
+              # flatten: [100,256]
               u_star = u.flatten()[:,None] # [25600,1]
               # [100,256]
               U_star = griddata(X_star, u_star.flatten(), (X, T), method='cubic')
-
+    
               img = axes[row].imshow(U_star.T, interpolation='nearest', cmap='gray',
-                         extent=[t.min(), t.max(), x.min(), x.max()],
-                         origin='lower', aspect='auto')
-
+                        extent=[t.min(), t.max(), x.min(), x.max()],
+                        origin='lower', aspect='auto')
+    
+              if row == 0:
+                  titlelabel = 'exact nu='
+              elif row == 1:
+                  titlelabel = 'exact nu='
+                
+              axes[row].set_title('%s %5f' % (titlelabel, np.float(label.split('_')[row])))
+            
               divider1 = make_axes_locatable(axes[row])
               cax1 = divider1.append_axes("right", size="2%", pad=0.1)
               plt.colorbar(img,cax=cax1)
-              
-          #fig.canvas.draw()
-          #axpos1 = axes[0].get_position() # 上の図の描画領域
-          #axpos2 = ax2.get_position() # 下の図の描画領域
-          #幅をax1と同じにする
-          #ax2.set_position([axpos2.x0, axpos2.y0, axpos1.width, axpos2.height])
-              
-          plt.tick_params(labelbottom=False,labelleft=False,labelright=False,labeltop=False)
-          plt.tick_params(bottom=False,left=False,right=False,top=False)
-          plt.axis('off')
-
+            
+              axes[row].set_xlabel('t', fontsize=10)
+              axes[row].set_ylabel('u(t,x)', fontsize=10)
+        
+          plt.tight_layout()
+        
           fpath = os.path.join('figure', f'burgers_{savename}_{self.dataMode}')
           isdir = os.path.exists(fpath)
+      
           if not isdir:
               os.makedirs(fpath)
-
           plt.savefig(os.path.join(fpath, f'{label}.png'))
       # ----
