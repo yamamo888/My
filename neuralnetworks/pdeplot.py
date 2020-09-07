@@ -57,7 +57,7 @@ class Plot:
           
           flag = False
           for nu in nus:
-              print(f'start param nu:{nu} -> inv u')
+              #print(f'start param nu:{nu} -> inv u')
               # observation
               obsu = np.zeros([xNum, tNum])
     
@@ -84,7 +84,7 @@ class Plot:
       # ----
       
       # ----
-      def plotExactPredParam(self, params, xNum=256, tNum=100, savename='test'):
+      def plotExactPredParam(self, params, xNum=256, tNum=100, itr=0, savename='test'):
           
           x = params[0]
           t = params[1]
@@ -94,9 +94,10 @@ class Plot:
           predus = self.paramToU([x,t,prednus], xNum=xNum, tNum=tNum)
           exactus = self.paramToU([x,t,exactnus], xNum=xNum, tNum=tNum)
           
-          for predu,exactu,prednu,exactnu in zip([predus,exactus,prednus,exactnus]):
+          for predu,exactu,prednu,exactnu in zip(predus,exactus,prednus,exactnus):
               # plot u
-              self.Uimg(x ,t, exactu, predu, label=f'{exactnu}_{prednu}', savename=savename)
+              
+              self.Uimg(x ,t, exactu, predu, label=f'{exactnu}_{prednu}_{itr}', savename=savename)
       # ----
       
       # u(t,x) ----
@@ -125,8 +126,8 @@ class Plot:
                   titlelabel = 'exact nu='
               elif row == 1:
                   titlelabel = 'exact nu='
-                
-              axes[row].set_title('%s %5f' % (titlelabel, np.float(label.split('_')[row])))
+              #pdb.set_trace()  
+              axes[row].set_title('%s %5f' % (titlelabel, np.float(label.split('_')[row][1:-1])))
             
               divider1 = make_axes_locatable(axes[row])
               cax1 = divider1.append_axes("right", size="2%", pad=0.1)

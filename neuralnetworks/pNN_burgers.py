@@ -46,7 +46,7 @@ class ParamNN:
         
         #self.testX, self.testT, self.testU, self.testNU, self.varU, self.varNU  = self.myData.traintestvaridation(ismask=True)
         # [256,1] [xDim,1] [100,1] [data,xDim,100,1]
-        self.alltestX, self.testX, self.testT, self.testU, self.testNU, self.varU, self.varNU  = self.myData.traintestvaridation()
+        self.alltestX, self.testX, self.testT, self.testU, self.testNU, self.varX, self.varU, self.varNU  = self.myData.traintestvaridation()
         #pdb.set_trace()
         # ----        
 
@@ -152,6 +152,7 @@ class ParamNN:
         
         # parameters ----
         testPeriod = 100
+        savemodelPeriod = 500
         batchCnt = 0
         #nTrain = 10
         nTrain = 3991
@@ -191,10 +192,10 @@ class ParamNN:
                 # train return nu -> u
                 #params = [self.testX, self.testT, trainParam]
                 params = [batchX, batchT, trainParam, batchNU]
+                #pdb.set_trace()
                 invU = self.myPlot.paramToU(params, xNum=self.xDim)
                 
                 trainULoss = np.mean(np.sum(np.sum(np.square(batchU - invU),2),1))
-
 
                 self.test(itr=itr)
                 self.varidation(itr=itr)
@@ -214,8 +215,9 @@ class ParamNN:
                 teUL = np.append(teUL, self.testULoss)
                 varUL = np.append(varUL, self.varULoss)
 
+            if itr % savemodelPeriod == 0:
                 # Save model
-                #self.saver.save(self.sess, os.path.join('model', f'{dataMode}burgers', f'first_{dataMode}'), global_step=itr)
+                self.saver.save(self.sess, os.path.join('model', f'{dataMode}burgers', f'first_{dataMode}'), global_step=itr)
         #pdb.set_trace()
         paramloss = [trPL,tePL,varPL]
         uloss = [trUL,teUL,varUL]
@@ -240,6 +242,18 @@ class ParamNN:
         invU = self.myPlot.paramToU(params, xNum=self.xDim)
         
         self.testULoss = np.mean(np.sum(np.sum(np.square(self.testU[:,:,:,0] - invU),2),1))
+        #pdb.set_trace()
+        
+        prednu_maemax = self.testParam[np.argmax(np.square(self.testNU - self.testParam))]
+        exactnu_maemax = self.testNU[np.argmax(np.square(self.testNU - self.testParam))]
+        
+        prednu_maemin = self.testParam[np.argmin(np.square(self.testNU - self.testParam))]
+        exactnu_maemin = self.testNU[np.argmin(np.square(self.testNU - self.testParam))]
+
+        prednu_maxmin = np.vstack([prednu_maemin, prednu_maemax])
+        exactnu_maxmin = np.vstack([exactnu_maemin, exactnu_maemax])
+
+        self.myPlot.plotExactPredParam([self.testX, self.testT, prednu_maxmin, exactnu_maxmin], xNum=self.testX.shape[0], itr=itr, savename='tepredparam')
 
         print('itr: %d, testPLoss:%f, testULoss:%f' % (itr, self.testLoss, self.testULoss))
         print(f'test exact: {self.testNU[:5]}')
@@ -256,10 +270,12 @@ class ParamNN:
 
         #pdb.set_trace() 
         # return nu -> u
-        params = [self.testX, self.testT, self.varParam, self.varNU]
+        params = [self.varX, self.testT, self.varParam, self.varNU]
         invU = self.myPlot.paramToU(params, xNum=self.xDim)
         
         self.varULoss = np.mean(np.sum(np.sum(np.square(self.varU[:,:,:,0] - invU),2),1))
+    
+        self.myPlot.plotExactPredParam(params, xNum=self.varX.shape[0], itr=itr, savename='varpredparam')
         
         print('itr: %d, varPLoss:%f, varULoss:%f' % (itr, self.varLoss, self.varULoss))
         print(f'varidation exact: {self.varNU}')
@@ -309,8 +325,8 @@ if __name__ == "__main__":
     #myPlot = pdeplot.Plot(dataMode=dataMode, trialID=trialID)
     model.myPlot.Loss(plosses, labels=['train','test','varid'], savename='pNN_param')
     model.myPlot.Loss(ulosses, labels=['train','test','varid'], savename='pNN_u')
-    model.myPlot.paramToU(teparams, xNum=teparams[0].shape[0], savename='tepredparam', isPlot=True)
-    model.myPlot.paramToU(varparams, xNum=varparams[0].shape[0], savename='varpredparam', isPlot=True)
+    model.myPlot.plotExactPredParam(teparams, xNum=teparams[0].shape[0], savename='lasttepredparam')
+    model.myPlot.plotExactPredParam(varparams, xNum=varparams[0].shape[0], savename='lastvarpredparam')
     # ----
     
  
