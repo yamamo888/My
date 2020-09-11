@@ -35,9 +35,9 @@ class Plot:
 
           plt.plot(data[0], linewidth=2, label=labels[0])
           plt.plot(data[1], linewidth=2, label=labels[1])
-          plt.plot(data[2], linewidth=2, label=labels[1])
+          plt.plot(data[2], linewidth=2, label=labels[2])
 
-          plt.title('trLoss, teLoss, varLoss: %f %f %f' % (data[0][-1], data[1][-1], data[1][-1]))
+          plt.title('trLoss, teLoss, varLoss: %f %f %f' % (data[0][-1], data[1][-1], data[2][-1]))
 
           plt.xlabel('iteration')
           plt.ylabel('# of data')
@@ -65,13 +65,13 @@ class Plot:
                   for i in range (0, xNum):
                       a = ( x[i] - 4.0 * t[j] )
                       b = ( x[i] - 4.0 * t[j] - 2.0 * np.pi )
-                      c = 4.0 * nu * ( t[j] + 1.0 )
+                      c = 4.0 * (nu + np.exp(-10)) * ( t[j] + 1.0 )
     
                       phi = np.exp ( - a * a / c ) + np.exp ( - b * b / c )
                       dphi = - 2.0 * a * np.exp ( - a * a / c ) / c \
                              - 2.0 * b * np.exp ( - b * b / c ) / c
     
-                      obsu[i,j] = 4.0 - 2.0 * nu * dphi / phi
+                      obsu[i,j] = 4.0 - 2.0 * nu * dphi / (phi + np.exp(-10))
               
               # for pNN_burgers
               if not flag:
@@ -102,7 +102,7 @@ class Plot:
       
       # u(t,x) ----
       def Uimg(self, x, t, exactu, predu, label='test', savename='u'):
-          
+          #pdb.set_trace() 
           X, T = np.meshgrid(x,t) #[100,256]
 
           X_star = np.hstack((X.flatten()[:,None], T.flatten()[:,None])) # [25600,2]
@@ -125,7 +125,7 @@ class Plot:
               if row == 0:
                   titlelabel = 'exact nu='
               elif row == 1:
-                  titlelabel = 'exact nu='
+                  titlelabel = 'predict nu='
               #pdb.set_trace()  
               axes[row].set_title('%s %5f' % (titlelabel, np.float(label.split('_')[row][1:-1])))
             
@@ -144,4 +144,5 @@ class Plot:
           if not isdir:
               os.makedirs(fpath)
           plt.savefig(os.path.join(fpath, f'{label}.png'))
+          plt.close()
       # ----
