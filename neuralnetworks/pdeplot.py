@@ -65,14 +65,23 @@ class Plot:
                   for i in range (0, xNum):
                       a = ( x[i] - 4.0 * t[j] )
                       b = ( x[i] - 4.0 * t[j] - 2.0 * np.pi )
-                      c = 4.0 * (nu + np.exp(-10)) * ( t[j] + 1.0 )
+                      
+                      if nu == 0.0:
+                          print(nu)
+                          c = 4.0 * nu * ( t[j] + 1.0 )
+                      else:
+                          print(nu)
+                          c = 4.0 * (nu + np.exp(-100)) * ( t[j] + 1.0 )
     
                       phi = np.exp ( - a * a / c ) + np.exp ( - b * b / c )
                       dphi = - 2.0 * a * np.exp ( - a * a / c ) / c \
                              - 2.0 * b * np.exp ( - b * b / c ) / c
     
-                      obsu[i,j] = 4.0 - 2.0 * nu * dphi / (phi + np.exp(-10))
-              
+                      if nu == 0.0:
+                          obsu[i,j] = 4.0 - 2.0 * (nu + np.exp(-100)) * dphi / (phi + np.exp(-100))
+                      else:
+                          obsu[i,j] = 4.0 - 2.0 * nu * dphi / phi
+            
               # for pNN_burgers
               if not flag:
                   predobsu = obsu[np.newaxis]
