@@ -97,26 +97,18 @@ class pdeData:
             # x:[256,] t:[100,] obsu:[256,100]
             x, t, obsu = self.burgers(nu=nu)
             
-            if nu == defaultnu:
-                with open(os.path.join(self.modelPath, self.pdeMode, 'burgers_default001.pkl'), 'wb') as fp:
-                    pickle.dump(x, fp)
-                    pickle.dump(t, fp)
-                    pickle.dump(obsu, fp)
-                    pickle.dump(nu, fp)
-                #pdb.set_trace()
+            if not flag:
+                X = x
+                T = t
+                U = obsu.T[np.newaxis]
+                NU = np.array([nu])
+                flag = True
             else:
-                if not flag:
-                    X = x
-                    T = t
-                    U = obsu.T[np.newaxis]
-                    NU = np.array([nu])
-                    flag = True
-                else:
-                    X = np.vstack([X, x]) # [data, 256]
-                    T = np.vstack([T, t]) # [data, 100]
-                    U = np.vstack([U, obsu.T[np.newaxis]]) # [data, 100, 256]
-                    NU = np.hstack([NU, np.array([nu])]) # [data,]
-        
+                X = np.vstack([X, x]) # [data, 256]
+                T = np.vstack([T, t]) # [data, 100]
+                U = np.vstack([U, obsu.T[np.newaxis]]) # [data, 100, 256]
+                NU = np.hstack([NU, np.array([nu])]) # [data,]
+    
         # X,T: 全データ数分同じデータconcat
         with open(os.path.join(self.modelPath, self.pdeMode, 'XTUNU.pkl'), 'wb') as fp:
             pickle.dump(X[0], fp) #[256,]
@@ -218,24 +210,22 @@ class pdeData:
         # flatten: [100,256]
         u_star = u.flatten()[:,None] # [25600,1]         
     
-   
         U_star = griddata(X_star, u_star.flatten(), (X, T), method='cubic')
     
-        plt.imshow(U_star.T, cmap='gray')
-        
+        img = plt.imshow(U_star.T, interpolation='nearest', cmap='gray', origin='lower')
+    
         plt.xlabel('t')
         plt.ylabel('x')
         plt.title(f'nu={label}')
         
-        plt.colorbar()
+        plt.colorbar(img, shrink=0.3)
         
         plt.savefig(os.path.join('figure',f'burgers_{name}',f'{label}.png'))
         plt.close()
         
     # ----
 
-
-     # ----
+    # ----
     def weight_variable(self,name,shape,trainable=True):
          return tf.compat.v1.get_variable(name,shape,initializer=tf.random_normal_initializer(stddev=0.1),trainable=trainable)
     # ----
@@ -282,8 +272,6 @@ class pdeData:
         
             conv2 = self.maxpool2d(conv2)
             
-            #pdb.set_trace() 
-            
             #w3 = self.weight_variable('w3', [24*32*24, 32])
             w3 = self.weight_variable('w3', [conv2.get_shape().as_list()[1]*conv2.get_shape().as_list()[2]*conv2.get_shape().as_list()[3], 32], trainable=trainable)
             b3 = self.bias_variable('b3', [32], trainable=trainable)
@@ -325,20 +313,19 @@ class pdeData:
     # ----
         
     
-#name = 'small'
+name = 'small'
 #name = 'middle'
-name = 'large'
+#name = 'large'
 myData = pdeData(dataMode='small')
 #[3]
 #myData.maketraintest(name=name)
-#[2]mask
-#myData.maskImg(name=name)
+
 #[1]
 #myData.saveXTU()
 
-
 #[2]
 print(name)
+
 
 with open(os.path.join('model','burgers','XTUNU.pkl'), 'rb') as fp:
     X = pickle.load(fp)
@@ -363,9 +350,13 @@ for i in np.arange(NU.shape[0]):
   
     label = np.round(NU[i],5).astype(str)
     print(label)
+    
+    if name == 'large':
+        myData.makeImg(X,T,U[i,:,:],label=label,name='exact')
+        
+    myData.makeImg(X[idx],T,U[i,:,idx].T,label=label,name=f'{name}')
+        
     pdb.set_trace()    
-    myData.makeImg(X,T,U[i,:,:],label=label,name='exact')
-    myData.makeImg(X[idx],T,U[i,:,idx].T,label=label,name='large')
     
     if not flag:
         Us = U[i,:,idx][np.newaxis] # [x,t]
@@ -381,24 +372,5 @@ with open(os.path.join('model','burgers',f'IMGXTUNU_{name}.pkl'), 'wb') as fp:
     pickle.dump(X[idx,np.newaxis], fp)
     pickle.dump(Us, fp)
 # ----
-        
-# for varidation ----
-with open(os.path.join('model','burgers','burgers_default001.pkl'), 'rb') as fp:
-    varX = pickle.load(fp) #[256,]
-    varT = pickle.load(fp) #[100,]
-    varU = pickle.load(fp) #[256,100]
-    varNU = pickle.load(fp) # 0.01
-    
-with open(os.path.join('model','burgers',f'IMGvarXTUNU_{name}.pkl'), 'wb') as fp:
-    pickle.dump(varX[:,np.newaxis], fp)
-    pickle.dump(varT[:,np.newaxis], fp)
-    pickle.dump(varU, fp)
-    pickle.dump(varNU, fp)
-    pickle.dump(varX[idx,np.newaxis], fp)
-    pickle.dump(varU[idx], fp)
-# ----
 
-
-#myPlot = plot.Plot(figurepath='figure', trialID=0)
-#myPlot.udata(xt, trainXY, testXY[1], testXY, testXY)
 
