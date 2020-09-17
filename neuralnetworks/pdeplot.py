@@ -35,9 +35,8 @@ class Plot:
 
           plt.plot(data[0], linewidth=2, label=labels[0])
           plt.plot(data[1], linewidth=2, label=labels[1])
-          plt.plot(data[2], linewidth=2, label=labels[2])
 
-          plt.title('trLoss, teLoss, varLoss: %f %f %f' % (data[0][-1], data[1][-1], data[2][-1]))
+          plt.title('trLoss, teLoss: %f %f' % (data[0][-1], data[1][-1]))
 
           plt.xlabel('iteration')
           plt.ylabel('# of data')
@@ -67,11 +66,9 @@ class Plot:
                       b = ( x[i] - 4.0 * t[j] - 2.0 * np.pi )
                       
                       if nu == 0.0:
-                          print(nu)
-                          c = 4.0 * nu * ( t[j] + 1.0 )
-                      else:
-                          print(nu)
                           c = 4.0 * (nu + np.exp(-100)) * ( t[j] + 1.0 )
+                      else:
+                          c = 4.0 * nu * ( t[j] + 1.0 )
     
                       phi = np.exp ( - a * a / c ) + np.exp ( - b * b / c )
                       dphi = - 2.0 * a * np.exp ( - a * a / c ) / c \
