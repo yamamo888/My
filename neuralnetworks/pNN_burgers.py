@@ -58,8 +58,8 @@ class ParamNN:
         # ----
         
         # neural network ----
-        self.predy, self.cnnfeature = self.lambdaNN(self.inobs)
-        self.predy_test, self.cnnfeature_test = self.lambdaNN(self.inobs, reuse=True)
+        self.predy, self.predy_pre, self.cnnfeature = self.lambdaNN(self.inobs)
+        self.predy_test, self.predy_test_pre, self.cnnfeature_test = self.lambdaNN(self.inobs, reuse=True)
         # ----
 
         # loss ----
@@ -100,6 +100,31 @@ class ParamNN:
          fc = tf.nn.dropout(fc, rate=rate)
          return fc
     # ----
+    # ----
+    # 0.01 < x < 5.0 (for moving burgers)
+    def outputthes(self, x):
+        
+        overlambda = tf.constant([5.0])
+        overid = tf.where(x>overlambda)
+        overnum = tf.shape(overid)[0]
+        overths = tf.tile(overlambda, [overnum])
+        overupdate = tf.tensor_scatter_nd_update(x, overid, overths)
+        
+        updatex = self.underupdate(overupdate)
+        
+        return updatex
+    # ----
+    # ----
+    def underupdate(self, xover):
+        
+        underlambda = tf.constant([0.01])
+        underid = tf.where(xover<underlambda)
+        undernum = tf.shape(underid)[0]
+        underths = tf.tile(underlambda, [undernum])
+        underupdate = tf.tensor_scatter_nd_update(xover, underid, underths)
+        
+        return underupdate
+    # ----
     
     # ----
     def lambdaNN(self, x, rate=0.05, reuse=False):
@@ -136,12 +161,12 @@ class ParamNN:
             
             # nu
             y = self.fc_relu(h3,w4,bias4,rate)
-            pdb.set_trace()
             
-            return y,xcnn
+            y_thes = self.outputthes(y)
+                
+            return y_thes,y,xcnn
             
     # ----
-    
     
     # ----
     def train(self, nItr=1000):
@@ -172,8 +197,8 @@ class ParamNN:
             #feed_dict = {self.y:batchNU[:,np.newaxis], self.inobs:batchU}
             feed_dict = {self.y:batchNU[:,np.newaxis], self.inobs:batchU[:,:,:,np.newaxis]}
             
-            _, trainParam, trainLoss =\
-            self.sess.run([self.opt, self.predy, self.loss], feed_dict)
+            _, trainParam, trainParamPre, trainLoss =\
+            self.sess.run([self.opt, self.predy, self.predy_pre, self.loss], feed_dict)
             
             if eInd + self.nBatch > nTrain:
                 batchCnt = 0
@@ -187,7 +212,7 @@ class ParamNN:
                 # train return nu -> u
                 #params = [self.testX, self.testT, trainParam]
                 params = [batchX, batchT, trainParam, batchNU]
-                #pdb.set_trace()
+                pdb.set_trace()
                 invU = self.myPlot.paramToU(params, xNum=self.xDim)
                 #pdb.set_trace() 
                 trainULoss = np.mean(np.mean(np.mean(np.square(batchU - invU),2),1))
@@ -234,8 +259,8 @@ class ParamNN:
         
         feed_dict={self.y: self.testNU, self.inobs:self.testU}    
         
-        self.testParam, self.testLoss =\
-        self.sess.run([self.predy_test, self.loss_test], feed_dict)
+        self.testParam, self.testParamPre, self.testLoss =\
+        self.sess.run([self.predy_test, self.predy_test_pre, self.loss_test], feed_dict)
         
         #pdb.set_trace()
         # return nu -> u
@@ -244,8 +269,8 @@ class ParamNN:
         
         self.testULoss = np.mean(np.mean(np.mean(np.square(self.testU[:,:,:,0] - invU),2),1))
         #pdb.set_trace()
-        if np.isnan(self.testULoss):
-            pdb.set_trace()
+        #if np.isnan(self.testULoss):
+            #pdb.set_trace()
         
         prednu_maemax = self.testParam[np.argmax(np.square(self.testNU - self.testParam))]
         exactnu_maemax = self.testNU[np.argmax(np.square(self.testNU - self.testParam))]
