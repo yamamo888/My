@@ -49,9 +49,6 @@ class ParamNN:
         # [testdata, 256] -> [testdata, xdim]
         self.testX = np.reshape(np.tile(self.testx, self.tDim), [-1, self.xDim])
         self.testT = np.reshape(np.tile(self.testt, self.xDim), [-1, self.tDim])
-        # for varidation data
-        self.varX = np.reshape(np.tile(self.varx, self.tDim), [-1, self.xDim])
-        self.varT = np.reshape(np.tile(self.testt, self.xDim), [-1, self.tDim])
         # ----
          
         # Placeholder ----
@@ -68,8 +65,6 @@ class ParamNN:
         # Restore neural network ----
         # pred nu [ndata,]
         hidden = self.RestorelambdaNN(self.inobs)
-        hidden_test = self.RestorelambdaNN(self.inobs, reuse=True)
-        hidden_vard = self.RestorelambdaNN(self.inobs, reuse=True)
         # ----
         
         # optimizer ----
@@ -88,41 +83,31 @@ class ParamNN:
         # ----
         
         # neural network (nu) ----
-        self.param = self.lambdaNN(hidden)
-        self.param_test = self.lambdaNN(hidden_test, reuse=True)
-        self.param_vard = self.lambdaNN(hidden_vard, reuse=True)
+        self.predparam, self.predparam_pre = self.lambdaNN(hidden)
         # ----
         
         # PDE ----
         # output: u
-        self.predu, self.predparam = self.pde(self.x, self.t, self.param, nData=self.nBatch)
-        self.predu_test, self.predparam_test = self.pde(self.x, self.t, self.param_test, nData=self.testNU.shape[0], reuse=True)
-        self.predu_vard, self.predparam_vard = self.pde(self.x, self.t, self.param_vard, nData=1, reuse=True)
+        self.predu = self.pde(self.x, self.t, self.param_test, nData=self.testNU.shape[0])
         # ----
-        #pdb.set_trace()
-
+        
         # loss param ----
         self.loss_nu = tf.reduce_mean(tf.square(self.y - self.param)) 
-        self.loss_nu_test = tf.reduce_mean(tf.square(self.y - self.param_test)) 
-        self.loss_nu_vard = tf.reduce_mean(tf.square(self.y - self.param_vard)) 
         # ----
 
         # loss u ----   
         self.loss = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu),2),1))
-        self.loss_test = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu_test),2),1))
-        self.loss_vard = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu_vard),2),1))
         # ----
         
         # gradient
-        self.gradu = tf.gradients(self.loss, self.inobs)[0]
+        self.gradnu = tf.gradients(self.loss_nu, self.inobs)[0]
 
         # Optimizer ----
-        self.opt_nu = tf.compat.v1.train.AdamOptimizer(lr).minimize(self.loss_nu)
-        self.opt = tf.compat.v1.train.AdamOptimizer(lr).minimize(self.loss)
-        # ----
+        #self.opt_nu = tf.compat.v1.train.AdamOptimizer(lr).minimize(self.loss_nu)
         
         lambdaVars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES,scope='updatelambdaNN') 
         self.opt = tf.compat.v1.train.AdamOptimizer(lr).minimize(self.loss, var_list=lambdaVars)
+        # ----
         
         # ----
         uninitialized = self.sess.run([tf.compat.v1.is_variable_initialized(var) for var in tf.compat.v1.global_variables()])
@@ -150,6 +135,32 @@ class ParamNN:
          fc = tf.matmul(inputs,w) + b
          fc = tf.nn.dropout(fc, rate=rate)
          return fc
+    # ----
+    
+    # ----
+    # 0.01 < x < 5.0 (for moving burgers)
+    def outputthes(self, x):
+        
+        overlambda = tf.constant([5.0])
+        overid = tf.where(x>overlambda)
+        overnum = tf.shape(overid)[0]
+        overths = tf.tile(overlambda, [overnum])
+        overupdate = tf.tensor_scatter_nd_update(x, overid, overths)
+        
+        updatex = self.underupdate(overupdate)
+        
+        return updatex
+    # ----
+    # ----
+    def underupdate(self, xover):
+        
+        underlambda = tf.constant([0.01])
+        underid = tf.where(xover<underlambda)
+        undernum = tf.shape(underid)[0]
+        underths = tf.tile(underlambda, [undernum])
+        underupdate = tf.tensor_scatter_nd_update(xover, underid, underths)
+        
+        return underupdate
     # ----
     
     # ----
@@ -200,25 +211,24 @@ class ParamNN:
         
             #y = self.fc(x,w4_reg,bias4_reg,rate)
             y = self.fc_relu(x,w4_reg,bias4_reg,rate)
+            
+            y_thes = self.outputthes(y)
         
-            return y  
+            return y_thes, y
     # ----
       
     # ----
-    def pde(self, x, t, param, nData=100, reuse=False):
+    def pde(self, x, t, param, nData=100):
         
         pi = 3.14
-        # 桁落ち防ぐため
-        zero_flow = tf.math.exp(tf.constant([[-10.0]]))
-        
-
+    
         # a,bは、すべての u で共通
         tmpa = x - 4.0 * tf.transpose(t) # [t.shape, x.shape]
         tmpb = x - 4.0 * tf.transpose(t) - 2.0 * pi
         # データ数分の t [ndata, t.shape]
         ts = tf.tile(tf.expand_dims(t[0], 0), [nData, 1])
         # データごと(param)に計算 [ndata, t.shape]
-        tmpc = 4.0 * (param + zero_flow) * (ts + 1.0)
+        tmpc = 4.0 * param * (ts + 1.0)
             
         # + N dimention [nBatch, t.shape, x.shape]
         a = tf.tile(tf.expand_dims(tmpa, 0), [nData, 1, 1])
@@ -229,167 +239,70 @@ class ParamNN:
         phi = tf.exp(- a * a / c) + tf.exp(- b * b / c)
         dphi = - 2.0 * a * tf.exp(- a * a / c ) / c - 2.0 * b * tf.exp(- b * b / c) / c
         
-        invu = 4.0 - 2.0 * tf.expand_dims(param,1) * dphi / (phi + tf.tile(tf.expand_dims(zero_flow,1),[1,self.tDim,self.xDim]))
+        invu = 4.0 - 2.0 * tf.expand_dims(param,1) * dphi / phi
 
-        return invu, param
+        return invu
     # ----
     
     # ----
     def train(self, nItr=1000):
         
         # parameters ----
-        testPeriod = 100
+        printPeriod = 100
         batchCnt = 0
-        nTrain = 3991
+        nTrain = 1000
         batchRandInd = np.random.permutation(nTrain)
+        # ※手動
+        plotnus = [0.01, 0.02, 0.05, 0.1, 0.5, 1.0, 2.0, 4.0]
         # ----
         
         # Start training
-        trL,teL,varL = [],[],[]
-        trPL,tePL,varPL = [],[],[]
-        trPUL,tePUL,varPUL = [],[],[]
+        teUL = []
+        tePL = []
         
         for itr in range(nItr):
             
-            # index
-            sInd = self.nBatch * batchCnt
-            eInd = sInd + self.nBatch
-            index = batchRandInd[sInd:eInd]
-            # Get train data
-            # [x.shape], [100,], [nbatch, t.shape, x.shape]
-            batchx, batcht, batchU, batchNU = self.myData.miniBatch(index)
-            
-            # [nbatch,100] -> [nbathc, x.shape]
-            batchX = np.reshape(np.tile(batchx, self.tDim), [-1, self.xDim])
-            batchT = np.reshape(np.tile(batcht, self.xDim), [-1, self.tDim])
-            #pdb.set_trace() 
-            feed_dict = {self.x:batchX, self.t:batchT, self.y:batchNU[:,np.newaxis], self.inobs:batchU[:,:,:,np.newaxis], self.outobs:batchU.transpose(0,2,1)}
-            
-            _,_, trainParam, trainPred, trainULoss, grad =\
-            self.sess.run([self.opt_nu, self.opt, self.predparam, self.predu, self.loss, self.gradu], feed_dict)
-
-            '''
-            # ※手動
-            if itr < 2500:
-                _, trainParam, trainPred, trainULoss, grad =\
-                self.sess.run([self.opt_nu, self.predparam, self.predu, self.loss, self.gradu], feed_dict)
-            elif itr >= 2500:
-                _, trainParam, trainPred, trainULoss, grad =\
-                self.sess.run([self.opt, self.predparam, self.predu, self.loss, self.gradu], feed_dict)
-            '''
-            
-            trainPLoss = np.mean(np.square(batchNU - trainParam))
-
-            if eInd + self.nBatch > nTrain:
-                batchCnt = 0
-                batchRandInd = np.random.permutation(nTrain)
-            else:
-                batchCnt += 1
-            
-            # Test
-            if itr % testPeriod == 0:
+            # ※1こずつ？
+            flag = False
+            cnt = 0
+            for ind in batchRandInd:
+                feed_dict={self.x:self.testX, self.t:self.testT, self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], self.outobs:self.testU[ind,np.newaxis,:,:,0].transpose(0,2,1)}    
+           
+                _, testParam, testPred, testploss, testuloss, grad =\
+                self.sess.run([self.opt, self.predparam_test, self.predparam_pre, self.predu_test, self.loss_nu_test, self.loss_test, self.gradnu], feed_dict)
                 
-                # pred nu -> u (py)
-                params = [batchx, batcht, trainParam, batchNU]
-                invU = self.myPlot.paramToU(params, xNum=self.xDim)
-                trainPULoss = np.mean(np.sum(np.sum(np.square(batchU - invU),2),1))
+                if cnt < printPeriod:
+                    
+                    if not flag:
+                        testPLoss = testploss
+                        testULoss = testuloss
+                        flag = True
+                    else:
+                        testPLoss = np.hstack([testPLoss, testploss])
+                        testULoss = np.hstack([testULoss, testuloss])
+                    
+                    cnt += 1
+                    
+                if itr % printPeriod == 0:
                 
-                self.test(itr=itr)
-                self.varidation(itr=itr)
-                
-                print('----')
-                print('itr: %d, trainULoss:%f, trainPLoss:%f' % (itr, trainULoss, trainPLoss))
-                print(f'train exact: {batchNU[:5]}')
-                print(f'train pred: {trainParam[:5]}')
-                #print(np.mean(grad))
-                
-                # u loss 
-                trL = np.append(trL,trainULoss)
-                teL = np.append(teL,self.testULoss)
-                varL = np.append(varL,self.varULoss)
-                
-                # param -> u loss
-                trPUL = np.append(trPUL,trainPULoss)
-                tePUL = np.append(tePUL,self.testPULoss)
-                varPUL = np.append(varPUL,self.varPULoss)
-                
-                # param loss
-                trPL = np.append(trPL,trainPLoss)
-                tePL = np.append(tePL,self.testPLoss)
-                varPL = np.append(varPL,self.varPLoss)
-            
-            #if itr % savemodelPeriod == 0:
-                # Save model
-                #self.saver.save(self.sess, os.path.join('model', 'burgers', 'first'), global_step=itr)
+                    print('itr: %d, testULoss:%f, testPLoss:%f' % (itr, self.testULoss, self.testPLoss))
+                    
+                    tePL = np.append(tePL, testPLoss)
+                    teUL = np.append(teUL, testULoss)
+                    
+                    if np.round(self.testNU[ind],3) in plotnus:
+                        
+                        exactnu = self.testNU[ind]
+                        prednu = testPred[ind]
+                        
+                        self.myPlot.plotExactPredParam([self.testx, self.testt, prednu, exactnu], xNum=self.testx.shape[0], itr=itr, savename='tepredparamode')
         
-        #pdb.set_trace()
-        paramloss = [trPL, tePL, varPL]
-        ulosses = [trL, teL, varL]
-        pulosses = [trPUL, tePUL, varPUL]
-    
-        teparams = [self.testx, self.testt, self.testParam, self.testNU]
-        varparams = [self.varx, self.testt, self.varParam, self.varNU]
+        paramloss = [tePL]
+        ulosses = [teUL]
         
-        return paramloss, ulosses, pulosses, teparams, varparams
+        return paramloss, ulosses
     # ----
     
-    # ----
-    def test(self,itr=0):
-        
-        #pdb.set_trace() 
-        feed_dict={self.x:self.testX, self.t:self.testT, self.y:self.testNU, self.inobs:self.testU, self.outobs:self.testU[:,:,:,0].transpose(0,2,1)}    
-        
-        self.testParam, self.testPred, self.testULoss =\
-        self.sess.run([self.predparam_test, self.predu_test, self.loss_test], feed_dict)
-
-        self.testPLoss = np.mean(np.square(self.testNU-self.testParam))
-
-        # return nu -> u ---
-        params = [self.testx, self.testt, self.testParam, self.testNU]
-        invU = self.myPlot.paramToU(params, xNum=self.xDim) 
-        self.testPULoss = np.mean(np.sum(np.sum(np.square(self.testU[:,:,:,0] - invU),2),1))
-        
-        prednu_maemax = self.testParam[np.argmax(np.square(self.testNU - self.testParam))]
-        exactnu_maemax = self.testNU[np.argmax(np.square(self.testNU - self.testParam))]
-        
-        prednu_maemin = self.testParam[np.argmin(np.square(self.testNU - self.testParam))]
-        exactnu_maemin = self.testNU[np.argmin(np.square(self.testNU - self.testParam))]
-
-        prednu_maxmin = np.vstack([prednu_maemin, prednu_maemax])
-        exactnu_maxmin = np.vstack([exactnu_maemin, exactnu_maemax])
-
-        self.myPlot.plotExactPredParam([self.testx, self.testt, prednu_maxmin, exactnu_maxmin], xNum=self.testx.shape[0], itr=itr, savename='tepredparamode')
-        # ---
-        
-        print('itr: %d, testULoss:%f, testPLoss:%f' % (itr, self.testULoss, self.testPLoss))
-        print(f'test exact: {self.testNU[:5]}')
-        print(f'test pred: {self.testParam[:5]}')
-       
-    # ----
-    
-    # ----
-    def varidation(self,itr=0):
-        #pdb.set_trace() 
-        feed_dict={self.x:self.testX, self.t:self.testT, self.y:self.varNU, self.inobs:self.varU, self.outobs:self.varU[:,:,:,0].transpose(0,2,1)}    
-        
-        self.varParam, self.varPred, self.varULoss =\
-        self.sess.run([self.predparam_vard, self.predu_vard, self.loss_vard], feed_dict)
-
-        self.varPLoss = np.mean(np.square(self.varNU-self.varParam))
-
-        # return nu -> u ---
-        params = [self.varx, self.testt, self.varParam, self.varNU]
-        invU = self.myPlot.paramToU(params, xNum=self.xDim)
-        self.varPULoss = np.mean(np.sum(np.sum(np.square(self.varU[:,:,:,0] - invU),2),1))
-    
-        self.myPlot.plotExactPredParam(params, xNum=self.varx.shape[0], itr=itr, savename='varpredparamode')
-        # ---
-    
-        print('itr: %d, varULoss:%f, varPLoss:%f' % (itr, self.varULoss, self.varPLoss))
-        print(f'varidation exact: {self.varNU}')
-        print(f'varidation pred: {self.varParam}')
-    # ----
-   
     
 if __name__ == "__main__":
     
@@ -427,16 +340,14 @@ if __name__ == "__main__":
     
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, nBatch=nBatch, trialID=trialID, dataMode=dataMode)
-    plosses, ulosses, pulosses, teparams, varparams = model.train(nItr=nItr)
+    plosses, ulosses = model.train(nItr=nItr)
     # ----
     
     # Plot ----
-    model.myPlot.Loss(plosses, labels=['train','test','varid'], savename='poNN_param')
-    model.myPlot.Loss(ulosses, labels=['train','test','varid'], savename='poNN_u')
-    model.myPlot.Loss(pulosses, labels=['train','test','varid'], savename='poNN_invu')
+    model.myPlot.Loss1(plosses, labels=['test'], savename='poNN_param')
+    model.myPlot.Loss1(ulosses, labels=['test'], savename='poNN_u')
     
-    model.myPlot.plotExactPredParam(teparams, xNum=teparams[0].shape[0], savename='lasttepredparamode')
-    model.myPlot.plotExactPredParam(varparams, xNum=varparams[0].shape[0], savename='lastvarpredparamode')
+    #model.myPlot.plotExactPredParam(teparams, xNum=teparams[0].shape[0], savename='lasttepredparamode')
     # ----
  
     
