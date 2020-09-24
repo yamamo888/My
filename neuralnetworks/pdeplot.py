@@ -28,7 +28,7 @@ class Plot:
           self.dataMode = dataMode
           self.trialID = trialID
 
-      # Plot loss ----
+      # Plot loss (two data)----
       def Loss(self, data, labels, savename='loss'):
 
           sns.set_style('dark')
@@ -46,13 +46,36 @@ class Plot:
           plt.savefig(losspath)
           plt.close()
       # ----
+      
+      # Plot loss (only one) ----
+      def Loss1(self, data, labels, savename='loss'):
 
+          sns.set_style('dark')
+
+          plt.plot(data[0], linewidth=2, label=labels[0])
+         
+          plt.title('Loss: %f' % (data[0][-1]))
+
+          plt.xlabel('iteration')
+          plt.ylabel('# of data')
+          plt.legend()
+
+          losspath = os.path.join(self.figurePath, 'loss', f'{savename}_{self.dataMode}_{self.trialID}.png')
+          plt.savefig(losspath)
+          plt.close()
+      # ----
+      
       # nu -> u(t,x) ----
       def paramToU(self, params, xNum=256, tNum=100):
           
           x = params[0]
           t = params[1]
           nus = params[2]
+          
+          # 0.01 < x < 5.0
+          nus = np.where(np.round(nus,3)<0.01, 0.01, np.where(np.round(nus,3)>5.0, 5.0, nus))
+          
+          pdb.set_trace()
           
           flag = False
           for nu in nus:
@@ -65,19 +88,13 @@ class Plot:
                       a = ( x[i] - 4.0 * t[j] )
                       b = ( x[i] - 4.0 * t[j] - 2.0 * np.pi )
                       
-                      if nu == 0.0:
-                          c = 4.0 * (nu + np.exp(-100)) * ( t[j] + 1.0 )
-                      else:
-                          c = 4.0 * nu * ( t[j] + 1.0 )
+                      c = 4.0 * nu * ( t[j] + 1.0 )
     
                       phi = np.exp ( - a * a / c ) + np.exp ( - b * b / c )
                       dphi = - 2.0 * a * np.exp ( - a * a / c ) / c \
                              - 2.0 * b * np.exp ( - b * b / c ) / c
     
-                      if nu == 0.0:
-                          obsu[i,j] = 4.0 - 2.0 * (nu + np.exp(-100)) * dphi / (phi + np.exp(-100))
-                      else:
-                          obsu[i,j] = 4.0 - 2.0 * nu * dphi / phi
+                      obsu[i,j] = 4.0 - 2.0 * nu * dphi / phi
             
               # for pNN_burgers
               if not flag:
@@ -102,7 +119,6 @@ class Plot:
           
           for predu,exactu,prednu,exactnu in zip(predus,exactus,prednus,exactnus):
               # plot u
-              
               self.Uimg(x ,t, exactu, predu, label=f'{exactnu}_{prednu}_{itr}', savename=savename)
       # ----
       
