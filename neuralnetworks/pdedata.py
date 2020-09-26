@@ -69,10 +69,55 @@ class pdeData:
                        - 2.0 * b * np.exp ( - b * b / c ) / c
                 
                 obsu[i,j] = 4.0 - 2.0 * nu * dphi / phi
-        #pdb.set_trace()
+        pdb.set_trace()
         return x, t, obsu
     # ---- 
     
+    # ---- 
+    def burgers2(self, NU=0.01):
+        
+        NT = 100
+        NX = 100
+        TMIN = 0.0
+        TMAX = 0.5
+        XMAX = 2.0*np.pi
+        t = np.linspace(TMIN, TMAX, NT) # [100,]
+        
+        # Increments
+        DT = TMAX/(NT-1)
+        DX = XMAX/(NX-1)
+        
+        # Initialise data structures
+        u = np.zeros((NX,NT))
+        x = np.zeros(NX)
+        ipos = np.zeros(NX)
+        ineg = np.zeros(NX)
+        
+        # Periodic boundary conditions
+        for i in range(0,NX):
+            x[i] = i*DX
+            ipos[i] = i+1
+            ineg[i] = i-1
+        
+        ipos[NX-1] = 0
+        ineg[0] = NX-1
+        
+        
+        # Initial conditions
+        for i in range(0,NX):
+            phi = np.exp( -(x[i]**2)/(4*NU) ) + np.exp( -(x[i]-2*np.pi)**2 / (4*NU) )
+            dphi = -(0.5*x[i]/NU)*np.exp( -(x[i]**2) / (4*NU) ) - (0.5*(x[i]-2*np.pi) / NU )*np.exp(-(x[i]-2*np.pi)**2 / (4*NU) )
+            u[i,0] = -2*NU*(dphi/phi) + 4
+        
+        # Numerical solution
+        for n in range(0,NT-1):
+            for i in range(0,NX):
+                u[i,n+1] = (u[i,n]-u[i,n]*(DT/DX)*(u[i,n]-u[int(ineg[i]),n])+
+                 NU*(DT/DX**2)*(u[int(ipos[i]),n]-2*u[i,n]+u[int(ineg[i]),n]))
+        
+        return x, t, u
+    # ---- 
+        
     # ----
     def saveXTU(self):
         '''
@@ -80,10 +125,10 @@ class pdeData:
         '''
         # default
         defaultnu = 0.01
-        #minnu = 0.05 # minnu < 0.0004　は対応できません(理由不明)
-        minnu = 0.01
-        #maxnu = 0.015
-        maxnu = 5.001
+        #minnu = 0.01 # burgers
+        #maxnu = 5.001
+        minnu = 0.005 # burgers2
+        maxnu = 0.30
         swnu = 0.001
         
         # 一様分布
@@ -95,7 +140,10 @@ class pdeData:
             cnt += 1
             print(cnt)
             # x:[256,] t:[100,] obsu:[256,100]
-            x, t, obsu = self.burgers(nu=nu)
+            #x, t, obsu = self.burgers(nu=nu)
+            x, t, obsu = self.burgers2(NU=nu)
+            
+            self.makeImg(x,t,obsu,label=f'{np.round(nu,3)}',name='exact')
             
             if not flag:
                 X = x
@@ -110,8 +158,8 @@ class pdeData:
                 NU = np.hstack([NU, np.array([nu])]) # [data,]
     
         # X,T: 全データ数分同じデータconcat
-        with open(os.path.join(self.modelPath, self.pdeMode, 'XTUNU.pkl'), 'wb') as fp:
-            pickle.dump(X[0], fp) #[256,]
+        with open(os.path.join(self.modelPath, self.pdeMode, 'XTUNU2.pkl'), 'wb') as fp:
+            pickle.dump(X[0], fp) #[256,] or [100,]
             pickle.dump(T[0], fp) #[100,]
             pickle.dump(U, fp) 
             pickle.dump(NU, fp)
@@ -203,7 +251,7 @@ class pdeData:
      
     # ----
     def makeImg(self,x,t,u,label='test',name='large'):
-            
+        #pdb.set_trace()
         X, T = np.meshgrid(x,t) #[100,256]
         #pdb.set_trace() 
         X_star = np.hstack((X.flatten()[:,None], T.flatten()[:,None])) # [25600,2]
@@ -321,8 +369,9 @@ myData = pdeData(dataMode='small')
 #myData.maketraintest(name=name)
 
 #[1]
-#myData.saveXTU()
+myData.saveXTU()
 
+'''
 #[2]
 print(name)
 
@@ -372,5 +421,5 @@ with open(os.path.join('model','burgers',f'IMGXTUNU_{name}.pkl'), 'wb') as fp:
     pickle.dump(X[idx,np.newaxis], fp)
     pickle.dump(Us, fp)
 # ----
-
+'''
 
