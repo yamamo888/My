@@ -72,10 +72,12 @@ class Plot:
           t = params[1]
           nus = params[2]
           
+          
           # 0.01 < x < 5.0
           nus = np.where(np.round(nus,3)<0.01, 0.01, np.where(np.round(nus,3)>5.0, 5.0, nus))
           
-          pdb.set_trace()
+          if any(nus) < 0.01:
+              pdb.set_trace()
           
           flag = False
           for nu in nus:
@@ -106,7 +108,7 @@ class Plot:
           return predobsu
       # ----
       
-      # ----
+      # param NN ----
       def plotExactPredParam(self, params, xNum=256, tNum=100, itr=0, savename='test'):
           
           x = params[0]
@@ -122,8 +124,26 @@ class Plot:
               self.Uimg(x ,t, exactu, predu, label=f'{exactnu}_{prednu}_{itr}', savename=savename)
       # ----
       
+      # ----
+      def CycleExactPredParam(self, params, xNum=256, tNum=100, itr=0, savename='test'):
+          
+          x = params[0]
+          t = params[1]
+          prednus = params[2]
+          exactnus = params[3]
+          cycleloss = params[4]
+          grads = params[5]
+          
+          predus = self.paramToU([x,t,prednus], xNum=xNum, tNum=tNum)
+          exactus = self.paramToU([x,t,exactnus], xNum=xNum, tNum=tNum)
+          
+          for predu,exactu,prednu,exactnu in zip(predus,exactus,prednus,exactnus):
+              # plot u
+              self.Uimg(x ,t, exactu, predu, label=f'{exactnu}_{prednu}_{itr}', label2=f'{cycleloss}_{grads}', savename=savename, isCycle=True)
+      # ----
+      
       # u(t,x) ----
-      def Uimg(self, x, t, exactu, predu, label='test', savename='u'):
+      def Uimg(self, x, t, exactu, predu, label='test', label2='test', savename='u', isCycle=False):
           #pdb.set_trace() 
           X, T = np.meshgrid(x,t) #[100,256]
 
@@ -143,13 +163,21 @@ class Plot:
               img = axes[row].imshow(U_star.T, interpolation='nearest', cmap='gray',
                         extent=[t.min(), t.max(), x.min(), x.max()],
                         origin='lower', aspect='auto')
-    
-              if row == 0:
-                  titlelabel = 'exact nu='
-              elif row == 1:
-                  titlelabel = 'predict nu='
-              #pdb.set_trace()  
-              axes[row].set_title('%s %5f' % (titlelabel, np.float(label.split('_')[row][1:-1])))
+              pdb.set_trace()
+              if isCycle:
+                  if row == 0:
+                      titlelabel = 'exact nu='
+                      axes[row].set_title('%s %3f' % (titlelabel, np.float(label.split('_')[row][1:-1])))
+                  elif row == 1:
+                      titlelabel = ['predict nu=', 'cyclecloss', 'grad']
+                      axes[row].set_title('%s %3f %s %5f %s %3f' % (titlelabel[0], np.float(label.split('_')[row][1:-1]), titlelabel[1], np.float(label2.split('_')[0]), titlelabel[2], np.float(label2.split('_')[1])))
+
+              else:
+                  if row == 0:
+                      titlelabel = 'exact nu='
+                  elif row == 1:
+                      titlelabel = 'predict nu='
+                  axes[row].set_title('%s %5f' % (titlelabel, np.float(label.split('_')[row][1:-1])))
             
               divider1 = make_axes_locatable(axes[row])
               cax1 = divider1.append_axes("right", size="2%", pad=0.1)
