@@ -108,6 +108,58 @@ class Plot:
           return predobsu
       # ----
       
+      # nu -> u(t,x) burgers2 var. ----
+      def paramToU2(self, params, delX, xNum=100, tNum=100):
+          
+          # parameter ----
+          NT = tNum
+          NX = xNum
+          TMAX = 0.5
+          XMAX = 2.0*np.pi
+          DT = TMAX/(NT-1)
+          DX = XMAX/(NX-1)
+          
+          ipos = np.zeros(NX)
+          ineg = np.zeros(NX)
+          for i in range(0,NX):
+              ipos[i] = i+1
+              ineg[i] = i-1
+          # ----
+          
+          x = params[0]
+          t = params[1]
+          nus = params[2]
+          
+          # 0.005 < nu < 3.0 for simulation theshold nu
+          nus = np.where(np.round(nus,3)<0.005, 0.005, np.where(np.round(nus,3)>0.3, 0.3, nus))
+          pdb.set_trace()
+          
+          flag = False
+          for NU in nus:
+              
+              u = np.zeros((NX,NT))
+              
+              # Initial conditions
+              for i in range(0,NX):
+                  phi = np.exp( -(x[i]**2)/(4*NU) ) + np.exp( -(x[i]-2*np.pi)**2 / (4*NU) )
+                  dphi = -(0.5*x[i]/NU)*np.exp( -(x[i]**2) / (4*NU) ) - (0.5*(x[i]-2*np.pi) / NU )*np.exp(-(x[i]-2*np.pi)**2 / (4*NU) )
+                  u[i,0] = -2*NU*(dphi/phi) + 4
+            
+              # Numerical solution
+              for n in range(0,NT-1):
+                  for i in range(0,NX):
+                      u[i,n+1] = (u[i,n]-u[i,n]*(DT/DX)*(u[i,n]-u[int(ineg[i]),n])+
+                        NU*(DT/DX**2)*(u[int(ipos[i]),n]-2*u[i,n]+u[int(ineg[i]),n]))
+           
+              if not flag:
+                  predobsu = u[np.newaxis]
+                  flag = True
+              else:
+                  predobsu = np.vstack([predobsu, u[np.newaxis]])
+
+          return predobsu
+      # ----
+      
       # param NN ----
       def plotExactPredParam(self, params, xNum=256, tNum=100, itr=0, savename='test'):
           
