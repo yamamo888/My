@@ -5,6 +5,9 @@ import os
 import numpy as np
 import seaborn as sns
 
+import matplotlib as mpl
+mpl.use('Agg')
+
 import matplotlib.pylab as plt
 
 from scipy.interpolate import griddata
@@ -15,6 +18,9 @@ import warnings
 warnings.simplefilter('ignore')
 
 import pdb
+
+import pdedata
+
 
 class Plot:
       def __init__(self, figurepath='figure', dataMode='test', trialID=0):
@@ -27,6 +33,8 @@ class Plot:
           self.figurePath = figurepath
           self.dataMode = dataMode
           self.trialID = trialID
+
+          self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
 
       # Plot loss (two data)----
       def Loss(self, data, labels, savename='loss'):
@@ -109,7 +117,7 @@ class Plot:
       # ----
       
       # nu -> u(t,x) burgers2 var. ----
-      def paramToU2(self, params, delX, xNum=100, tNum=100):
+      def paramToU2(self, params, xNum=100, tNum=100):
           
           # parameter ----
           NT = tNum
@@ -124,15 +132,18 @@ class Plot:
           for i in range(0,NX):
               ipos[i] = i+1
               ineg[i] = i-1
+          ipos[NX-1] = 0
+          ineg[0] = NX-1
           # ----
           
           x = params[0]
           t = params[1]
           nus = params[2]
-          
+          idx = params[3]
+
+          #pdb.set_trace()
           # 0.005 < nu < 3.0 for simulation theshold nu
           nus = np.where(np.round(nus,3)<0.005, 0.005, np.where(np.round(nus,3)>0.3, 0.3, nus))
-          pdb.set_trace()
           
           flag = False
           for NU in nus:
@@ -150,72 +161,79 @@ class Plot:
                   for i in range(0,NX):
                       u[i,n+1] = (u[i,n]-u[i,n]*(DT/DX)*(u[i,n]-u[int(ineg[i]),n])+
                         NU*(DT/DX**2)*(u[int(ipos[i]),n]-2*u[i,n]+u[int(ineg[i]),n]))
+              
+              #pdb.set_trace()
            
               if not flag:
-                  predobsu = u[np.newaxis]
+                  predobsu = u[np.newaxis,idx,:]
                   flag = True
               else:
-                  predobsu = np.vstack([predobsu, u[np.newaxis]])
+                  predobsu = np.vstack([predobsu, u[np.newaxis,idx,:]])
 
           return predobsu
       # ----
       
       # param NN ----
-      def plotExactPredParam(self, params, xNum=256, tNum=100, itr=0, savename='test'):
+      def plotExactPredParam(self, params, xNum=100, tNum=100, itr=0, savename='test'):
           
           x = params[0]
           t = params[1]
           prednus = params[2]
           exactnus = params[3]
+          idx = params[4]
           
-          predus = self.paramToU([x,t,prednus], xNum=xNum, tNum=tNum)
-          exactus = self.paramToU([x,t,exactnus], xNum=xNum, tNum=tNum)
+          predus = self.paramToU2([x,t,prednus,idx], xNum=xNum, tNum=tNum)
+          exactus = self.paramToU2([x,t,exactnus,idx], xNum=xNum, tNum=tNum)
           
           for predu,exactu,prednu,exactnu in zip(predus,exactus,prednus,exactnus):
               # plot u
-              self.Uimg(x ,t, exactu, predu, label=f'{exactnu}_{prednu}_{itr}', savename=savename)
+              #pdb.set_trace()
+              #self.myData.makeImg(np.reshape(x[idx],[-1,]), np.reshape(t,[-1,]), exactu.T, name='exact')
+
+              self.Uimg(x[idx] ,t, exactu, predu, label=f'{exactnu}_{prednu}_{itr}', savename=savename)
       # ----
       
-      # ----
-      def CycleExactPredParam(self, params, xNum=256, tNum=100, itr=0, savename='test'):
+      # param & pde NN ----
+      def CycleExactPredParam(self, params, xNum=100, tNum=100, itr=0, savename='test'):
           
           x = params[0]
           t = params[1]
           prednus = params[2]
           exactnus = params[3]
-          cycleloss = params[4]
-          grads = params[5]
+          idx = params[4]
+          cycleloss = params[5]
+          grads = params[6]
           
-          predus = self.paramToU([x,t,prednus], xNum=xNum, tNum=tNum)
-          exactus = self.paramToU([x,t,exactnus], xNum=xNum, tNum=tNum)
+          predus = self.paramToU2([x,t,prednus,idx], xNum=xNum, tNum=tNum)
+          exactus = self.paramToU2([x,t,exactnus,idx], xNum=xNum, tNum=tNum)
           
           for predu,exactu,prednu,exactnu in zip(predus,exactus,prednus,exactnus):
               # plot u
-              self.Uimg(x ,t, exactu, predu, label=f'{exactnu}_{prednu}_{itr}', label2=f'{cycleloss}_{grads}', savename=savename, isCycle=True)
+              #pdb.set_trace()
+              self.Uimg(x[idx] ,t, exactu, predu, label=f'{exactnu}_{prednu}_{itr}', label2=f'{cycleloss}_{grads}', savename=savename, isCycle=True)
       # ----
       
       # u(t,x) ----
       def Uimg(self, x, t, exactu, predu, label='test', label2='test', savename='u', isCycle=False):
-          #pdb.set_trace() 
           X, T = np.meshgrid(x,t) #[100,256]
 
           X_star = np.hstack((X.flatten()[:,None], T.flatten()[:,None])) # [25600,2]
-      
-          us = [exactu.T,predu.T]
+          # exactu [25,100] 
+          us = [exactu.T, predu.T]
+
+          #pdb.set_trace() 
         
           # u of exact nu (row0) -> pred nu (row1)
           fig, axes = plt.subplots(nrows=2)
           for row,u in enumerate(us):
         
-              # flatten: [100,256]
+              # u[100,25]
               u_star = u.flatten()[:,None] # [25600,1]
-              # [100,256]
+              # [100,100]
               U_star = griddata(X_star, u_star.flatten(), (X, T), method='cubic')
-    
-              img = axes[row].imshow(U_star.T, interpolation='nearest', cmap='gray',
-                        extent=[t.min(), t.max(), x.min(), x.max()],
-                        origin='lower', aspect='auto')
-              pdb.set_trace()
+              #pdb.set_trace()
+              img = axes[row].imshow(U_star.T, interpolation='nearest', cmap='gray', origin='lower')
+              
               if isCycle:
                   if row == 0:
                       titlelabel = 'exact nu='
@@ -245,6 +263,7 @@ class Plot:
       
           if not isdir:
               os.makedirs(fpath)
+          
           plt.savefig(os.path.join(fpath, f'{label}.png'))
           plt.close()
       # ----
