@@ -44,10 +44,10 @@ class ParamNN:
         # Dataset ----
         self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
         
-        # [256,1] [xDim,1] [100,1] [data,xDim,100,1]
-        self.alltestX, self.testX, self.testT, self.testU, self.testNU = self.myData.traintest()
-        
-        np.savetxt(os.path.join('model','params',f'pNNexacttest_{dataMode}{trialID}.txt'), self.testNU, fmt='%2f')
+        # [100,1] [xDim,1] [100,1] [data,xDim,100,1]
+        self.alltestX, self.testX, self.testT, self.testU, self.testNU, self.idx = self.myData.traintest()
+        #pdb.set_trace() 
+        #np.savetxt(os.path.join('model','params',f'pNNexacttest_{dataMode}.txt'), self.testNU, fmt='%2f')
         # ----        
 
         # Placeholder ----
@@ -58,8 +58,8 @@ class ParamNN:
         # ----
         
         # neural network ----
-        self.predy, self.predy_pre, self.cnnfeature = self.lambdaNN(self.inobs)
-        self.predy_test, self.predy_test_pre, self.cnnfeature_test = self.lambdaNN(self.inobs, reuse=True)
+        self.predy, self.cnnfeature = self.lambdaNN(self.inobs)
+        self.predy_test, self.cnnfeature_test = self.lambdaNN(self.inobs, reuse=True)
         # ----
 
         # loss ----
@@ -100,31 +100,6 @@ class ParamNN:
          fc = tf.nn.dropout(fc, rate=rate)
          return fc
     # ----
-    # ----
-    # 0.01 < x < 5.0 (for moving burgers)
-    def outputthes(self, x):
-        
-        overlambda = tf.constant([5.0])
-        overid = tf.where(x>overlambda)
-        overnum = tf.shape(overid)[0]
-        overths = tf.tile(overlambda, [overnum])
-        overupdate = tf.tensor_scatter_nd_update(x, overid, overths)
-        
-        updatex = self.underupdate(overupdate)
-        
-        return updatex
-    # ----
-    # ----
-    def underupdate(self, xover):
-        
-        underlambda = tf.constant([0.01])
-        underid = tf.where(xover<underlambda)
-        undernum = tf.shape(underid)[0]
-        underths = tf.tile(underlambda, [undernum])
-        underupdate = tf.tensor_scatter_nd_update(xover, underid, underths)
-        
-        return underupdate
-    # ----
     
     # ----
     def lambdaNN(self, x, rate=0.05, reuse=False):
@@ -136,7 +111,7 @@ class ParamNN:
                 scope.reuse_variables()
             
             xcnn = self.myData.CNNfeature(x, reuse=reuse)
-            #pdb.set_trace()            
+            
             dInput = xcnn.get_shape().as_list()[-1]
             
             # 1st layer
@@ -162,11 +137,10 @@ class ParamNN:
             # nu
             y = self.fc_relu(h3,w4,bias4,rate)
             
-            y_thes = self.outputthes(y)
-                
-            return y_thes,y,xcnn
+            return y,xcnn
             
     # ----
+    
     
     # ----
     def train(self, nItr=1000):
@@ -175,7 +149,7 @@ class ParamNN:
         testPeriod = 100
         savemodelPeriod = 500
         batchCnt = 0
-        nTrain = 3991
+        nTrain = 235
         batchRandInd = np.random.permutation(nTrain)
         # ----
         
@@ -197,8 +171,8 @@ class ParamNN:
             #feed_dict = {self.y:batchNU[:,np.newaxis], self.inobs:batchU}
             feed_dict = {self.y:batchNU[:,np.newaxis], self.inobs:batchU[:,:,:,np.newaxis]}
             
-            _, trainParam, trainParamPre, trainLoss =\
-            self.sess.run([self.opt, self.predy, self.predy_pre, self.loss], feed_dict)
+            _, trainParam, trainLoss =\
+            self.sess.run([self.opt, self.predy, self.loss], feed_dict)
             
             if eInd + self.nBatch > nTrain:
                 batchCnt = 0
@@ -211,11 +185,14 @@ class ParamNN:
 
                 # train return nu -> u
                 #params = [self.testX, self.testT, trainParam]
-                params = [batchX, batchT, trainParam, batchNU]
-                pdb.set_trace()
-                invU = self.myPlot.paramToU(params, xNum=self.xDim)
+                params = [self.alltestX, batchT, trainParam, self.idx]
+                #pdb.set_trace()
+                invU = self.myPlot.paramToU2(params)
                 #pdb.set_trace() 
                 trainULoss = np.mean(np.mean(np.mean(np.square(batchU - invU),2),1))
+
+                if np.isnan(trainULoss):
+                    pdb.set_trace()
 
                 self.test(itr=itr)
                 
@@ -248,7 +225,7 @@ class ParamNN:
         uloss = [trUL,teUL]
         predparams = [trP, teP]
         
-        teparams = [self.testX, self.testT, self.testParam, self.testNU]
+        teparams = [self.alltestX, self.testT, self.testParam, self.testNU]
         
         
         return paramloss, uloss, teparams, predparams
@@ -256,32 +233,31 @@ class ParamNN:
     
     # ----
     def test(self,itr=0):
-        
         feed_dict={self.y: self.testNU, self.inobs:self.testU}    
         
-        self.testParam, self.testParamPre, self.testLoss =\
-        self.sess.run([self.predy_test, self.predy_test_pre, self.loss_test], feed_dict)
+        #pdb.set_trace() 
+        self.testParam, self.testLoss =\
+        self.sess.run([self.predy_test, self.loss_test], feed_dict)
         
-        #pdb.set_trace()
         # return nu -> u
-        params = [self.testX, self.testT, self.testParam, self.testNU]
-        invU = self.myPlot.paramToU(params, xNum=self.xDim)
+        params = [self.alltestX, self.testT, self.testParam, self.idx]
+        invU = self.myPlot.paramToU2(params)
         
         self.testULoss = np.mean(np.mean(np.mean(np.square(self.testU[:,:,:,0] - invU),2),1))
+        
+        if np.isnan(self.testULoss):
+            pdb.set_trace()
+
+        # plot ----
+        printnus = [0.005, 0.01, 0.02, 0.05, 0.1, 0.3]
+        printindex = [i for i,e in enumerate(self.testNU) if np.round(e,3) in printnus]
+
+        exactnus = self.testNU[printindex]
+        prednus = self.testParam[printindex]
+        
         #pdb.set_trace()
-        #if np.isnan(self.testULoss):
-            #pdb.set_trace()
-        
-        prednu_maemax = self.testParam[np.argmax(np.square(self.testNU - self.testParam))]
-        exactnu_maemax = self.testNU[np.argmax(np.square(self.testNU - self.testParam))]
-        
-        prednu_maemin = self.testParam[np.argmin(np.square(self.testNU - self.testParam))]
-        exactnu_maemin = self.testNU[np.argmin(np.square(self.testNU - self.testParam))]
 
-        prednu_maxmin = np.vstack([prednu_maemin, prednu_maemax])
-        exactnu_maxmin = np.vstack([exactnu_maemin, exactnu_maemax])
-
-        self.myPlot.plotExactPredParam([self.testX, self.testT, prednu_maxmin, exactnu_maxmin], xNum=self.testX.shape[0], itr=itr, savename='tepredparam')
+        self.myPlot.plotExactPredParam([self.alltestX, self.testT, prednus, exactnus, self.idx], itr=itr, savename='tepredparam')
 
         print('itr: %d, testPLoss:%f, testULoss:%f' % (itr, self.testLoss, self.testULoss))
         #print(f'test exact: {self.testNU[:5]}')
@@ -297,7 +273,7 @@ if __name__ == "__main__":
     # iteration of training
     parser.add_argument('--nItr', type=int, default=100)
     # Num of mini-batch
-    parser.add_argument('--nBatch', type=int, default=100)
+    parser.add_argument('--nBatch', type=int, default=25)
     # datamode (pkl)
     parser.add_argument('--dataMode', required=True, choices=['large', 'middle', 'small'])
     # trial ID
@@ -325,18 +301,18 @@ if __name__ == "__main__":
     
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, nBatch=nBatch, trialID=trialID, dataMode=dataMode)
-    plosses, ulosses, teparams, varparams, params  = model.train(nItr=nItr)
+    plosses, ulosses, teparams, params  = model.train(nItr=nItr)
     # ----
     
     # Plot ----
     model.myPlot.Loss(plosses, labels=['train','test'], savename='pNN_param')
     model.myPlot.Loss(ulosses, labels=['train','test'], savename='pNN_u')
-    model.myPlot.plotExactPredParam(teparams, xNum=teparams[0].shape[0], savename='lasttepredparam')
+    #model.myPlot.plotExactPredParam(teparams, xNum=teparams[0].shape[0], savename='lasttepredparam')
     # ----
 
     # save txt ----
-    np.savetxt(os.path.join('model','params',f'pNNtrain_{dataMode}{trialID}.txt'), params[0], fmt='%2f')
-    np.savetxt(os.path.join('model','params',f'pNNtest_{dataMode}{trialID}.txt'), params[1], fmt='%2f')
+    #np.savetxt(os.path.join('model','params',f'pNNtrain_{dataMode}{trialID}.txt'), params[0], fmt='%2f')
+    #np.savetxt(os.path.join('model','params',f'pNNtest_{dataMode}{trialID}.txt'), params[1], fmt='%2f')
     # ----
     
  
