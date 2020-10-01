@@ -58,14 +58,14 @@ class ParamNN:
         # ----
         
         # neural network ----
-        self.predy, self.cnnfeature = self.lambdaNN(self.inobs)
-        self.predy_test, self.cnnfeature_test = self.lambdaNN(self.inobs, reuse=True)
+        self.predy, self.predy_, self.cnnfeature = self.lambdaNN(self.inobs)
+        self.predy_test, self.predy_test_, self.cnnfeature_test = self.lambdaNN(self.inobs, reuse=True)
         # ----
 
         # loss ----
         # param loss
-        self.loss = tf.reduce_mean(tf.square(self.y - self.predy))
-        self.loss_test = tf.reduce_mean(tf.square(self.y - self.predy_test))
+        self.loss = tf.reduce_mean(tf.square(self.y - self.predy_))
+        self.loss_test = tf.reduce_mean(tf.square(self.y - self.predy_test_))
         # ----
         
         # Optimizer ----
@@ -99,6 +99,32 @@ class ParamNN:
          fc = tf.matmul(inputs,w) + b
          fc = tf.nn.dropout(fc, rate=rate)
          return fc
+    # ----
+    
+    # ----
+    # 0.005 < x < 0.304 (for moving burgers)
+    def outputthes(self, x):
+        
+        overlambda = tf.constant([0.304])
+        overid = tf.where(x>overlambda)
+        overnum = tf.shape(overid)[0]
+        overths = tf.tile(overlambda, [overnum])
+        overupdate = tf.tensor_scatter_nd_update(x, overid, overths)
+        
+        updatex = self.underupdate(overupdate)
+        
+        return updatex
+    # ----
+    # ----
+    def underupdate(self, xover):
+        
+        underlambda = tf.constant([0.005])
+        underid = tf.where(xover<underlambda)
+        undernum = tf.shape(underid)[0]
+        underths = tf.tile(underlambda, [undernum])
+        underupdate = tf.tensor_scatter_nd_update(xover, underid, underths)
+        
+        return underupdate
     # ----
     
     # ----
@@ -137,10 +163,11 @@ class ParamNN:
             # nu
             y = self.fc_relu(h3,w4,bias4,rate)
             
-            return y,xcnn
+            # 0.005 < y < 0.304
+            y_ = self.outputthes(y)
             
+            return y, y_, xcnn
     # ----
-    
     
     # ----
     def train(self, nItr=1000):
@@ -236,8 +263,8 @@ class ParamNN:
         feed_dict={self.y: self.testNU, self.inobs:self.testU}    
         
         #pdb.set_trace() 
-        self.testParam, self.testLoss =\
-        self.sess.run([self.predy_test, self.loss_test], feed_dict)
+        self.testParam, self.testParam_, self.testLoss =\
+        self.sess.run([self.predy_test, self.predy_test_, self.loss_test], feed_dict)
         
         # return nu -> u
         params = [self.alltestX, self.testT, self.testParam, self.idx]
@@ -260,6 +287,7 @@ class ParamNN:
         self.myPlot.plotExactPredParam([self.alltestX, self.testT, prednus, exactnus, self.idx], itr=itr, savename='tepredparam')
 
         print('itr: %d, testPLoss:%f, testULoss:%f' % (itr, self.testLoss, self.testULoss))
+        pdb.set_trace()
         #print(f'test exact: {self.testNU[:5]}')
         #print(f'test pred: {self.testParam[:5]}')
     # ----
