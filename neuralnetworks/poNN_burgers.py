@@ -15,6 +15,7 @@ import pdb
 import matplotlib.pylab as plt
 
 import pdedata
+import pdeburgers
 import pdeplot
 
 
@@ -44,20 +45,13 @@ class ParamNN:
         # Dataset ----
         self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
         # [xDim,1], [100,1], [data, xDim, 100], [data,] 
-        self.alltestX, self.testx, self.testt, self.testU, self.testNU, self.varx, self.varU, self.varNU  = self.myData.traintestvaridation()
-         
-        # [testdata, 256] -> [testdata, xdim]
-        self.testX = np.reshape(np.tile(self.testx, self.tDim), [-1, self.xDim])
-        self.testT = np.reshape(np.tile(self.testt, self.xDim), [-1, self.tDim])
+        self.alltestX, self.testx, self.testt, self.testU, self.testNU, self.idx = self.myData.traintest()
         # ----
          
         # Placeholder ----
         # u
         self.inobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDim, self.tDim, 1])
-        self.outobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.tDim, self.xDim])
-        # x,t
-        self.x = tf.compat.v1.placeholder(tf.float32,shape=[self.tDim, self.xDim])
-        self.t = tf.compat.v1.placeholder(tf.float32,shape=[self.xDim, self.tDim])
+        self.outobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDim, self.tDim])
         # param nu 
         self.y = tf.compat.v1.placeholder(tf.float32,shape=[None, self.yDim])
         # ----
@@ -83,16 +77,17 @@ class ParamNN:
         # ----
         
         # neural network (nu) ----
-        self.predparam, self.predparam_pre = self.lambdaNN(hidden)
+        self.predparam, self.predparam_ = self.lambdaNN(hidden)
         # ----
         
         # PDE ----
         # output: u
-        self.predu = self.pde(self.x, self.t, self.param_test, nData=self.testNU.shape[0])
+        #self.predu = self.pde(self.x, self.t, self.param_test, nData=self.testNU.shape[0])
+        self.predu = pdeburgers.burgers(self.predparam_)
         # ----
         
         # loss param ----
-        self.loss_nu = tf.reduce_mean(tf.square(self.y - self.param)) 
+        self.loss_nu = tf.reduce_mean(tf.square(self.y - self.predparam)) 
         # ----
 
         # loss u ----   
@@ -141,7 +136,7 @@ class ParamNN:
     # 0.01 < x < 5.0 (for moving burgers)
     def outputthes(self, x):
         
-        overlambda = tf.constant([5.0])
+        overlambda = tf.constant([0.304])
         overid = tf.where(x>overlambda)
         overnum = tf.shape(overid)[0]
         overths = tf.tile(overlambda, [overnum])
@@ -154,7 +149,7 @@ class ParamNN:
     # ----
     def underupdate(self, xover):
         
-        underlambda = tf.constant([0.01])
+        underlambda = tf.constant([0.005])
         underid = tf.where(xover<underlambda)
         undernum = tf.shape(underid)[0]
         underths = tf.tile(underlambda, [undernum])
@@ -162,7 +157,7 @@ class ParamNN:
         
         return underupdate
     # ----
-    
+
     # ----
     def RestorelambdaNN(self, x, rate=0.0, reuse=False, trainable=False):
         
@@ -214,34 +209,7 @@ class ParamNN:
             
             y_thes = self.outputthes(y)
         
-            return y_thes, y
-    # ----
-      
-    # ----
-    def pde(self, x, t, param, nData=100):
-        
-        pi = 3.14
-    
-        # a,bは、すべての u で共通
-        tmpa = x - 4.0 * tf.transpose(t) # [t.shape, x.shape]
-        tmpb = x - 4.0 * tf.transpose(t) - 2.0 * pi
-        # データ数分の t [ndata, t.shape]
-        ts = tf.tile(tf.expand_dims(t[0], 0), [nData, 1])
-        # データごと(param)に計算 [ndata, t.shape]
-        tmpc = 4.0 * param * (ts + 1.0)
-            
-        # + N dimention [nBatch, t.shape, x.shape]
-        a = tf.tile(tf.expand_dims(tmpa, 0), [nData, 1, 1])
-        b = tf.tile(tf.expand_dims(tmpb, 0), [nData, 1, 1])
-        c = tf.tile(tf.expand_dims(tmpc, -1), [1, 1, self.xDim])
-            
-        # [nBatch, t.shape, x.shape]
-        phi = tf.exp(- a * a / c) + tf.exp(- b * b / c)
-        dphi = - 2.0 * a * tf.exp(- a * a / c ) / c - 2.0 * b * tf.exp(- b * b / c) / c
-        
-        invu = 4.0 - 2.0 * tf.expand_dims(param,1) * dphi / phi
-
-        return invu
+            return y, y_thes
     # ----
     
     # ----
@@ -250,10 +218,10 @@ class ParamNN:
         # parameters ----
         printPeriod = 100
         batchCnt = 0
-        nTrain = 1000
+        nTrain = 65
         batchRandInd = np.random.permutation(nTrain)
         # ※手動
-        plotnus = [0.01, 0.02, 0.05, 0.1, 0.5, 1.0, 2.0, 4.0]
+        plotnus = [0.005, 0.01, 0.02, 0.05, 0.1, 0.3]
         # ----
         
         # Start training
@@ -295,7 +263,7 @@ class ParamNN:
                         exactnu = self.testNU[ind]
                         prednu = testPred[ind]
                         
-                        self.myPlot.plotExactPredParam([self.testx, self.testt, prednu, exactnu], xNum=self.testx.shape[0], itr=itr, savename='tepredparamode')
+                        self.myPlot.plotExactPredParam([self.alltestX, self.testt, prednu, exactnu, self.idx], itr=itr, savename='tepredparamode')
         
         paramloss = [tePL]
         ulosses = [teUL]
