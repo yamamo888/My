@@ -18,7 +18,7 @@ import pdedata
 import pdeburgers
 import pdeplot
 
-
+# ※float64とfloat32が混在
 class ParamNN:
     def __init__(self, rateTrain=0.0, lr=1e-3, nBatch=100, trialID=0, dataMode='test'):
         
@@ -45,13 +45,13 @@ class ParamNN:
         # Dataset ----
         self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
         # [xDim,1], [100,1], [data, xDim, 100], [data,] 
-        self.alltestX, self.testx, self.testt, self.testU, self.testNU, self.idx = self.myData.traintest()
+        self.alltestX, self.testx, self.testt, self.testU, self.testNU, self.testIDX = self.myData.traintest()
         # ----
          
         # Placeholder ----
         # u
         self.inobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDim, self.tDim, 1])
-        self.outobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDim, self.tDim])
+        self.outobs = tf.compat.v1.placeholder(tf.float64,shape=[None, self.xDim, self.tDim])
         # param nu 
         self.y = tf.compat.v1.placeholder(tf.float32,shape=[None, self.yDim])
         # ----
@@ -79,19 +79,21 @@ class ParamNN:
         # neural network (nu) ----
         self.predparam, self.predparam_ = self.lambdaNN(hidden)
         # ----
-        
+        #pdb.set_trace()
         # PDE ----
         # output: u
-        #self.predu = self.pde(self.x, self.t, self.param_test, nData=self.testNU.shape[0])
-        self.predu = pdeburgers.burgers(self.predparam_)
+        self.idx = tf.compat.v1.placeholder(tf.int32, shape=[None,1])
+        self.predu = pdeburgers.burgers(tf.cast(self.predparam_[0], tf.float64))
+        self.predu = tf.gather_nd(self.predu, self.idx)
         # ----
         
         # loss param ----
-        self.loss_nu = tf.reduce_mean(tf.square(self.y - self.predparam)) 
+        self.loss_nu = tf.reduce_mean(tf.square(self.y - self.predparam_)) 
         # ----
 
-        # loss u ----   
-        self.loss = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu),2),1))
+        #pdb.set_trace()
+        # loss u ----
+        self.loss = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - tf.expand_dims(self.predu, 0)),2),1))
         # ----
         
         # gradient
@@ -204,7 +206,6 @@ class ParamNN:
             w4_reg = self.weight_variable('w4_reg',[nHidden, dOutput], trainable=trainable)
             bias4_reg = self.bias_variable('bias4_reg',[dOutput], trainable=trainable)
         
-            #y = self.fc(x,w4_reg,bias4_reg,rate)
             y = self.fc_relu(x,w4_reg,bias4_reg,rate)
             
             y_thes = self.outputthes(y)
@@ -234,10 +235,15 @@ class ParamNN:
             flag = False
             cnt = 0
             for ind in batchRandInd:
-                feed_dict={self.x:self.testX, self.t:self.testT, self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], self.outobs:self.testU[ind,np.newaxis,:,:,0].transpose(0,2,1)}    
+                feed_dict={self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], self.outobs:self.testU[ind,np.newaxis,:,:,0], self.idx:self.testIDX[:,np.newaxis]} 
            
-                _, testParam, testPred, testploss, testuloss, grad =\
-                self.sess.run([self.opt, self.predparam_test, self.predparam_pre, self.predu_test, self.loss_nu_test, self.loss_test, self.gradnu], feed_dict)
+                #_, testParamPre, testParam, testPred, testploss, testuloss =\
+                #self.sess.run([self.opt, self.predparam, self.predparam_, self.predu, self.loss_nu, self.loss], feed_dict)
+                
+                _, testParamPre, testParam, testPred, testploss, testuloss, testgrad =\
+                self.sess.run([self.opt, self.predparam, self.predparam_, self.predu, self.loss_nu, self.loss, self.gradnu], feed_dict)
+                
+                pdb.set_trace()
                 
                 if cnt < printPeriod:
                     
