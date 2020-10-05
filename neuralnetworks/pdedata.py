@@ -319,7 +319,8 @@ class pdeData:
             conv2 = self.conv2d(conv1, w2, b2, strides=2)
         
             conv2 = self.maxpool2d(conv2)
-            #pdb.set_trace() 
+            
+            #w3 = self.weight_variable('w3', [24*32*24, 32])
             w3 = self.weight_variable('w3', [conv2.get_shape().as_list()[1]*conv2.get_shape().as_list()[2]*conv2.get_shape().as_list()[3], 32], trainable=trainable)
             b3 = self.bias_variable('b3', [32], trainable=trainable)
             

@@ -67,9 +67,7 @@ class ParamNN:
         self.loss = tf.reduce_mean(tf.square(self.y - self.predy_))
         self.loss_test = tf.reduce_mean(tf.square(self.y - self.predy_test_))
         # ----
-
-        self.gradnu = tf.gradients(self.loss, self.inobs)[0]
-        pdb.set_trace() 
+        
         # Optimizer ----
         self.opt = tf.compat.v1.train.AdamOptimizer(lr).minimize(self.loss)
         # ----
@@ -132,7 +130,7 @@ class ParamNN:
     # ----
     def lambdaNN(self, x, rate=0.05, reuse=False):
         
-        nHidden = 64
+        nHidden = 128
         
         with tf.compat.v1.variable_scope('lambdaNN') as scope:  
             if reuse:
@@ -145,21 +143,26 @@ class ParamNN:
             # 1st layer
             w1 = self.weight_variable('w1',[dInput, nHidden])
             bias1 = self.bias_variable('bias1',[nHidden])
+            #h1 = self.fc_relu(x,w1,bias1,rate)
             h1 = self.fc_relu(xcnn,w1,bias1,rate)
+            
             # 2nd layer
             w2 = self.weight_variable('w2',[nHidden, nHidden])
             bias2 = self.bias_variable('bias2',[nHidden])
             h2 = self.fc_relu(h1,w2,bias2,rate)
+            
             # 3nd layer
             w3 = self.weight_variable('w3',[nHidden, nHidden])
             bias3 = self.bias_variable('bias3',[nHidden])
-            h3 = self.fc_relu(h2,w3,bias3,rate) 
+            h3 = self.fc_relu(h2,w3,bias3,rate)
+            
             # 4nd layer
             w4 = self.weight_variable('w4',[nHidden, self.yDim])
             bias4 = self.bias_variable('bias4',[self.yDim])
             
             # nu
             y = self.fc_relu(h3,w4,bias4,rate)
+            
             # 0.005 < y < 0.304
             y_ = self.outputthes(y)
             
@@ -192,11 +195,12 @@ class ParamNN:
             # [x.shape], [100,], [nbatch, t.shape, x.shape]
             batchX, batchT, batchU, batchNU = self.myData.miniBatch(index)
             # y: prameter b
+            #feed_dict = {self.y:batchNU[:,np.newaxis], self.inobs:batchU}
             feed_dict = {self.y:batchNU[:,np.newaxis], self.inobs:batchU[:,:,:,np.newaxis]}
             
-            _, trainParam, trainLoss, trainGrad =\
-            self.sess.run([self.opt, self.predy, self.loss, self.gradnu], feed_dict)
-            pdb.set_trace()
+            _, trainParam, trainLoss =\
+            self.sess.run([self.opt, self.predy, self.loss], feed_dict)
+            
             if eInd + self.nBatch > nTrain:
                 batchCnt = 0
                 batchRandInd = np.random.permutation(nTrain)
@@ -240,9 +244,9 @@ class ParamNN:
                     trP = np.hstack([trP, trainParam])
                     teP = np.hstack([teP, self.testParam])
 
-            if itr % savemodelPeriod == 0:
+            #if itr % savemodelPeriod == 0:
                 # Save model
-                self.saver.save(self.sess, os.path.join('model', f'{dataMode}burgers', f'first_{dataMode}'), global_step=itr)
+                #self.saver.save(self.sess, os.path.join('model', f'{dataMode}burgers', f'first_{dataMode}'), global_step=itr)
         #pdb.set_trace()
         paramloss = [trPL,tePL]
         uloss = [trUL,teUL]
@@ -283,6 +287,7 @@ class ParamNN:
         self.myPlot.plotExactPredParam([self.alltestX, self.testT, prednus, exactnus, self.idx], itr=itr, savename='tepredparam')
 
         print('itr: %d, testPLoss:%f, testULoss:%f' % (itr, self.testLoss, self.testULoss))
+        pdb.set_trace()
         #print(f'test exact: {self.testNU[:5]}')
         #print(f'test pred: {self.testParam[:5]}')
     # ----
