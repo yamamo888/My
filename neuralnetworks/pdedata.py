@@ -274,69 +274,6 @@ class pdeData:
     # ----
 
     # ----
-    def weight_variable(self,name,shape,trainable=True):
-         return tf.compat.v1.get_variable(name,shape,initializer=tf.random_normal_initializer(stddev=0.1),trainable=trainable)
-    # ----
-    # ----
-    def bias_variable(self,name,shape,trainable=True):
-         return tf.compat.v1.get_variable(name,shape,initializer=tf.constant_initializer(0.1),trainable=trainable)
-    # ----
-    # ----
-    def conv2d(self, x, W, b, strides=1):
-        x = tf.nn.conv2d(x, W, strides=[1, strides, strides, 1], padding='SAME')
-        x = tf.nn.bias_add(x, b)
-        return tf.nn.relu(x)
-    # ----
-    # ----
-    def maxpool2d(self, x, k=2):
-        return tf.nn.max_pool(x, ksize=[1, k, k, 1], strides=[1, k, k, 1],padding='SAME')
-    # ----
-    # ----
-    def fc_relu(self,inputs,w,b,rate=0.0):
-        relu = tf.matmul(inputs,w) + b
-        relu = tf.nn.dropout(relu, rate=rate)
-        relu = tf.nn.relu(relu)
-        return relu
-    # ----
-    
-    # ----
-    def CNNfeature(self, x, reuse=False, trainable=True):
-        
-        with tf.compat.v1.variable_scope("CNN") as scope:
-            if reuse:
-                scope.reuse_variables()
-            #pdb.set_trace() 
-            # 1st conv layer
-            w1 = self.weight_variable('w1', [5,5,1,24])
-            b1 = self.bias_variable('b1', [24])
-            conv1 = self.conv2d(x, w1, b1, strides=2)
-        
-            conv1 = self.maxpool2d(conv1)
-        
-            # 2nd conv layer
-            w2 = self.weight_variable('w2', [5,5,24,24])
-            b2 = self.bias_variable('b2', [24])
-            conv2 = self.conv2d(conv1, w2, b2, strides=2)
-        
-            conv2 = self.maxpool2d(conv2)
-            
-            #w3 = self.weight_variable('w3', [24*32*24, 32])
-            w3 = self.weight_variable('w3', [conv2.get_shape().as_list()[1]*conv2.get_shape().as_list()[2]*conv2.get_shape().as_list()[3], 32], trainable=trainable)
-            b3 = self.bias_variable('b3', [32], trainable=trainable)
-            
-            # 1st full-layer
-            reshape_conv2 = tf.reshape(conv2, [-1, w3.get_shape().as_list()[0]])
-            
-            fc1 = self.fc_relu(reshape_conv2,w3,b3)
-            
-            w4 = self.weight_variable('w4', [32, 32], trainable=trainable)
-            b4 = self.bias_variable('b4', [32], trainable=trainable)
-            fc2 = self.fc_relu(fc1,w4,b4)
-            
-            return fc2
-    # ----
-    
-    # ----
     def miniBatch(self, index):
         
         #pdb.set_trace()

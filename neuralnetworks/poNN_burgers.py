@@ -77,7 +77,7 @@ class ParamNN:
         # ----
         
         # neural network (nu) ----
-        self.predparam, self.predparam_ = self.lambdaNN(hidden)
+        self.predparam, self.predparam_ = self.lambdaNN(hidden, rate=rateTrain)
         # ----
         
         # PDE ----
@@ -131,6 +131,16 @@ class ParamNN:
          fc = tf.nn.dropout(fc, rate=rate)
          return fc
     # ----
+    # ----
+    def conv2d(self, x, W, b, strides=1):
+        x = tf.nn.conv2d(x, W, strides=[1, strides, strides, 1], padding='SAME')
+        x = tf.nn.bias_add(x, b)
+        return tf.nn.relu(x)
+    # ----
+    # ----
+    def maxpool2d(self, x, k=2):
+        return tf.nn.max_pool(x, ksize=[1, k, k, 1], strides=[1, k, k, 1],padding='SAME')
+    # ----
     
     # ----
     # 0.01 < x < 5.0 (for moving burgers)
@@ -159,7 +169,60 @@ class ParamNN:
     # ----
 
     # ----
-    def RestorelambdaNN(self, x, rate=0.0, reuse=False, trainable=False):
+    def RestorelambdaNN(self, x, reuse=False, trainable=False):
+        
+        nHidden1 = 32
+        nHidden2 = 64
+        nHidden3 = 128
+        nHidden4 = 128
+        nHidden5 = 512
+        
+        with tf.compat.v1.variable_scope("pre-training-lambdaNN") as scope:
+            if reuse:
+                scope.reuse_variables()
+            #pdb.set_trace() 
+            # 1st conv layer
+            w1 = self.weight_variable('w1', [5,5,1,nHidden1], trainable=trainable)
+            b1 = self.bias_variable('b1', [nHidden1], trainable=trainable)
+            conv1 = self.conv2d(x, w1, b1, strides=2)
+        
+            conv1 = self.maxpool2d(conv1)
+        
+            # 2nd conv layer
+            w2 = self.weight_variable('w2', [5,5,nHidden1,nHidden2], trainable=trainable)
+            b2 = self.bias_variable('b2', [nHidden2], trainable=trainable)
+            conv2 = self.conv2d(conv1, w2, b2, strides=2)
+        
+            conv2 = self.maxpool2d(conv2)
+            
+            # 3nd conv layer
+            w3 = self.weight_variable('w3', [5,5,nHidden2,nHidden3], trainable=trainable)
+            b3 = self.bias_variable('b3', [nHidden3], trainable=trainable)
+            conv3 = self.conv2d(conv2, w3, b3, strides=2)
+        
+            conv3 = self.maxpool2d(conv3)
+            
+            # 4nd conv layer
+            w4 = self.weight_variable('w4', [5,5,nHidden3,nHidden4], trainable=trainable)
+            b4 = self.bias_variable('b4', [nHidden4], trainable=trainable)
+            conv4 = self.conv2d(conv3, w4, b4, strides=2)
+        
+            conv4 = self.maxpool2d(conv4)
+            
+            w5 = self.weight_variable('w5', [conv4.get_shape().as_list()[1]*conv4.get_shape().as_list()[2]*conv4.get_shape().as_list()[3], 
+                                             nHidden5], trainable=trainable)
+            b5 = self.bias_variable('b5', [nHidden5], trainable=trainable)
+            
+            # 1st full-layer
+            reshape_conv4 = tf.reshape(conv4, [-1, w5.get_shape().as_list()[0]])
+            
+            fc1 = self.fc_relu(reshape_conv4,w5,b5)
+          
+            return fc1
+    # ----
+    
+    # ----
+    def lambdaNN(self, x, rate=0.0, reuse=False, trainable=True):
         
         nHidden = 128
         
@@ -167,51 +230,20 @@ class ParamNN:
             if reuse:
                 scope.reuse_variables()
             
-            # CNN feature
-            xcnn = self.myData.CNNfeature(x, reuse=reuse, trainable=trainable)
             
-            dInput = xcnn.get_shape().as_list()[-1]
+            dInput = x.get_shape().as_list()[-1]
             
             # 1st layer
             w1 = self.weight_variable('w1',[dInput, nHidden], trainable=trainable)
             bias1 = self.bias_variable('bias1',[nHidden], trainable=trainable)
-            h1 = self.fc_relu(xcnn,w1,bias1,rate)
+            y = self.fc_relu(x,w1,bias1,rate)
             
-            # 2nd layer
-            w2 = self.weight_variable('w2',[nHidden, nHidden], trainable=trainable)
-            bias2 = self.bias_variable('bias2',[nHidden], trainable=trainable)
-            h2 = self.fc_relu(h1,w2,bias2,rate)
+            # 0.005 < y < 0.304
+            y_ = self.outputthes(y)
             
-            # 3nd layer
-            w3 = self.weight_variable('w3',[nHidden, nHidden], trainable=trainable)
-            bias3 = self.bias_variable('bias3',[nHidden], trainable=trainable)
-            h3 = self.fc_relu(h2,w3,bias3,rate)
-            
-            return h3
+            return y, y_
     # ----
-    
-    # ----
-    def lambdaNN(self, x, rate=0.0, reuse=False, trainable=True):
-        
-        nHidden = 128
-        dOutput = 1
-        
-        with tf.compat.v1.variable_scope('updatelambdaNN') as scope:
-            if reuse:
-                scope.reuse_variables()
-                
-            # 4th layer
-            w4_reg = self.weight_variable('w4_reg',[nHidden, dOutput], trainable=trainable)
-            bias4_reg = self.bias_variable('bias4_reg',[dOutput], trainable=trainable)
-        
-            #y = self.fc(x,w4_reg,bias4_reg,rate)
-            y = self.fc_relu(x,w4_reg,bias4_reg,rate)
-            
-            y_thes = self.outputthes(y)
-        
-            return y, y_thes
-    # ----
-    
+     
     # ----
     def train(self, nItr=1000):
         

@@ -58,8 +58,8 @@ class ParamNN:
         # ----
         
         # neural network ----
-        self.predy, self.predy_, self.cnnfeature = self.lambdaNN(self.inobs)
-        self.predy_test, self.predy_test_, self.cnnfeature_test = self.lambdaNN(self.inobs, reuse=True)
+        self.predy, self.predy_ = self.lambdaNN(self.inobs, rate=rateTrain)
+        self.predy_test, self.predy_test_ = self.lambdaNN(self.inobs, reuse=True)
         # ----
 
         # loss ----
@@ -86,6 +86,16 @@ class ParamNN:
     # ----
     def bias_variable(self, name, shape):
          return tf.compat.v1.get_variable(name,shape,initializer=tf.constant_initializer(0.1))
+    # ----
+    # ----
+    def conv2d(self, x, W, b, strides=1):
+        x = tf.nn.conv2d(x, W, strides=[1, strides, strides, 1], padding='SAME')
+        x = tf.nn.bias_add(x, b)
+        return tf.nn.relu(x)
+    # ----
+    # ----
+    def maxpool2d(self, x, k=2):
+        return tf.nn.max_pool(x, ksize=[1, k, k, 1], strides=[1, k, k, 1],padding='SAME')
     # ----
     # ----
     def fc_relu(self,inputs,w,b,rate=0.0):
@@ -128,46 +138,67 @@ class ParamNN:
     # ----
     
     # ----
-    def lambdaNN(self, x, rate=0.05, reuse=False):
+    def lambdaNN(self, x, rate=0.0, reuse=False, trainable=True):
         
-        nHidden = 128
+        nHidden1 = 32
+        nHidden2 = 64
+        nHidden3 = 128
+        nHidden4 = 128
+        nHidden5 = 512
         
-        with tf.compat.v1.variable_scope('lambdaNN') as scope:  
+        with tf.compat.v1.variable_scope("pre-training-lambdaNN") as scope:
             if reuse:
                 scope.reuse_variables()
+            #pdb.set_trace() 
+            # 1st conv layer
+            w1 = self.weight_variable('w1', [5,5,1,nHidden1], trainable=trainable)
+            b1 = self.bias_variable('b1', [nHidden1], trainable=trainable)
+            conv1 = self.conv2d(x, w1, b1, strides=2)
+        
+            conv1 = self.maxpool2d(conv1)
+        
+            # 2nd conv layer
+            w2 = self.weight_variable('w2', [5,5,nHidden1,nHidden2], trainable=trainable)
+            b2 = self.bias_variable('b2', [nHidden2], trainable=trainable)
+            conv2 = self.conv2d(conv1, w2, b2, strides=2)
+        
+            conv2 = self.maxpool2d(conv2)
             
-            xcnn = self.myData.CNNfeature(x, reuse=reuse)
+            # 3nd conv layer
+            w3 = self.weight_variable('w3', [5,5,nHidden2,nHidden3], trainable=trainable)
+            b3 = self.bias_variable('b3', [nHidden3], trainable=trainable)
+            conv3 = self.conv2d(conv2, w3, b3, strides=2)
+        
+            conv3 = self.maxpool2d(conv3)
             
-            dInput = xcnn.get_shape().as_list()[-1]
+            # 4nd conv layer
+            w4 = self.weight_variable('w4', [5,5,nHidden3,nHidden4], trainable=trainable)
+            b4 = self.bias_variable('b4', [nHidden4], trainable=trainable)
+            conv4 = self.conv2d(conv3, w4, b4, strides=2)
+        
+            conv4 = self.maxpool2d(conv4)
             
-            # 1st layer
-            w1 = self.weight_variable('w1',[dInput, nHidden])
-            bias1 = self.bias_variable('bias1',[nHidden])
-            #h1 = self.fc_relu(x,w1,bias1,rate)
-            h1 = self.fc_relu(xcnn,w1,bias1,rate)
+            w5 = self.weight_variable('w5', [conv4.get_shape().as_list()[1]*conv4.get_shape().as_list()[2]*conv4.get_shape().as_list()[3], 
+                                             nHidden5], trainable=trainable)
+            b5 = self.bias_variable('b5', [nHidden5], trainable=trainable)
             
-            # 2nd layer
-            w2 = self.weight_variable('w2',[nHidden, nHidden])
-            bias2 = self.bias_variable('bias2',[nHidden])
-            h2 = self.fc_relu(h1,w2,bias2,rate)
+            # 1st full-layer
+            reshape_conv4 = tf.reshape(conv4, [-1, w5.get_shape().as_list()[0]])
             
-            # 3nd layer
-            w3 = self.weight_variable('w3',[nHidden, nHidden])
-            bias3 = self.bias_variable('bias3',[nHidden])
-            h3 = self.fc_relu(h2,w3,bias3,rate)
-            
-            # 4nd layer
-            w4 = self.weight_variable('w4',[nHidden, self.yDim])
-            bias4 = self.bias_variable('bias4',[self.yDim])
-            
-            # nu
-            y = self.fc_relu(h3,w4,bias4,rate)
+            fc1 = self.fc_relu(reshape_conv4,w5,b5)
+          
+            # 2nd full-layer
+            w6 = self.weight_variable('w6', [nHidden4,self.yDim], trainable=trainable)
+            b6 = self.bias_variable('b6', [self.yDim], trainable=trainable)
+           
+            y = self.fc_relu(fc1,w6,b6)
             
             # 0.005 < y < 0.304
             y_ = self.outputthes(y)
             
-            return y, y_, xcnn
+            return y, y_
     # ----
+    
     
     # ----
     def train(self, nItr=1000):
