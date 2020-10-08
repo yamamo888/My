@@ -45,13 +45,13 @@ class ParamNN:
         # Dataset ----
         self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
         # [xDim,1], [100,1], [data, xDim, 100], [data,] 
-        self.alltestX, self.testx, self.testt, self.testU, self.testNU, self.idx = self.myData.traintest()
+        self.alltestX, self.testX, self.testT, self.testU, self.testNU, self.idx = self.myData.traintest()
         # ----
          
         # Placeholder ----
         # u
         self.inobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDim, self.tDim, 1])
-        self.outobs = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDim, self.tDim])
+        self.outobs = tf.compat.v1.placeholder(tf.float64,shape=[None, self.xDim, self.tDim])
         # param nu 
         self.y = tf.compat.v1.placeholder(tf.float32,shape=[None, self.yDim])
         # ----
@@ -79,29 +79,37 @@ class ParamNN:
         # neural network (nu) ----
         self.predparam, self.predparam_ = self.lambdaNN(hidden, rate=rateTrain)
         # ----
+        predparam = tf.cast(tf.reshape(self.predparam, [-1,]), tf.float64)
         
         # PDE ----
         # output: u
         #self.predu = self.pde(self.x, self.t, self.param_test, nData=self.testNU.shape[0])
-        self.predu = pdeburgers.burgers(self.predparam_)
+        #self.predu = pdeburgers.burgers(predparam)
         # ----
         
+        #pdb.set_trace()
+        # space data
+        self.indx = tf.compat.v1.placeholder(tf.int32,shape=[None,1])
+        #self.predu = tf.gather_nd(self.predu, self.indx)
+        #self.predu = tf.expand_dims(self.predu, 0) 
+        
+
         # loss param ----
         self.loss_nu = tf.reduce_mean(tf.square(self.y - self.predparam)) 
         # ----
+        self.gradnu = tf.gradients(self.loss_nu, self.inobs)
 
         # loss u ----   
-        self.loss = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu),2),1))
+        #self.loss = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu),2),1))
         # ----
         
         # gradient
-        self.gradnu = tf.gradients(self.loss_nu, self.inobs)[0]
-
+        #self.gradnu = tf.gradients(self.loss_nu, self.inobs)
         # Optimizer ----
         #self.opt_nu = tf.compat.v1.train.AdamOptimizer(lr).minimize(self.loss_nu)
         
-        lambdaVars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES,scope='updatelambdaNN') 
-        self.opt = tf.compat.v1.train.AdamOptimizer(lr).minimize(self.loss, var_list=lambdaVars)
+        lambdaVars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES,scope='lambdaNN') 
+        self.opt = tf.compat.v1.train.AdamOptimizer(lr).minimize(self.loss_nu, var_list=lambdaVars)
         # ----
         
         # ----
@@ -171,41 +179,40 @@ class ParamNN:
     # ----
     def RestorelambdaNN(self, x, reuse=False, trainable=False):
         
-        nHidden1 = 32
-        nHidden2 = 64
-        nHidden3 = 128
-        nHidden4 = 128
-        nHidden5 = 512
+        nHidden1 = 8
+        nHidden2 = 8
+        nHidden3 = 16
+        nHidden4 = 16
+        nHidden5 = 32
         
         with tf.compat.v1.variable_scope("pre-training-lambdaNN") as scope:
             if reuse:
                 scope.reuse_variables()
             #pdb.set_trace() 
             # 1st conv layer
-            w1 = self.weight_variable('w1', [5,5,1,nHidden1], trainable=trainable)
+            w1 = self.weight_variable('w1', [3,3,1,nHidden1], trainable=trainable)
             b1 = self.bias_variable('b1', [nHidden1], trainable=trainable)
-            conv1 = self.conv2d(x, w1, b1, strides=2)
+            conv1 = self.conv2d(x, w1, b1, strides=1)
         
-            conv1 = self.maxpool2d(conv1)
+            conv1 = tf.nn.dropout(conv1, rate=0.4)
         
             # 2nd conv layer
-            w2 = self.weight_variable('w2', [5,5,nHidden1,nHidden2], trainable=trainable)
+            w2 = self.weight_variable('w2', [3,3,nHidden1,nHidden2], trainable=trainable)
             b2 = self.bias_variable('b2', [nHidden2], trainable=trainable)
-            conv2 = self.conv2d(conv1, w2, b2, strides=2)
+            conv2 = self.conv2d(conv1, w2, b2, strides=1)
         
             conv2 = self.maxpool2d(conv2)
             
             # 3nd conv layer
-            w3 = self.weight_variable('w3', [5,5,nHidden2,nHidden3], trainable=trainable)
+            w3 = self.weight_variable('w3', [3,3,nHidden2,nHidden3], trainable=trainable)
             b3 = self.bias_variable('b3', [nHidden3], trainable=trainable)
-            conv3 = self.conv2d(conv2, w3, b3, strides=2)
+            conv3 = self.conv2d(conv2, w3, b3, strides=1)
         
-            conv3 = self.maxpool2d(conv3)
             
             # 4nd conv layer
-            w4 = self.weight_variable('w4', [5,5,nHidden3,nHidden4], trainable=trainable)
+            w4 = self.weight_variable('w4', [3,3,nHidden3,nHidden4], trainable=trainable)
             b4 = self.bias_variable('b4', [nHidden4], trainable=trainable)
-            conv4 = self.conv2d(conv3, w4, b4, strides=2)
+            conv4 = self.conv2d(conv3, w4, b4, strides=1)
         
             conv4 = self.maxpool2d(conv4)
             
@@ -224,8 +231,6 @@ class ParamNN:
     # ----
     def lambdaNN(self, x, rate=0.0, reuse=False, trainable=True):
         
-        nHidden = 128
-        
         with tf.compat.v1.variable_scope('lambdaNN') as scope:  
             if reuse:
                 scope.reuse_variables()
@@ -234,9 +239,9 @@ class ParamNN:
             dInput = x.get_shape().as_list()[-1]
             
             # 1st layer
-            w1 = self.weight_variable('w1',[dInput, nHidden], trainable=trainable)
-            bias1 = self.bias_variable('bias1',[nHidden], trainable=trainable)
-            y = self.fc_relu(x,w1,bias1,rate)
+            w1 = self.weight_variable('w1',[dInput, self.yDim], trainable=trainable)
+            bias1 = self.bias_variable('bias1',[self.yDim], trainable=trainable)
+            y = self.fc(x,w1,bias1,rate)
             
             # 0.005 < y < 0.304
             y_ = self.outputthes(y)
@@ -248,7 +253,8 @@ class ParamNN:
     def train(self, nItr=1000):
         
         # parameters ----
-        printPeriod = 100
+        printPeriod = 10
+        pdePeriod = 100
         batchCnt = 0
         nTrain = 65
         batchRandInd = np.random.permutation(nTrain)
@@ -261,16 +267,24 @@ class ParamNN:
         tePL = []
         
         for itr in range(nItr):
-            
+
             # ※1こずつ？
             flag = False
             cnt = 0
             for ind in batchRandInd:
-                feed_dict={self.x:self.testX, self.t:self.testT, self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], self.outobs:self.testU[ind,np.newaxis,:,:,0].transpose(0,2,1)}    
-           
-                _, testParam, testPred, testploss, testuloss, grad =\
-                self.sess.run([self.opt, self.predparam_test, self.predparam_pre, self.predu_test, self.loss_nu_test, self.loss_test, self.gradnu], feed_dict)
+                #pdb.set_trace()
+                feed_dict={self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], self.outobs:self.testU[ind,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis]} 
+          
+                if itr <= pdePeriod:
+                    _, testParam, testploss, testgrad =\
+                    self.sess.run([self.opt, self.predparam, self.loss_nu, self.gradnu], feed_dict)
                 
+                elif itr > pdePeriod:
+                    _, testParam, testploss, testuloss, testGrad =\
+                    self.sess.run([self.opt, self.predparam, self.predu, self.loss_nu, self.loss, self.gradnu], feed_dict)
+                
+
+                """
                 if cnt < printPeriod:
                     
                     if not flag:
@@ -286,7 +300,10 @@ class ParamNN:
                 if itr % printPeriod == 0:
                 
                     print('itr: %d, testULoss:%f, testPLoss:%f' % (itr, self.testULoss, self.testPLoss))
-                    
+                    print('grad %f' % (np.mean(testGrad)))
+                    print(testParam)
+                    print(self.testNU)
+
                     tePL = np.append(tePL, testPLoss)
                     teUL = np.append(teUL, testULoss)
                     
@@ -300,7 +317,8 @@ class ParamNN:
         paramloss = [tePL]
         ulosses = [teUL]
         
-        return paramloss, ulosses
+        return paramloss, ulosses"""
+        #pdb.set_trace()
     # ----
     
     
@@ -340,12 +358,13 @@ if __name__ == "__main__":
     
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, nBatch=nBatch, trialID=trialID, dataMode=dataMode)
-    plosses, ulosses = model.train(nItr=nItr)
+    #plosses, ulosses = model.train(nItr=nItr)
+    model.train(nItr=nItr)
     # ----
     
     # Plot ----
-    model.myPlot.Loss1(plosses, labels=['test'], savename='poNN_param')
-    model.myPlot.Loss1(ulosses, labels=['test'], savename='poNN_u')
+    #model.myPlot.Loss1(plosses, labels=['test'], savename='poNN_param')
+    #model.myPlot.Loss1(ulosses, labels=['test'], savename='poNN_u')
     
     #model.myPlot.plotExactPredParam(teparams, xNum=teparams[0].shape[0], savename='lasttepredparamode')
     # ----
