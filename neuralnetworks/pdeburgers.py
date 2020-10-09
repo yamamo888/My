@@ -47,9 +47,14 @@ def burgers(nu):
     simulateu = tf.while_loop(cond, body, loop_vars=[n0, initu, dummyuxt, nu],
                               shape_invariants=[n0.get_shape(), tf.TensorShape([None,None,1]), tf.TensorShape([None,None,None]), tf.TensorShape([None,1])])
     
+    # del dummy [none,x,200] -> [none,x,100]
     simulateu = tf.slice(simulateu[2], [0,0,100], [-1,NX,100])
+    
+    # push initu & pop last u
+    simulateu = tf.concat([initu,simulateu],2)
 
-    return simulateu
+    return simulateu[:,:,:-1]
+# ----       
 
 # ----       
 def condinit(i, _, nu):
