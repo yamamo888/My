@@ -83,41 +83,30 @@ class ParamNN:
         
         # PDE ----
         # output: u
-        #self.predu = self.pde(self.x, self.t, self.param_test, nData=self.testNU.shape[0])
+        self.predu = self.pde(self.x, self.t, self.param_test, nData=self.testNU.shape[0])
         #self.predu = pdeburgers.burgers(predparam)
         # ----
         
         #pdb.set_trace()
         # space data
         self.indx = tf.compat.v1.placeholder(tf.int32,shape=[None,1])
-        #self.predu = tf.gather_nd(self.predu, self.indx)
+        self.predu = tf.gather_nd(self.predu, self.indx)
         #self.predu = tf.expand_dims(self.predu, 0) 
         
 
         # loss param ----
         self.loss_nu = tf.reduce_mean(tf.square(self.y - self.predparam)) 
         # ----
-        self.gradnu = tf.gradients(self.loss_nu, self.inobs)
-
+        
         # loss u ----   
-        #self.loss = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu),2),1))
+        self.loss = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu),2),1))
         # ----
         
-        # gradient
-        #self.gradnu = tf.gradients(self.loss_nu, self.inobs)
-        # Optimizer ----
-        #self.opt_nu = tf.compat.v1.train.AdamOptimizer(lr).minimize(self.loss_nu)
+        # gradient ----
+        self.gradnu = tf.gradients(self.loss_nu, self.inobs)
+        # ----
+
         
-        lambdaVars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES,scope='lambdaNN') 
-        self.opt = tf.compat.v1.train.AdamOptimizer(lr).minimize(self.loss_nu, var_list=lambdaVars)
-        # ----
-        
-        # ----
-        uninitialized = self.sess.run([tf.compat.v1.is_variable_initialized(var) for var in tf.compat.v1.global_variables()])
-        uninitializedVars =[v for (v, f) in zip(tf.compat.v1.global_variables(), uninitialized) if not f]
-        self.sess.run(tf.compat.v1.variables_initializer(uninitializedVars))
-        # ----
-      
     # ----
     def weight_variable(self, name, shape, trainable=True):
          return tf.compat.v1.get_variable(name,shape,initializer=tf.random_normal_initializer(stddev=0.1),trainable=trainable)
@@ -225,23 +214,11 @@ class ParamNN:
             
             fc1 = self.fc_relu(reshape_conv4,w5,b5)
           
-            return fc1
-    # ----
-    
-    # ----
-    def lambdaNN(self, x, rate=0.0, reuse=False, trainable=True):
-        
-        with tf.compat.v1.variable_scope('lambdaNN') as scope:  
-            if reuse:
-                scope.reuse_variables()
-            
-            
-            dInput = x.get_shape().as_list()[-1]
-            
-            # 1st layer
-            w1 = self.weight_variable('w1',[dInput, self.yDim], trainable=trainable)
-            bias1 = self.bias_variable('bias1',[self.yDim], trainable=trainable)
-            y = self.fc(x,w1,bias1,rate)
+            # 2nd full-layer
+            w6 = self.weight_variable('w6', [nHidden5,self.yDim], trainable=trainable)
+            b6 = self.bias_variable('b6', [self.yDim], trainable=trainable)
+           
+            y = self.fc_relu(fc1,w6,b6)
             
             # 0.005 < y < 0.304
             y_ = self.outputthes(y)
