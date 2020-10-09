@@ -93,7 +93,6 @@ def burgersPy2(x,t,nu, xNum=256,tNum=100):
              NU*(DT/DX**2)*(u[int(ipos[i]),n]-2*u[i,n]+u[int(ineg[i]),n]))
             
     pdb.set_trace()
-    
 # ----   
 
 # ----       
@@ -125,17 +124,13 @@ def burgersTensor2(nu):
     initu = tf.slice(initu[1], [0,1,0], [-1,NX,1])
     
     # Numerical solution 3: u[none(data),x,t] ex) [1,100,100]
-    #simulateu = tf.while_loop(cond, body, loop_vars=[n0, initu, dummyuxt, nu],
-                              #shape_invariants=[n0.get_shape(), tf.TensorShape([None,None,1]), tf.TensorShape([None,None,None]), tf.TensorShape([None,1])])
-    simulateu = tf.while_loop(cond, body, loop_vars=[n0, initu, dummyuxt, initu, nu],
-                              shape_invariants=[n0.get_shape(), tf.TensorShape([None,None,1]), tf.TensorShape([None,None,None]), tf.TensorShape([None,None,1]), tf.TensorShape([None,1])])
+    simulateu = tf.while_loop(cond, body, loop_vars=[n0, initu, dummyuxt, nu],
+                              shape_invariants=[n0.get_shape(), tf.TensorShape([None,None,1]), tf.TensorShape([None,None,None]), tf.TensorShape([None,1])])
     
-    #return initu
+    simulateu = tf.slice(simulateu[2], [0,0,100], [-1,NX,100])
+
     return simulateu
-    
-    #return initu, simulateu
-    # output u[x,t]
-    #return simulateu[2][:,1:] # del dummy
+# ----       
     
 # ----       
 def condinit(i, _, nu):
@@ -167,20 +162,18 @@ def bodyinit(i, init_u, nu):
     # [none(データ数),none(x),1] 0:初期値, i=0, i=1, ... -> [none, 101(初期値-1入ってる), 1]
     init_u = tf.concat([init_u, tf.expand_dims(u,2)], 1)
     
-    pdb.set_trace()
+    #pdb.set_trace()
     
     return [i+1, init_u, nu]
 # ----       
 
 # ----    
 # outside for n range(NT)
-#def cond(n, ux, uxt, nu):
-
-def cond(n, ux, uxt, _, nu):
+def cond(n, ux, uxt, nu):
     NT = 100
     return n < NT
 
-def body(n, ux, uxt, updateux, nu):
+def body(n, ux, uxt, nu):
     '''
     ux == initu (first time)
     '''
@@ -200,19 +193,18 @@ def body(n, ux, uxt, updateux, nu):
     updateux = tf.slice(updateux[2], [0,1,0], [-1,NX,1])
     
     # copy ux <- updateux
-    #ux = updateux
+    ux = updateux
     
     # u[data,x,t]
-    #uxt = tf.concat([uxt, updateux], 2)
+    uxt = tf.concat([uxt, updateux], 2)
     
-    #return [n+1, ux, uxt, nu]
-    return [n+1, ux, uxt, updateux, nu]
+    return [n+1, ux, uxt, nu]
     
 # ----       
 
 # ----    
 # inside for i range(XT)
-def xcond(i, ux, updateu, nu):
+def xcond(i, ux, _, nu):
     NX = 100
     return i < NX
 
@@ -228,11 +220,15 @@ def xbody(i, ut, updateu, nu):
     ineg = tf.concat([tf.constant([99]),tf.range(0,99)],0)
     
     # ut+1 = ut * nu ... [none(data),1]
-    tmpu = ut[i] - ut[i] * (DT/DX) * (ut[i] - ut[ineg[i]]) + nu * (DT/DX**2) * (ut[ipos[i]] - 2.0 * ut[i] + ut[ineg[i]])
+    tmpu = tf.slice(ut, [0,i,0], [-1,1,1]) - tf.slice(ut, [0,i,0], [-1,1,1]) * (DT/DX) * (tf.slice(ut,[0,i,0], [-1,1,1]) - 
+                    tf.slice(ut, [0,ineg[i],0], [-1,1,1])) + nu * (DT/DX**2) * (tf.slice(ut, [0,ipos[i],0], [-1,1,1]) 
+                    - 2.0 * tf.slice(ut,[0,i,0], [-1,1,1]) + tf.slice(ut, [0,ineg[i],0], [-1,1,1]))
     
-    # [none,none(101?),1]
-    updateu = tf.concat([updateu, tf.expand_dims(tmpu,2)], 1)
-    pdb.set_trace()
+    #pdb.set_trace()
+    
+    # [none,none(101),1]
+    updateu = tf.concat([updateu, tmpu], 1)
+    
     return [i+1, ut, updateu, nu]
 # ----       
 
@@ -383,71 +379,28 @@ if __name__ == "__main__":
         nu = tf.compat.v1.placeholder(tf.float64,shape=[None,1])
         ind = tf.compat.v1.placeholder(tf.int32,shape=[None,1])
         
-        #initu_op = burgersTensor2(nu)
         simulateu_op = burgersTensor2(nu)
         
-        #initu_op, simulateu_op = burgersTensor2(nu)
-        # [none,none]
-        #simulateu_op, w_op = burgersTensor2(nu)
-        #gather_op = tf.gather_nd(simulateu_op, ind)
-        
-        #pdb.set_trace()
-        #grad = tf.gradients(initu_op, nu)
-        #grad = tf.gradients(simulateu_op, nu)
-        #grad = tf.gradients(gather_op, nu)
-        
+        grad = tf.gradients(simulateu_op, nu)
         
         #pdb.set_trace()
         config = tf.compat.v1.ConfigProto(gpu_options=tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.1,allow_growth=True)) 
         sess = tf.compat.v1.Session(config=config)
         sess.run(tf.compat.v1.global_variables_initializer())
-        
         
         for i in np.arange(1):
             
             feed_dict = {nu:np.array(NUs)[:,np.newaxis], ind:np.array([0,2])[:,np.newaxis]}
-            #pdb.set_trace()
-            #updataX, gradX = sess.run([initu_op,grad], feed_dict)
-            updateX = sess.run([simulateu_op], feed_dict)
-            #updataX = sess.run([initu_op, simulateu_op], feed_dict)
-            #updataX, gatherX, gradX = sess.run([simulateu_op, gather_op, grad], feed_dict)
-            
-            print(updateX)
-            #print(gatherX)
-            #print(gradX)
-            #print(updataX[0,:10])
-        pdb.set_trace()
-            
-        '''
-        # graph ----
-        # placeholder
-        x = tf.compat.v1.placeholder(tf.float32,shape=[tNum, xNum])
-        t = tf.compat.v1.placeholder(tf.float32,shape=[xNum, tNum])
-        nu = tf.compat.v1.placeholder(tf.float32,shape=[nData,1])
-        pi = tf.compat.v1.placeholder(tf.float32,shape=[1])
-        
-        # u = PDE(x,t,nu)
-        u_op, a_op, b_op, c_op, tmpa_op, tmpb_op, tmpc_op, phi_op, tmpnu_op = burgersTensor(x,t,nu,pi, nData=nData,xDim=xNum)
-        
-        config = tf.compat.v1.ConfigProto(gpu_options=tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.1,allow_growth=True)) 
-        sess = tf.compat.v1.Session(config=config)
-        sess.run(tf.compat.v1.global_variables_initializer())
-        # ----
-        Xgrid = np.reshape(np.tile(X, tNum), [-1, xNum])
-        Tgrid = np.reshape(np.tile(T, xNum), [-1, tNum])
-           
-        feed_dict = {x:Xgrid, t:Tgrid, pi:np.array([np.pi]), nu:np.array([NUs]).T}
-        Us, A, B, C, tmpA, tmpB, tmpC, Phi, tmpNU = sess.run([u_op, a_op, b_op, c_op, tmpa_op, tmpb_op, tmpc_op, phi_op, tmpnu_op], feed_dict)
-        
-        print(Phi)
-        pdb.set_trace()
-        '''
-    # ----
     
-    '''
-    # ----
-   
-      
+            updateX, gradX = sess.run([simulateu_op,grad], feed_dict)
+           
+            print(updateX)
+            print(gradX)
+            
+        pdb.set_trace()
+            
+    
+    '''  
     # Plot ----
     #for ni in np.arange(testNU.shape[0]):
     for ni in np.arange(len(NUs)):
