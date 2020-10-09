@@ -79,20 +79,17 @@ class ParamNN:
         # neural network (nu) ----
         self.predparam, self.predparam_ = self.lambdaNN(hidden, rate=rateTrain)
         # ----
-        predparam = tf.cast(tf.reshape(self.predparam, [-1,]), tf.float64)
         
         # PDE ----
         # output: u
-        self.predu = self.pde(self.x, self.t, self.param_test, nData=self.testNU.shape[0])
-        #self.predu = pdeburgers.burgers(predparam)
+        self.predu = pdeburgers.burgers(self.predparam)
         # ----
         
-        #pdb.set_trace()
-        # space data
+        pdb.set_trace()
+        # space data ----
         self.indx = tf.compat.v1.placeholder(tf.int32,shape=[None,1])
         self.predu = tf.gather_nd(self.predu, self.indx)
-        #self.predu = tf.expand_dims(self.predu, 0) 
-        
+        # ----
 
         # loss param ----
         self.loss_nu = tf.reduce_mean(tf.square(self.y - self.predparam)) 
@@ -101,7 +98,7 @@ class ParamNN:
         # loss u ----   
         self.loss = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu),2),1))
         # ----
-        
+        pdb.set_trace()
         # gradient ----
         self.gradnu = tf.gradients(self.loss_nu, self.inobs)
         # ----
@@ -252,14 +249,10 @@ class ParamNN:
                 #pdb.set_trace()
                 feed_dict={self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], self.outobs:self.testU[ind,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis]} 
           
-                if itr <= pdePeriod:
-                    _, testParam, testploss, testgrad =\
-                    self.sess.run([self.opt, self.predparam, self.loss_nu, self.gradnu], feed_dict)
-                
-                elif itr > pdePeriod:
-                    _, testParam, testploss, testuloss, testGrad =\
-                    self.sess.run([self.opt, self.predparam, self.predu, self.loss_nu, self.loss, self.gradnu], feed_dict)
-                
+                _, testParam, testploss, testuloss, testGrad =\
+                self.sess.run([self.opt, self.predparam, self.predu, self.loss_nu, self.loss, self.gradnu], feed_dict)
+            
+                pdb.set_trace()
 
                 """
                 if cnt < printPeriod:
