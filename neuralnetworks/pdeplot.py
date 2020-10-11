@@ -237,17 +237,18 @@ class Plot:
               if isCycle:
                   if row == 0:
                       titlelabel = 'exact nu='
-                      axes[row].set_title('%s %3f' % (titlelabel, np.float(label.split('_')[row][1:-1])))
+                      axes[row].set_title('%s %.3f' % (titlelabel, np.float(label.split('_')[row])))
                   elif row == 1:
                       titlelabel = ['predict nu=', 'cyclecloss', 'grad']
-                      axes[row].set_title('%s %3f %s %5f %s %3f' % (titlelabel[0], np.float(label.split('_')[row][1:-1]), titlelabel[1], np.float(label2.split('_')[0]), titlelabel[2], np.float(label2.split('_')[1])))
+                      axes[row].set_title('%s %.3f %s %.2f %s %.10f' % (titlelabel[0], np.float(label.split('_')[row][1:-1]), titlelabel[1], np.float(label2.split('_')[0][1:-1]), titlelabel[2], np.float(label2.split('_')[1])))
 
               else:
                   if row == 0:
                       titlelabel = 'exact nu='
                   elif row == 1:
                       titlelabel = 'predict nu='
-                  axes[row].set_title('%s %5f' % (titlelabel, np.float(label.split('_')[row][1:-1])))
+                  #pdb.set_trace()
+                  axes[row].set_title('%s %5f' % (titlelabel, np.float(label.split('_')[row])))
             
               divider1 = make_axes_locatable(axes[row])
               cax1 = divider1.append_axes("right", size="2%", pad=0.1)

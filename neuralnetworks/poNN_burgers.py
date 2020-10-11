@@ -58,7 +58,7 @@ class ParamNN:
         
         # Restore neural network ----
         # pred nu [ndata,]
-        hidden = self.RestorelambdaNN(self.inobs)
+        self.predparam = self.lambdaNN(self.inobs)
         # ----
         
         # optimizer ----
@@ -75,35 +75,36 @@ class ParamNN:
         self.saver.restore(self.sess, lastmodel)
         print('>>> Restore model')
         # ----
-        
-        # neural network (nu) ----
-        self.predparam, self.predparam_ = self.lambdaNN(hidden, rate=rateTrain)
-        # ----
-        
+         
+        # float32 -> float64
+        self.predparam = tf.cast(self.predparam, tf.float64)
         # PDE ----
         # output: u
         self.predu = pdeburgers.burgers(self.predparam)
         # ----
         
-        pdb.set_trace()
-        # space data ----
-        self.indx = tf.compat.v1.placeholder(tf.int32,shape=[None,1])
-        self.predu = tf.gather_nd(self.predu, self.indx)
+        #pdb.set_trace()
+        # space data -> [none, self.xDim, t] ----
+        self.indx = tf.compat.v1.placeholder(tf.int32,shape=[self.xDim,1])
+        trans_predu = tf.transpose(self.predu, perm=[1,0,2])
+        # [100(x),data,t]
+        gather_predu = tf.gather_nd(trans_predu, self.indx)
+        # [data,self.xDim,t]
+        space_predu = tf.transpose(gather_predu, perm=[1,0,2])
         # ----
 
         # loss param ----
-        self.loss_nu = tf.reduce_mean(tf.square(self.y - self.predparam)) 
+        self.loss_nu = tf.reduce_mean(tf.square(tf.cast(self.y, tf.float64) - self.predparam)) 
         # ----
         
+        #pdb.set_trace()
         # loss u ----   
-        self.loss = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - self.predu),2),1))
+        self.loss = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - space_predu),2),1))
         # ----
-        pdb.set_trace()
         # gradient ----
         self.gradnu = tf.gradients(self.loss_nu, self.inobs)
         # ----
 
-        
     # ----
     def weight_variable(self, name, shape, trainable=True):
          return tf.compat.v1.get_variable(name,shape,initializer=tf.random_normal_initializer(stddev=0.1),trainable=trainable)
@@ -163,7 +164,7 @@ class ParamNN:
     # ----
 
     # ----
-    def RestorelambdaNN(self, x, reuse=False, trainable=False):
+    def lambdaNN(self, x, reuse=False, trainable=False):
         
         nHidden1 = 8
         nHidden2 = 8
@@ -218,17 +219,16 @@ class ParamNN:
             y = self.fc_relu(fc1,w6,b6)
             
             # 0.005 < y < 0.304
-            y_ = self.outputthes(y)
+            y = self.outputthes(y)
             
-            return y, y_
+            return y
     # ----
      
     # ----
     def train(self, nItr=1000):
         
         # parameters ----
-        printPeriod = 10
-        pdePeriod = 100
+        printPeriod = 3
         batchCnt = 0
         nTrain = 65
         batchRandInd = np.random.permutation(nTrain)
@@ -245,50 +245,49 @@ class ParamNN:
             # ※1こずつ？
             flag = False
             cnt = 0
+            
+            testPLoss = []
+            testULoss = []
+            testP = []
+            testGrads = []
+            
             for ind in batchRandInd:
                 #pdb.set_trace()
                 feed_dict={self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], self.outobs:self.testU[ind,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis]} 
           
-                _, testParam, testploss, testuloss, testGrad =\
-                self.sess.run([self.opt, self.predparam, self.predu, self.loss_nu, self.loss, self.gradnu], feed_dict)
-            
-                pdb.set_trace()
-
-                """
-                if cnt < printPeriod:
+                testPredParam, testPredU, testploss, testuloss, testGrad =\
+                self.sess.run([self.predparam, self.predu, self.loss_nu, self.loss, self.gradnu], feed_dict)
                     
-                    if not flag:
-                        testPLoss = testploss
-                        testULoss = testuloss
-                        flag = True
-                    else:
-                        testPLoss = np.hstack([testPLoss, testploss])
-                        testULoss = np.hstack([testULoss, testuloss])
-                    
-                    cnt += 1
-                    
-                if itr % printPeriod == 0:
+                testPLoss = np.append(testPLoss, testploss)
+                testULoss = np.append(testULoss, testuloss)
+                testP = np.append(testP, testPredParam)
+                testGrads = np.append(testGrads, testGrad)
+                cnt += 1
                 
-                    print('itr: %d, testULoss:%f, testPLoss:%f' % (itr, self.testULoss, self.testPLoss))
-                    print('grad %f' % (np.mean(testGrad)))
-                    print(testParam)
-                    print(self.testNU)
-
-                    tePL = np.append(tePL, testPLoss)
-                    teUL = np.append(teUL, testULoss)
+                if itr == 2 and np.round(self.testNU[ind],3) in plotnus:
+                    exactnu = self.testNU[ind]
+                    prednu = testPredParam
+                        
+                    self.myPlot.CycleExactPredParam([self.alltestX, self.testT, prednu, exactnu, self.idx, testULoss[-1], np.mean(testGrad)], itr=itr, savename='tepredparamode')
                     
-                    if np.round(self.testNU[ind],3) in plotnus:
-                        
-                        exactnu = self.testNU[ind]
-                        prednu = testPred[ind]
-                        
-                        self.myPlot.plotExactPredParam([self.alltestX, self.testt, prednu, exactnu, self.idx], itr=itr, savename='tepredparamode')
+            if itr % printPeriod == 0:
+                #pdb.set_trace()
+                print('----')
+                print('itr: %d, testULoss:%f, testPLoss:%f' % (itr, np.mean(testULoss), np.mean(testPLoss)))
+                print('grad {:.16f}'.format(np.mean(testGrads)))
+                print('exact nu:')
+                print(self.testNU[batchRandInd][:,0])
+                print('pred nu:')
+                print(testP)
+
+                tePL = np.append(tePL, testPLoss)
+                teUL = np.append(teUL, testULoss)
+                    
         
         paramloss = [tePL]
         ulosses = [teUL]
         
-        return paramloss, ulosses"""
-        #pdb.set_trace()
+        return paramloss, ulosses
     # ----
     
     
@@ -328,13 +327,12 @@ if __name__ == "__main__":
     
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, nBatch=nBatch, trialID=trialID, dataMode=dataMode)
-    #plosses, ulosses = model.train(nItr=nItr)
-    model.train(nItr=nItr)
+    plosses, ulosses = model.train(nItr=nItr)
     # ----
     
     # Plot ----
-    #model.myPlot.Loss1(plosses, labels=['test'], savename='poNN_param')
-    #model.myPlot.Loss1(ulosses, labels=['test'], savename='poNN_u')
+    model.myPlot.Loss1(plosses, labels=['test'], savename='poNN_param')
+    model.myPlot.Loss1(ulosses, labels=['test'], savename='poNN_u')
     
     #model.myPlot.plotExactPredParam(teparams, xNum=teparams[0].shape[0], savename='lasttepredparamode')
     # ----
