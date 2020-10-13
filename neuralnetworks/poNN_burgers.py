@@ -294,6 +294,69 @@ class ParamNN:
         return paramloss, ulosses, grads
     # ----
     
+    # ----
+    def multitrain(self, nItr=1000):
+        
+        # parameters ----
+        printPeriod = 3
+        nTrain = 235
+        batchCnt = 0
+        batchRandInd = np.random.permutation(nTrain)
+        # ※手動
+        plotnus = [0.005, 0.01, 0.02, 0.05, 0.1, 0.3]
+        # ----
+        
+        tePL, teUL = [],[]
+        for itr in range(nItr):
+            
+            # index
+            sInd = self.nBatch * batchCnt
+            eInd = sInd + self.nBatch
+            index = batchRandInd[sInd:eInd]
+            
+            feed_dict = {self.y:self.testNU[index,np.newaxis], self.inobs:self.testU[index,np.newaxis], self.outobs:self.testU[index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis]}
+             
+            testPredParam, testPredU, testpLoss, testuLoss, testGrad =\
+            self.sess.run([self.predparam, self.predu, self.loss_nu, self.loss, self.gradnu], feed_dict)
+           
+            if eInd + self.nBatch > nTrain:
+                batchCnt = 0
+                batchRandInd = np.random.permutation(nTrain)
+            else:
+                batchCnt += 1
+          
+            if itr % printPeriod == 0:
+                #pdb.set_trace()
+                print('----')
+                print('itr: %d, testULoss:%f, testPLoss:%f' % (itr, testuLoss, testpLoss))
+                print('grad {:.16f}'.format(np.mean(testGrad)))
+                print('exact nu:')
+                print(self.testNU[index][:,0])
+                print('pred nu:')
+                print(testPredParam)
+                
+                # loss
+                tePL = np.append(tePL, testpLoss)
+                teUL = np.append(teUL, testuLoss)
+                
+                # plot ----
+                if np.round(self.testNU[index],3) in plotnus:
+                    
+                    pdb.set_trace()
+                    #np.where(self.testNU) 
+                    
+                    exactnu = self.testNU
+                    prednu = testPredParam
+                            
+                    self.myPlot.CycleExactPredParam([self.alltestX, self.testT, prednu, exactnu, self.idx, testuLoss, np.mean(testGrad)], itr=itr, savename='tepredparamode')
+                # ----
+                
+            paramloss = [tePL]
+            uloss = [teUL]
+            
+            return paramloss, uloss
+        # ----
+    
     
 if __name__ == "__main__":
     
@@ -331,7 +394,8 @@ if __name__ == "__main__":
     
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, nBatch=nBatch, trialID=trialID, dataMode=dataMode)
-    plosses, ulosses, grads = model.train(nItr=nItr)
+    #plosses, ulosses, grads = model.train(nItr=nItr)
+    plosses, ulosses = model.multitrain(nItr=nItr)
     # ----
     
     # Plot ----
