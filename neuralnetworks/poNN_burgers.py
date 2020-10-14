@@ -225,140 +225,40 @@ class ParamNN:
     # ----
      
     # ----
-    def train(self, nItr=1000):
-        
-        # parameters ----
-        printPeriod = 100
-        #printPeriod = 2
-        plotPeriod = 1000
-        batchCnt = 0
-        nTrain = 65
-        batchRandInd = np.random.permutation(nTrain)
-        # ※手動
-        plotnus = [0.005, 0.01, 0.02, 0.05, 0.1, 0.3]
-        # ----
+    def train(self, nItr=1000, ind):
         
         # Start training
         teUL = []
         tePL = []
         teG = []
+        
         for itr in range(nItr):
-
-            # ※1こずつ？
-            flag = False
-            cnt = 0
-            
-            testPLoss = []
-            testULoss = []
-            testP = []
-            testGrads = []
             
             pdb.set_trace()
-            for ind in batchRandInd:
-                
-                #pdb.set_trace()
-                feed_dict={self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], self.outobs:self.testU[ind,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis]} 
-          
-                testPredParam, testPredU, testploss, testuloss, testGrad =\
-                self.sess.run([self.predparam, self.predu, self.loss_nu, self.loss, self.gradnu], feed_dict)
-                #pdb.set_trace()
-                testPLoss = np.append(testPLoss, testploss)
-                testULoss = np.append(testULoss, testuloss)
-                #testP = np.append(testP, testPredParam)
-                testGrads = np.append(testGrads, np.mean(testGrad))
-                cnt += 1
-                
-                if itr % plotPeriod == 0 and np.round(self.testNU[ind],3) in plotnus:
-                    exactnu = self.testNU[ind]
-                    prednu = testPredParam
-                        
-                    self.myPlot.CycleExactPredParam([self.alltestX, self.testT, prednu, exactnu, self.idx, testULoss[-1], np.mean(testGrad)], itr=itr, savename='tepredparamode')
-                    
-            if itr % printPeriod == 0:
-                #pdb.set_trace()
-                print('----')
-                print('itr: %d, testULoss:%f, testPLoss:%f' % (itr, np.mean(testULoss), np.mean(testPLoss)))
-                print('grad {:.16f}'.format(np.mean(testGrads)))
-                #print('exact nu:')
-                #print(self.testNU[batchRandInd][:,0])
-                #print('pred nu:')
-                #print(testP)
-                #pdb.set_trace()
-                tePL = np.append(tePL, np.mean(testPLoss))
-                teUL = np.append(teUL, np.mean(testULoss))
-                teG = np.append(teG, np.mean(testGrads))
-                    
+            feed_dict={self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], self.outobs:self.testU[ind,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis]} 
+      
+            testPredParam, testPredU, testploss, testuloss, testgrad =\
+            self.sess.run([self.predparam, self.predu, self.loss_nu, self.loss, self.gradnu], feed_dict)
+            
+            print('----')
+            print('itr: %d, testULoss:%f, testPLoss:%f' % (itr, np.mean(testULoss), np.mean(testPLoss)))
+            print('grad {:.16f}'.format(np.mean(testGrads)))
         
+            tePL = np.append(tePL, testploss)
+            teUL = np.append(teUL, testuloss)
+            teG = np.append(teG, testgrad)
+             
+            exactnu = self.testNU[ind]
+            prednu = testPredParam
+            self.myPlot.CycleExactPredParam([self.alltestX, self.testT, prednu, exactnu, self.idx, testULoss[-1], np.mean(testGrad)], itr=itr, savename='tepredparamode')
+            
+    
         paramloss = [tePL]
         ulosses = [teUL]
         grads = [teG]
         
         return paramloss, ulosses, grads
     # ----
-    
-    # ----
-    def multitrain(self, nItr=1000):
-        
-        # parameters ----
-        printPeriod = 3
-        nTrain = 65
-        batchCnt = 0
-        batchRandInd = np.random.permutation(nTrain)
-        # ※手動
-        plotnus = [0.005, 0.01, 0.02, 0.05, 0.1, 0.3]
-        # ----
-        
-        tePL, teUL = [],[]
-        for itr in range(nItr):
-            
-            # index
-            sInd = self.nBatch * batchCnt
-            eInd = sInd + self.nBatch
-            index = batchRandInd[sInd:eInd]
-            pdb.set_trace() 
-            feed_dict = {self.y:self.testNU[index], self.inobs:self.testU[index], self.outobs:self.testU[index,:,:,0], self.indx:self.idx[:,np.newaxis]}
-             
-            testPredParam, testPredU, testpLoss, testuLoss, testGrad =\
-            self.sess.run([self.predparam, self.predu, self.loss_nu, self.loss, self.gradnu], feed_dict)
-           
-            if eInd + self.nBatch > nTrain:
-                batchCnt = 0
-                batchRandInd = np.random.permutation(nTrain)
-            else:
-                batchCnt += 1
-          
-            if itr % printPeriod == 0:
-                #pdb.set_trace()
-                print('----')
-                print('itr: %d, testULoss:%f, testPLoss:%f' % (itr, testuLoss, testpLoss))
-                print('grad {:.16f}'.format(np.mean(testGrad)))
-                print('exact nu:')
-                print(self.testNU[index][:,0])
-                print('pred nu:')
-                print(testPredParam)
-                
-                # loss
-                tePL = np.append(tePL, testpLoss)
-                teUL = np.append(teUL, testuLoss)
-                
-                # plot ----
-                if np.round(self.testNU[index],3) in plotnus:
-                    
-                    pdb.set_trace()
-                    #np.where(self.testNU) 
-                    
-                    exactnu = self.testNU
-                    prednu = testPredParam
-                            
-                    self.myPlot.CycleExactPredParam([self.alltestX, self.testT, prednu, exactnu, self.idx, testuLoss, np.mean(testGrad)], itr=itr, savename='tepredparamode')
-                # ----
-                
-            paramloss = [tePL]
-            uloss = [teUL]
-            
-            return paramloss, uloss
-        # ----
-    
     
 if __name__ == "__main__":
     
@@ -371,6 +271,8 @@ if __name__ == "__main__":
     parser.add_argument('--nBatch', type=int, default=100)
     # datamode (pkl)
     parser.add_argument('--dataMode', required=True, choices=['large', 'middle', 'small'])
+    # index test 2=0.01
+    parser.add_argument('--index', required=True, type=int, default=2)
     # trial ID
     parser.add_argument('--trialID', type=int, default=0)    
      
@@ -379,8 +281,9 @@ if __name__ == "__main__":
     
     nItr = args.nItr
     nBatch = args.nBatch
-    trialID = args.trialID
     dataMode = args.dataMode
+    index = args.index
+    trialID = args.trialID
     # ----
     
     # path ----
@@ -396,8 +299,7 @@ if __name__ == "__main__":
     
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, nBatch=nBatch, trialID=trialID, dataMode=dataMode)
-    plosses, ulosses, grads = model.train(nItr=nItr)
-    #plosses, ulosses = model.multitrain(nItr=nItr)
+    plosses, ulosses, grads = model.train(nItr=nItr, ind=index)
     # ----
     
     # Plot ----
