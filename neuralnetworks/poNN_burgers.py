@@ -253,7 +253,9 @@ class ParamNN:
             testP = []
             testGrads = []
             
+            pdb.set_trace()
             for ind in batchRandInd:
+                
                 #pdb.set_trace()
                 feed_dict={self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], self.outobs:self.testU[ind,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis]} 
           
@@ -266,7 +268,7 @@ class ParamNN:
                 testGrads = np.append(testGrads, np.mean(testGrad))
                 cnt += 1
                 
-                if itr == plotPeriod and np.round(self.testNU[ind],3) in plotnus:
+                if itr % plotPeriod == 0 and np.round(self.testNU[ind],3) in plotnus:
                     exactnu = self.testNU[ind]
                     prednu = testPredParam
                         
@@ -299,7 +301,7 @@ class ParamNN:
         
         # parameters ----
         printPeriod = 3
-        nTrain = 235
+        nTrain = 65
         batchCnt = 0
         batchRandInd = np.random.permutation(nTrain)
         # ※手動
@@ -313,8 +315,8 @@ class ParamNN:
             sInd = self.nBatch * batchCnt
             eInd = sInd + self.nBatch
             index = batchRandInd[sInd:eInd]
-            
-            feed_dict = {self.y:self.testNU[index,np.newaxis], self.inobs:self.testU[index,np.newaxis], self.outobs:self.testU[index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis]}
+            pdb.set_trace() 
+            feed_dict = {self.y:self.testNU[index], self.inobs:self.testU[index], self.outobs:self.testU[index,:,:,0], self.indx:self.idx[:,np.newaxis]}
              
             testPredParam, testPredU, testpLoss, testuLoss, testGrad =\
             self.sess.run([self.predparam, self.predu, self.loss_nu, self.loss, self.gradnu], feed_dict)
@@ -371,7 +373,7 @@ if __name__ == "__main__":
     parser.add_argument('--dataMode', required=True, choices=['large', 'middle', 'small'])
     # trial ID
     parser.add_argument('--trialID', type=int, default=0)    
-    
+     
     # 引数展開
     args = parser.parse_args()
     
@@ -394,8 +396,8 @@ if __name__ == "__main__":
     
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, nBatch=nBatch, trialID=trialID, dataMode=dataMode)
-    #plosses, ulosses, grads = model.train(nItr=nItr)
-    plosses, ulosses = model.multitrain(nItr=nItr)
+    plosses, ulosses, grads = model.train(nItr=nItr)
+    #plosses, ulosses = model.multitrain(nItr=nItr)
     # ----
     
     # Plot ----

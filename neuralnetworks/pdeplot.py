@@ -62,7 +62,7 @@ class Plot:
 
           plt.plot(data[0], linewidth=2, label=labels[0])
          
-          plt.title('Loss: %f' % (data[0][-1]))
+          plt.title('Loss: %.16f' % (data[0][-1]))
 
           plt.xlabel('iteration')
           plt.ylabel('# of data')
@@ -240,7 +240,7 @@ class Plot:
                       axes[row].set_title('%s %.3f' % (titlelabel, np.float(label.split('_')[row])))
                   elif row == 1:
                       titlelabel = ['predict nu=', 'cyclecloss', 'grad']
-                      axes[row].set_title('%s %.3f %s %.2f %s %.10f' % (titlelabel[0], np.float(label.split('_')[row][1:-1]), titlelabel[1], np.float(label2.split('_')[0][1:-1]), titlelabel[2], np.float(label2.split('_')[1])))
+                      axes[row].set_title('%s %.3f %s %.2f %s %.16f' % (titlelabel[0], np.float(label.split('_')[row][1:-1]), titlelabel[1], np.float(label2.split('_')[0][1:-1]), titlelabel[2], np.float(label2.split('_')[1])))
 
               else:
                   if row == 0:
@@ -248,7 +248,7 @@ class Plot:
                   elif row == 1:
                       titlelabel = 'predict nu='
                   #pdb.set_trace()
-                  axes[row].set_title('%s %5f' % (titlelabel, np.float(label.split('_')[row])))
+                  axes[row].set_title('%s %5f' % (titlelabel, np.float(label.split('_')[row][1:-1])))
             
               divider1 = make_axes_locatable(axes[row])
               cax1 = divider1.append_axes("right", size="2%", pad=0.1)
