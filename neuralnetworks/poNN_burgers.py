@@ -97,12 +97,28 @@ class ParamNN:
         self.loss_nu = tf.reduce_mean(tf.square(tf.cast(self.y, tf.float64) - self.predparam)) 
         # ----
         
-        #pdb.set_trace()
         # loss u ----   
-        self.loss = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(tf.square(self.outobs - space_predu),2),1))
+        self.loss = tf.reduce_mean(tf.square(self.outobs - space_predu))
+        #self.loss = tf.reduce_mean(tf.reduce_mean(tf.square(self.outobs - space_predu),2),1)
+        
+        #pdb.set_trace()
         # ----
         # gradient ----
-        self.gradnu = tf.gradients(self.loss_nu, self.inobs)
+        self.alpha = tf.compat.v1.placeholder(tf.float32, shape=[1])
+        #self.gradnu = tf.gradients(self.predparam, self.inobs)[0]
+        self.gradnu = tf.gradients(self.loss, self.predparam)[0]
+        #self.gradnu = tf.gradients(self.loss_nu, self.inobs)[0]
+        self.grads = tf.Variable([tf.reduce_mean(self.gradnu)])
+        #self.update_gradnu = tf.compat.v1.assign(self.grads, -self.alpha * self.grads)
+        #config = tf.compat.v1.ConfigProto(gpu_options=tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.1,allow_growth=True)) 
+        #self.sess = tf.compat.v1.Session(config=config)
+
+        #pdb.set_trace()
+        #global_vars = tf.global_variables()
+        #is_not_init = self.sess.run([tf.is_variable_initialized(var) for var in global_vars])
+        #not_init = [v for (v,f) in zip(global_vars, is_not_init) if not f]
+        #self.sess.run(tf.compat.v1.variables_initializer([global_vars[-1]]))
+        #self.sess.run(tf.compat.v1.global_variables_initializer())
         # ----
 
     # ----
@@ -181,8 +197,6 @@ class ParamNN:
             b1 = self.bias_variable('b1', [nHidden1], trainable=trainable)
             conv1 = self.conv2d(x, w1, b1, strides=1)
         
-            conv1 = tf.nn.dropout(conv1, rate=0.4)
-        
             # 2nd conv layer
             w2 = self.weight_variable('w2', [3,3,nHidden1,nHidden2], trainable=trainable)
             b2 = self.bias_variable('b2', [nHidden2], trainable=trainable)
@@ -216,16 +230,16 @@ class ParamNN:
             w6 = self.weight_variable('w6', [nHidden5,self.yDim], trainable=trainable)
             b6 = self.bias_variable('b6', [self.yDim], trainable=trainable)
            
-            y = self.fc_relu(fc1,w6,b6)
+            y = self.fc(fc1,w6,b6)
             
             # 0.005 < y < 0.304
-            y = self.outputthes(y)
+            #y = self.outputthes(y)
             
             return y
     # ----
      
     # ----
-    def train(self, nItr=1000, ind):
+    def train(self, nItr=1000, ind=0, alpha=0.01):
         
         # Start training
         teUL = []
@@ -234,23 +248,38 @@ class ParamNN:
         
         for itr in range(nItr):
             
-            pdb.set_trace()
-            feed_dict={self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], self.outobs:self.testU[ind,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis]} 
-      
+            feed_dict={self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], self.outobs:self.testU[ind,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], self.alpha:np.array([alpha])} 
+            #pdb.set_trace()
+            #testPredParam, testPredU, testploss, testuloss, testgrad, updategrad =\
+            #self.sess.run([self.predparam, self.predu, self.loss_nu, self.loss, self.grads, self.update_gradnu], feed_dict)
+            
             testPredParam, testPredU, testploss, testuloss, testgrad =\
             self.sess.run([self.predparam, self.predu, self.loss_nu, self.loss, self.gradnu], feed_dict)
-            
+            #pdb.set_trace()
             print('----')
-            print('itr: %d, testULoss:%f, testPLoss:%f' % (itr, np.mean(testULoss), np.mean(testPLoss)))
-            print('grad {:.16f}'.format(np.mean(testGrads)))
-        
+            print(self.testNU[ind])
+            print(testPredParam)
+            print('itr: %d, testULoss:%f, testPLoss:%f' % (itr, testuloss, testploss))
+            print('grad {:.16f}'.format(np.mean(testgrad)))
+            #print(testgrad)
+            #print(updategrad)
+            #print(self.testNU[ind])
+            #print(testPredParam)
+
+            #print('update grad {:.16f}'.format(np.mean(updategrad[0])))
+            #pdb.set_trace()
             tePL = np.append(tePL, testploss)
             teUL = np.append(teUL, testuloss)
-            teG = np.append(teG, testgrad)
+            teG = np.append(teG, np.mean(testgrad))
+            #teG = np.append(teG, updategrad)
              
+            #pdb.set_trace()
             exactnu = self.testNU[ind]
             prednu = testPredParam
-            self.myPlot.CycleExactPredParam([self.alltestX, self.testT, prednu, exactnu, self.idx, testULoss[-1], np.mean(testGrad)], itr=itr, savename='tepredparamode')
+            #self.myPlot.CycleExactPredParam([self.alltestX, self.testT, prednu, exactnu, self.idx, testuloss, np.mean(updategrad[0])], itr=itr, savename='tepredparamode')
+             
+            #pdb.set_trace()
+            self.myPlot.CycleExactPredParam([self.alltestX, self.testT, prednu, exactnu, self.idx, testuloss, np.mean(testgrad), testploss], itr=itr, savename='tepredparamode')
             
     
         paramloss = [tePL]
@@ -273,6 +302,8 @@ if __name__ == "__main__":
     parser.add_argument('--dataMode', required=True, choices=['large', 'middle', 'small'])
     # index test 2=0.01
     parser.add_argument('--index', required=True, type=int, default=2)
+    # alpha * grad
+    parser.add_argument('--alpha', required=True, type=float, default=0.01)
     # trial ID
     parser.add_argument('--trialID', type=int, default=0)    
      
@@ -283,6 +314,7 @@ if __name__ == "__main__":
     nBatch = args.nBatch
     dataMode = args.dataMode
     index = args.index
+    alpha = args.alpha
     trialID = args.trialID
     # ----
     
@@ -299,7 +331,7 @@ if __name__ == "__main__":
     
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, nBatch=nBatch, trialID=trialID, dataMode=dataMode)
-    plosses, ulosses, grads = model.train(nItr=nItr, ind=index)
+    plosses, ulosses, grads = model.train(nItr=nItr, ind=index, alpha=alpha)
     # ----
     
     # Plot ----

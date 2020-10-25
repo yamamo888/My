@@ -203,6 +203,7 @@ class Plot:
           idx = params[4]
           cycleloss = params[5]
           grads = params[6]
+          lambdaloss = params[7]
           
           predus = self.paramToU2([x,t,prednus,idx], xNum=xNum, tNum=tNum)
           exactus = self.paramToU2([x,t,exactnus,idx], xNum=xNum, tNum=tNum)
@@ -210,7 +211,7 @@ class Plot:
           for predu,exactu,prednu,exactnu in zip(predus,exactus,prednus,exactnus):
               # plot u
               #pdb.set_trace()
-              self.Uimg(x[idx] ,t, exactu, predu, label=f'{exactnu}_{prednu}_{itr}', label2=f'{cycleloss}_{grads}', savename=savename, isCycle=True)
+              self.Uimg(x[idx] ,t, exactu, predu, label=f'{exactnu}_{prednu}_{itr}', label2=f'{cycleloss}_{grads}_{lambdaloss}', savename=savename, isCycle=True)
       # ----
       
       # u(t,x) ----
@@ -236,11 +237,14 @@ class Plot:
               
               if isCycle:
                   if row == 0:
-                      titlelabel = 'exact nu='
-                      axes[row].set_title('%s %.3f' % (titlelabel, np.float(label.split('_')[row])))
+                      #pdb.set_trace()
+                      titlelabel = ['exact nu=', 'lloss']
+                      axes[row].set_title('%s %.3f %s %.10f' % (titlelabel[0], np.float(label.split('_')[row]), titlelabel[1], np.float(label2.split('_')[2])))
                   elif row == 1:
-                      titlelabel = ['predict nu=', 'cyclecloss', 'grad']
-                      axes[row].set_title('%s %.3f %s %.2f %s %.16f' % (titlelabel[0], np.float(label.split('_')[row][1:-1]), titlelabel[1], np.float(label2.split('_')[0][1:-1]), titlelabel[2], np.float(label2.split('_')[1])))
+                      titlelabel = ['predict nu=', 'closs', 'grad']
+                      #axes[row].set_title('%s %.3f %s %.2f %s %.12f' % (titlelabel[0], np.float(label.split('_')[row][1:-1]), titlelabel[1], np.float(label2.split('_')[0][1:-1]), titlelabel[2], np.float(label2.split('_')[1])))
+                      #pdb.set_trace()
+                      axes[row].set_title('%s %.5f %s %.10f' % (titlelabel[0], np.float(label.split('_')[row][1:-1]), titlelabel[1], np.float(label2.split('_')[0])))
 
               else:
                   if row == 0:
