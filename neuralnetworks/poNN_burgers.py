@@ -99,27 +99,17 @@ class ParamNN:
         
         # loss u ----   
         self.loss = tf.reduce_mean(tf.square(self.outobs - space_predu))
-        #self.loss = tf.reduce_mean(tf.reduce_mean(tf.square(self.outobs - space_predu),2),1)
-        
-        #pdb.set_trace()
         # ----
         # gradient ----
-        self.alpha = tf.compat.v1.placeholder(tf.float32, shape=[1])
+        self.alpha = tf.compat.v1.placeholder(tf.float64, shape=[1])
         #self.gradnu = tf.gradients(self.predparam, self.inobs)[0]
         self.gradnu = tf.gradients(self.loss, self.predparam)[0]
+        self.gradnu = self.gradnu * self.alpha
         #self.gradnu = tf.gradients(self.loss_nu, self.inobs)[0]
-        self.grads = tf.Variable([tf.reduce_mean(self.gradnu)])
-        #self.update_gradnu = tf.compat.v1.assign(self.grads, -self.alpha * self.grads)
-        #config = tf.compat.v1.ConfigProto(gpu_options=tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.1,allow_growth=True)) 
-        #self.sess = tf.compat.v1.Session(config=config)
-
-        #pdb.set_trace()
-        #global_vars = tf.global_variables()
-        #is_not_init = self.sess.run([tf.is_variable_initialized(var) for var in global_vars])
-        #not_init = [v for (v,f) in zip(global_vars, is_not_init) if not f]
-        #self.sess.run(tf.compat.v1.variables_initializer([global_vars[-1]]))
-        #self.sess.run(tf.compat.v1.global_variables_initializer())
         # ----
+
+        self.opt = tf.compat.v1.train.AdamOptimizer(1e-3).minimize(self.loss)
+
 
     # ----
     def weight_variable(self, name, shape, trainable=True):
@@ -250,12 +240,13 @@ class ParamNN:
             
             feed_dict={self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], self.outobs:self.testU[ind,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], self.alpha:np.array([alpha])} 
             #pdb.set_trace()
-            #testPredParam, testPredU, testploss, testuloss, testgrad, updategrad =\
-            #self.sess.run([self.predparam, self.predu, self.loss_nu, self.loss, self.grads, self.update_gradnu], feed_dict)
             
-            testPredParam, testPredU, testploss, testuloss, testgrad =\
-            self.sess.run([self.predparam, self.predu, self.loss_nu, self.loss, self.gradnu], feed_dict)
-            #pdb.set_trace()
+            #testPredParam, testPredU, testploss, testuloss, testgrad =\
+            #self.sess.run([self.predparam, self.predu, self.loss_nu, self.loss, self.gradnu], feed_dict)
+            
+            _, testPredParam, testPredU, testploss, testuloss, testgrad =\
+            self.sess.run([self.opt, self.predparam, self.predu, self.loss_nu, self.loss, self.gradnu], feed_dict)
+            
             print('----')
             print(self.testNU[ind])
             print(testPredParam)
@@ -295,15 +286,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # iteration of training
-    parser.add_argument('--nItr', type=int, default=100)
+    parser.add_argument('--nItr', type=int, default=5)
     # Num of mini-batch
     parser.add_argument('--nBatch', type=int, default=100)
     # datamode (pkl)
     parser.add_argument('--dataMode', required=True, choices=['large', 'middle', 'small'])
     # index test 2=0.01
-    parser.add_argument('--index', required=True, type=int, default=2)
+    parser.add_argument('--index', type=int, default=2)
     # alpha * grad
-    parser.add_argument('--alpha', required=True, type=float, default=0.01)
+    parser.add_argument('--alpha', type=float, default=0.000001)
     # trial ID
     parser.add_argument('--trialID', type=int, default=0)    
      
