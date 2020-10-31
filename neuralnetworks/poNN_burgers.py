@@ -81,7 +81,7 @@ class ParamNN:
         self.predparam = tf.cast(self.predparam, tf.float64)
         
         # PDE ----
-        self.placeparam = tf.compat.v1.placeholder(tf.float64,shape=[None, self.yDim])
+        self.placeparam = tf.compat.v1.placeholder(tf.float64, shape=[None, self.yDim])
         # output: u
         self.predu = pdeburgers.burgers(self.placeparam)
         # ----
@@ -96,7 +96,7 @@ class ParamNN:
         # ----
 
         # loss param ----
-        self.loss_nu = tf.reduce_mean(tf.square(tf.cast(self.y, tf.float64) - self.predparam)) 
+        self.loss_nu = tf.reduce_mean(tf.square(tf.cast(self.y, tf.float64) - self.placeparam)) 
         # ----
         
         # loss u ----   
@@ -106,13 +106,9 @@ class ParamNN:
         # gradient ----
         self.alpha = tf.compat.v1.placeholder(tf.float64, shape=[1])
         self.gradnu = tf.gradients(self.loss, self.placeparam)[0]
-        #pdb.set_trace()
+        
         self.nextparam = self.placeparam - (self.gradnu * self.alpha)
-        self.updateparam = tf.compat.v1.assign(tf.Variable(self.placeparam[0]), self.nextparam[0])
         # ----
-
-        #self.opt = tf.compat.v1.train.AdamOptimizer(1e-3).minimize(self.loss)
-
 
     # ----
     def weight_variable(self, name, shape, trainable=True):
@@ -146,32 +142,6 @@ class ParamNN:
         return tf.nn.max_pool(x, ksize=[1, k, k, 1], strides=[1, k, k, 1],padding='SAME')
     # ----
     
-    # ----
-    # 0.01 < x < 5.0 (for moving burgers)
-    def outputthes(self, x):
-        
-        overlambda = tf.constant([0.304])
-        overid = tf.where(x>overlambda) # ※　勾配死んでる
-        overnum = tf.shape(overid)[0]
-        overths = tf.tile(overlambda, [overnum])
-        overupdate = tf.tensor_scatter_nd_update(x, overid, overths)
-        
-        updatex = self.underupdate(overupdate)
-        
-        return updatex
-    # ----
-    # ----
-    def underupdate(self, xover):
-        
-        underlambda = tf.constant([0.005])
-        underid = tf.where(xover<underlambda)
-        undernum = tf.shape(underid)[0]
-        underths = tf.tile(underlambda, [undernum])
-        underupdate = tf.tensor_scatter_nd_update(xover, underid, underths)
-        
-        return underupdate
-    # ----
-
     # ----
     def lambdaNN(self, x, reuse=False, trainable=False):
         
@@ -233,73 +203,37 @@ class ParamNN:
      
     # ----
     def train(self, nItr=1000, ind=0, alpha=0.01):
-        
-        # Start training
-        teUL = []
-        tePL = []
-        teG = []
-        
+       
         for itr in range(nItr):
             
             if itr == 0:
-                # ※ placeparam 適切な値
-                feed_dict={self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], self.outobs:self.testU[ind,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], self.alpha:np.array([alpha]), self.placeparam:np.array([alpha])[:,None]} 
                 
-                testPredParam ,testgrad =\
-                self.sess.run([self.predparam, self.gradnu_], feed_dict)
-
-                print('exact nu %f' % (self.testNU[ind]))
-                print('pred nu %f' % (testPredParam))
-                print('grad %f' %(testgrad))
+                feed_dict={self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], 
+                           self.outobs:self.testU[ind,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
+                           self.placeparam:np.array([0.05])[:,None], self.alpha:np.array([alpha])}
+          
+                predParam = self.sess.run(self.predparam, feed_dict)
                 
+                preParam = [predParam[0][0]]
+                          
             else:
-
-                feef_dict = {self.outobs:self.testU[ind,np.newaxis,:,:,0], self.alpha:np.array([alpha]), self.placeparam:testPredParam}
-                
-                #pdb.set_trace()
-                testloss, updateParam, testgrad =\
-                self.sess.run([self.loss, self.updateparam, self.gradnu], feed_dict)
-                print('----') 
-                print('grad %f' % (testgrad))
-                print('exact nu %f' % (self.testNU[ind]))
-                print('pred nu %f' % (testPredParam))
-                print('update nu %f' % (updateParam))
-                print('loss %f' % (testloss))
-                
-                #pdb.set_trace()
-            #_, testPredParam, testPredU, testploss, testuloss, testgrad =\
-            #self.sess.run([self.opt, self.predparam, self.predu, self.loss_nu, self.loss, self.gradnu], feed_dict)
-            
-            #print('----')
-            #print(testPredParam)
-            #print(updateParam)
-            #print('itr: %d, testULoss:%f, testPLoss:%f' % (itr, testuloss, testploss))
-            #print('grad {:.16f}'.format(np.mean(testgrad)))
-            #print(updategrad)
-            #print(self.testNU[ind])
-            #print(testPredParam)
-
-            #print('update grad {:.16f}'.format(np.mean(updategrad[0])))
-            #pdb.set_trace()
-            #tePL = np.append(tePL, testploss)
-            #teUL = np.append(teUL, testuloss)
-            #teG = np.append(teG, np.mean(testgrad))
-            #teG = np.append(teG, updategrad)
-             
-            #pdb.set_trace()
-            #exactnu = self.testNU[ind]
-            #prednu = testPredParam
-            #self.myPlot.CycleExactPredParam([self.alltestX, self.testT, prednu, exactnu, self.idx, testuloss, np.mean(updategrad[0])], itr=itr, savename='tepredparamode')
-             
-            #pdb.set_trace()
-            #self.myPlot.CycleExactPredParam([self.alltestX, self.testT, prednu, exactnu, self.idx, testuloss, np.mean(testgrad), testploss], itr=itr, savename='tepredparamode')
-            
-    
-        paramloss = [tePL]
-        ulosses = [teUL]
-        grads = [teG]
         
-        return paramloss, ulosses, grads
+                pp = np.array([preParam[itr-1]])[:,None]
+                
+                feed_dict={self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], 
+                           self.outobs:self.testU[ind,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
+                           self.placeparam:pp, self.alpha:np.array([alpha])}
+                
+                grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
+                
+                preParam = np.append(preParam, nextParam)
+                
+                print('----')
+                print('exact lambda: %.8f predlambda: %.8f' % (self.testNU[ind], pp))
+                print('lambda mse: %.10f' % (lloss))
+                print('v mse: %.10f' % (vloss))
+                print('gradient (closs/param): %f' % (grad))
+        
     # ----
     
 if __name__ == "__main__":
@@ -344,15 +278,15 @@ if __name__ == "__main__":
     
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, nBatch=nBatch, trialID=trialID, dataMode=dataMode)
-    plosses, ulosses, grads = model.train(nItr=nItr, ind=index, alpha=alpha)
+    #plosses, ulosses, grads = model.train(nItr=nItr, ind=index, alpha=alpha)
+    model.train(nItr=nItr, ind=index, alpha=alpha)
+    
     # ----
     
     # Plot ----
-    model.myPlot.Loss1(plosses, labels=['test'], savename='poNN_param')
-    model.myPlot.Loss1(ulosses, labels=['test'], savename='poNN_u')
-    model.myPlot.Loss1(grads, labels=['test'], savename='poNN_grad')
+    #model.myPlot.Loss1(plosses, labels=['test'], savename='poNN_param')
+    #model.myPlot.Loss1(ulosses, labels=['test'], savename='poNN_u')
+    #model.myPlot.Loss1(grads, labels=['test'], savename='poNN_grad')
     
     #model.myPlot.plotExactPredParam(teparams, xNum=teparams[0].shape[0], savename='lasttepredparamode')
     # ----
- 
-    
