@@ -14,8 +14,8 @@ import pdb
 
 import matplotlib.pylab as plt
 
-import pdedata
-import pdeplot
+import burgersdata
+import burgersplot
 
 
 class ParamNN:
@@ -39,10 +39,10 @@ class ParamNN:
         # ----
         
         # for plot
-        self.myPlot = pdeplot.Plot(dataMode=dataMode, trialID=trialID)
+        self.myPlot = burgersplot.Plot(dataMode=dataMode, trialID=trialID)
     
         # Dataset ----
-        self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
+        self.myData = burgersdata.Data(pdeMode='burgers', dataMode=dataMode)
         
         # [100,1] [xDim,1] [100,1] [data,xDim,100,1]
         self.alltestX, self.testX, self.testT, self.testU, self.testNU, self.idx = self.myData.traintest()

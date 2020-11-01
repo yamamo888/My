@@ -24,7 +24,7 @@ import plot
 np.random.seed(1234)
 
 
-class pdeData:
+class Data:
     def __init__(self, pdeMode='test', dataMode='test'):
         '''
         datamode: small(256/100) or middle(256/50) or large(256/10)
@@ -32,51 +32,12 @@ class pdeData:
         '''
         
         
-        self.pdeMode = 'burgers'
-        self.modelPath = 'model'
+        self.pdeMode = pdeMode
         self.dataMode = dataMode
     
-    # ---- 
-    def burgers(self, nu=0.01):
-        '''
-        # viscosity (parameter)
-        nu = 0.01 (default)
-        '''
-        
-        # datapoint
-        # Num.of time
-        tNum = 100 
-        # range of time
-        tMin = 0.0
-        tMax = 1.0
-        # time
-        t = np.linspace(tMin, tMax, tNum) # [100,]
-        
-        # Num.of space
-        xNum = 256
-        # range of space
-        xMin = 0.0 # xMin > 0
-        xMax = 2.0 * np.pi
-        # space
-        x = np.linspace(xMin, xMax, xNum) # [256,]
-        # observation
-        obsu = np.zeros([xNum, tNum])
-
-        for j in range (0, tNum):
-            for i in range (0, xNum):
-                a = ( x[i] - 4.0 * t[j] )
-                b = ( x[i] - 4.0 * t[j] - 2.0 * np.pi )
-                c = 4.0 * nu * ( t[j] + 1.0 )
-                #pdb.set_trace()
-                phi = np.exp ( - a * a / c ) + np.exp ( - b * b / c )
-                dphi = - 2.0 * a * np.exp ( - a * a / c ) / c \
-                       - 2.0 * b * np.exp ( - b * b / c ) / c
-                
-                obsu[i,j] = 4.0 - 2.0 * nu * dphi / phi
-        #pdb.set_trace()
-        return x, t, obsu
-    # ---- 
-    
+        self.modelPath = 'model'
+      
+  
     # ---- 
     def burgers2(self, NU=0.01):
         
@@ -285,23 +246,12 @@ class pdeData:
         
         return batchX, batchT, batchU, batchNU
     # ----
-    
-    # ----
-    def Batch(self):
-        
-        batchX = self.trainX
-        batchT = self.trainT
-        batchU = self.trainU
-        batchNU = self.trainNU
-        
-        return batchX, batchT, batchU, batchNU
-    # ----
-        
+   
    
 #name = 'small'
 #name = 'middle'
 #name = 'large'
-#myData = pdeData(dataMode='small')
+#myData = Data(dataMode='small')
 #[3]
 #myData.maketraintest(name=name)
 

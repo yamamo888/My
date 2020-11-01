@@ -19,7 +19,7 @@ warnings.simplefilter('ignore')
 
 import pdb
 
-import pdedata
+import burgersdata
 
 
 class Plot:
@@ -34,7 +34,7 @@ class Plot:
           self.dataMode = dataMode
           self.trialID = trialID
 
-          self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
+          self.myData = burgersdata.Data(pdeMode='burgers', dataMode=dataMode)
 
       # Plot loss (two data)----
       def Loss(self, data, labels, savename='loss'):
