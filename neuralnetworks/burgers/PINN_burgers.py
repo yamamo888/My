@@ -57,7 +57,7 @@ class PhysicsInformedNN:
         
         self.optimizer = tf.contrib.opt.ScipyOptimizerInterface(self.loss, 
                                                                 method = 'L-BFGS-B', 
-                                                                options = {'maxiter': 50000, # 学習回数？
+                                                                options = {'maxiter': 100000, # 学習回数？
                                                                            'maxfun': 50000,
                                                                            'maxcor': 50,
                                                                            'maxls': 50,
@@ -188,12 +188,14 @@ if __name__ == "__main__":
     # Dataset ----
     myData = burgersdata.Data(pdeMode='burgers', dataMode=dataMode)
     allx, partx, allt, testU, testNU, idx = myData.traintest()
-    
+    #pdb.set_trace()
     # select nu & u
     nu = testNU[index]
     exactU = testU[index]
     
     X, T = np.meshgrid(partx,allt) #[100,256]
+    #X, T = np.meshgrid(allx,allt) #[100,256]
+    
     X_star = np.hstack((X.flatten()[:,None], T.flatten()[:,None])) # [xDim*t,2]
     u_star = exactU.flatten()[:,None] # [xDim*t,1]
 
