@@ -57,7 +57,7 @@ class PhysicsInformedNN:
         
         self.optimizer = tf.contrib.opt.ScipyOptimizerInterface(self.loss, 
                                                                 method = 'L-BFGS-B', 
-                                                                options = {'maxiter': 100000, # 学習回数？
+                                                                options = {'maxiter': 100, # 学習回数？
                                                                            'maxfun': 50000,
                                                                            'maxcor': 50,
                                                                            'maxls': 50,
@@ -131,22 +131,29 @@ class PhysicsInformedNN:
             
         tf_dict = {self.x_tf:self.x[:,None], self.t_tf:self.t[:,None], self.u_tf:self.u}
         
+        losses = []
         for it in range(nItr):
             
-            self.sess.run(self.train_op_Adam, tf_dict)
+            #self.sess.run(self.train_op_Adam, tf_dict)
             
+            self.optimizer.minimize(self.sess, feed_dict = tf_dict)
+                
+            loss_value = self.sess.run(self.loss, tf_dict)
+            lambda_1_value = self.sess.run(self.lambda1)
+                
+            print('It: %d, Loss: %.3e, Lambda_1: %.6f' % (it, loss_value, np.exp(lambda_1_value)))
+                              
             # Print
-            if it % 10 == 0:
-                loss_value = self.sess.run(self.loss, tf_dict)
-                lambda_1_value = self.sess.run(self.lambda1)
+            #if it % 100 == 0:
                 
-                print('It: %d, Loss: %.3e, Lambda_1: %.6f' % (it, loss_value, lambda_1_value))
-                
+                #losses = np.append(losses, loss_value)
         
-        self.optimizer.minimize(self.sess,
-                                feed_dict = tf_dict,
-                                fetches = [self.loss, self.lambda1],
-                                loss_callback = self.callback)
+        
+        pdb.set_trace()
+        #self.optimizer.minimize(self.sess,
+                                #feed_dict = tf_dict,
+                                #fetches = [self.loss, self.lambda1],
+                                #loss_callback = self.callback)
     # ----
         
     def predict(self, X_star):
@@ -183,7 +190,8 @@ if __name__ == "__main__":
     # ----
 
     
-    layers = [2, 20, 20, 20, 20, 20, 20, 20, 20, 1]
+    layers = [2, 40, 40, 40, 40, 40, 40, 40, 40, 1]
+    #layers = [2, 20, 20, 20, 20, 20, 20, 20, 20, 1]
     
     # Dataset ----
     myData = burgersdata.Data(pdeMode='burgers', dataMode=dataMode)
