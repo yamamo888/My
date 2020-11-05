@@ -14,13 +14,13 @@ import pdb
 
 import matplotlib.pylab as plt
 
-import burgersdata
+import pdedata
 import pdeburgers
-import burgersplot
+import pdeplot
 
 
 class ParamNN:
-    def __init__(self, rateTrain=0.0, lr=1e-3, nBatch=100, trialID=0, dataMode='test'):
+    def __init__(self, rateTrain=0.0, lr=1e-3, trialID=0, dataMode='test'):
         
       
         # parameter ----
@@ -33,17 +33,17 @@ class ParamNN:
         
         #self.xDim = 256 
         self.tDim = 100
-        self.nBatch = nBatch
+        
         self.trialID = trialID
         self.yDim = 1
         # ----
         
         # for Plot ----
-        self.myPlot = burgersplot.Plot(dataMode=dataMode, trialID=trialID)
+        self.myPlot = pdeplot.Plot(dataMode=dataMode, trialID=trialID)
         # ----
 
         # Dataset ----
-        self.myData = burgersdata.Data(pdeMode='burgers', dataMode=dataMode)
+        self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
         # [xDim,1], [100,1], [data, xDim, 100], [data,] 
         self.alltestX, self.testX, self.testT, self.testU, self.testNU, self.idx = self.myData.traintest()
         # ----
@@ -242,15 +242,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # iteration of training
-    parser.add_argument('--nItr', type=int, default=5)
-    # Num of mini-batch
-    parser.add_argument('--nBatch', type=int, default=100)
+    parser.add_argument('--nItr', type=int, default=100)
     # datamode (pkl)
     parser.add_argument('--dataMode', required=True, choices=['large', 'middle', 'small'])
     # index test 2=0.01
     parser.add_argument('--index', type=int, default=2)
     # alpha * grad
-    parser.add_argument('--alpha', type=float, default=0.000001)
+    parser.add_argument('--alpha', type=float, default=0.0001)
     # trial ID
     parser.add_argument('--trialID', type=int, default=0)    
      
@@ -258,7 +256,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     nItr = args.nItr
-    nBatch = args.nBatch
     dataMode = args.dataMode
     index = args.index
     alpha = args.alpha
@@ -277,16 +274,8 @@ if __name__ == "__main__":
     # ----
     
     # Training ----
-    model = ParamNN(rateTrain=rateTrain, lr=lr, nBatch=nBatch, trialID=trialID, dataMode=dataMode)
+    model = ParamNN(rateTrain=rateTrain, lr=lr, trialID=trialID, dataMode=dataMode)
     #plosses, ulosses, grads = model.train(nItr=nItr, ind=index, alpha=alpha)
     model.train(nItr=nItr, ind=index, alpha=alpha)
     
-    # ----
-    
-    # Plot ----
-    #model.myPlot.Loss1(plosses, labels=['test'], savename='poNN_param')
-    #model.myPlot.Loss1(ulosses, labels=['test'], savename='poNN_u')
-    #model.myPlot.Loss1(grads, labels=['test'], savename='poNN_grad')
-    
-    #model.myPlot.plotExactPredParam(teparams, xNum=teparams[0].shape[0], savename='lasttepredparamode')
     # ----
