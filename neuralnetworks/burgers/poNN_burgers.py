@@ -20,7 +20,7 @@ import pdeplot
 
 
 class ParamNN:
-    def __init__(self, rateTrain=0.0, lr=1e-3, trialID=0, dataMode='test'):
+    def __init__(self, rateTrain=0.0, lr=1e-3, index=0, dataMode='test', isExactModel=False):
         
       
         # parameter ----
@@ -34,12 +34,12 @@ class ParamNN:
         #self.xDim = 256 
         self.tDim = 100
         
-        self.trialID = trialID
+        self.index = index
         self.yDim = 1
         # ----
         
         # for Plot ----
-        self.myPlot = pdeplot.Plot(dataMode=dataMode, trialID=trialID)
+        self.myPlot = pdeplot.Plot(dataMode=dataMode, trialID=index)
         # ----
 
         # Dataset ----
@@ -59,7 +59,6 @@ class ParamNN:
         # Restore neural network ----
         # pred nu [ndata,]
         self.predparam = self.lambdaNN(self.inobs)
-        #self.predparam = tf.expand_dims(tf.constant([0.01]),1)
         # ----
         
         # optimizer ----
@@ -67,14 +66,22 @@ class ParamNN:
         self.saver = tf.compat.v1.train.Saver()
         self.sess = tf.compat.v1.Session(config=config)
         # ----
-        
+        pdb.set_trace()
         # Restore model ----
-        ckptpath = os.path.join('model', f'{dataMode}burgers')
-        ckpt = tf.train.get_checkpoint_state(ckptpath)
-        
-        lastmodel = ckpt.model_checkpoint_path
-        self.saver.restore(self.sess, lastmodel)
-        print('>>> Restore model')
+        if isExactModel:
+            ckptpath = os.path.join('model', f'{dataMode}burgers_exact{self.index}')
+            ckpt = tf.train.get_checkpoint_state(ckptpath)
+            
+            lastmodel = ckpt.model_checkpoint_path
+            self.saver.restore(self.sess, lastmodel)
+            print('>>> Restore model')
+        else: 
+            ckptpath = os.path.join('model', f'{dataMode}burgers')
+            ckpt = tf.train.get_checkpoint_state(ckptpath)
+            
+            lastmodel = ckpt.model_checkpoint_path
+            self.saver.restore(self.sess, lastmodel)
+            print('>>> Restore model')
         # ----
          
         # float32 -> float64
@@ -202,14 +209,14 @@ class ParamNN:
     # ----
      
     # ----
-    def train(self, nItr=1000, ind=0, alpha=0.01):
+    def train(self, nItr=1000, alpha=0.01):
        
         for itr in range(nItr):
             
             if itr == 0:
                 
-                feed_dict={self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], 
-                           self.outobs:self.testU[ind,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
+                feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
+                           self.outobs:self.testU[self.index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
                            self.placeparam:np.array([0.05])[:,None], self.alpha:np.array([alpha])}
           
                 predParam = self.sess.run(self.predparam, feed_dict)
@@ -220,8 +227,8 @@ class ParamNN:
         
                 pp = np.array([preParam[itr-1]])[:,None]
                 
-                feed_dict={self.y:self.testNU[ind,np.newaxis], self.inobs:self.testU[ind,np.newaxis], 
-                           self.outobs:self.testU[ind,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
+                feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
+                           self.outobs:self.testU[self.index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
                            self.placeparam:pp, self.alpha:np.array([alpha])}
                 
                 grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
@@ -229,7 +236,7 @@ class ParamNN:
                 preParam = np.append(preParam, nextParam)
                 
                 print('----')
-                print('exact lambda: %.8f predlambda: %.8f' % (self.testNU[ind], pp))
+                print('exact lambda: %.8f predlambda: %.8f' % (self.testNU[self.index], pp))
                 print('lambda mse: %.10f' % (lloss))
                 print('v mse: %.10f' % (vloss))
                 print('gradient (closs/param): %f' % (grad))
@@ -249,9 +256,8 @@ if __name__ == "__main__":
     parser.add_argument('--index', type=int, default=2)
     # alpha * grad
     parser.add_argument('--alpha', type=float, default=0.0001)
-    # trial ID
-    parser.add_argument('--trialID', type=int, default=0)    
-     
+    # select fine-tuned model exact(only test data) == flag or train data
+    parser.add_argument('--exactflag', action='store_true')
     # 引数展開
     args = parser.parse_args()
     
@@ -259,7 +265,7 @@ if __name__ == "__main__":
     dataMode = args.dataMode
     index = args.index
     alpha = args.alpha
-    trialID = args.trialID
+    isExactModel = args.exactflag
     # ----
     
     # path ----
@@ -274,8 +280,7 @@ if __name__ == "__main__":
     # ----
     
     # Training ----
-    model = ParamNN(rateTrain=rateTrain, lr=lr, trialID=trialID, dataMode=dataMode)
-    #plosses, ulosses, grads = model.train(nItr=nItr, ind=index, alpha=alpha)
-    model.train(nItr=nItr, ind=index, alpha=alpha)
-    
+    model = ParamNN(rateTrain=rateTrain, lr=lr, index=index,
+                    dataMode=dataMode, isExactModel=isExactModel)
+    model.train(nItr=nItr, alpha=alpha)
     # ----
