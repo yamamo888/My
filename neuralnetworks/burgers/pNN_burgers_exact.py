@@ -168,6 +168,7 @@ class ParamNN:
         
         # parameter ----
         printPeriod = 100
+        savemodelPeriod = 100
         # Start training
         trPL = []
         # ----
@@ -189,7 +190,11 @@ class ParamNN:
                 # param loss
                 trPL = np.append(trPL,lLoss)
                 
-                
+                if itr % savemodelPeriod == 0:
+                    # Save model
+                    self.saver.save(self.sess, os.path.join('model', f'{dataMode}burgers_exact{ind}', f'first_{dataMode}'), global_step=itr)
+
+
         return [trPL]
     # ----
    
@@ -200,7 +205,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # iteration of training
-    parser.add_argument('--nItr', type=int, default=100)
+    parser.add_argument('--nItr', type=int, default=301)
     # Num of mini-batch
     parser.add_argument('--nBatch', type=int, default=25)
     # datamode (pkl)
