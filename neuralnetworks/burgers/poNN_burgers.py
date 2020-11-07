@@ -37,11 +37,7 @@ class ParamNN:
         self.index = index
         self.yDim = 1
         # ----
-        
-        # for Plot ----
-        self.myPlot = pdeplot.Plot(dataMode=dataMode, trialID=index)
-        # ----
-
+    
         # Dataset ----
         self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
         # [xDim,1], [100,1], [data, xDim, 100], [data,] 
@@ -66,7 +62,7 @@ class ParamNN:
         self.saver = tf.compat.v1.train.Saver()
         self.sess = tf.compat.v1.Session(config=config)
         # ----
-        pdb.set_trace()
+        #pdb.set_trace()
         # Restore model ----
         if isExactModel:
             ckptpath = os.path.join('model', f'{dataMode}burgers_exact{self.index}')
@@ -209,8 +205,10 @@ class ParamNN:
     # ----
      
     # ----
-    def train(self, nItr=1000, alpha=0.01):
+    def train(self, nItr=1000, alpha=0.01, isRandomParam=False):
        
+        grads = []
+        llosses = []
         for itr in range(nItr):
             
             if itr == 0:
@@ -220,7 +218,11 @@ class ParamNN:
                            self.placeparam:np.array([0.05])[:,None], self.alpha:np.array([alpha])}
           
                 predParam = self.sess.run(self.predparam, feed_dict)
-                
+                pdb.set_trace()
+                if isRandomParam:
+                    randomarray = np.arange(0.005,3.05,0.0001)
+                    predParam = random.choice(randomarray)
+                    
                 preParam = [predParam[0][0]]
                           
             else:
@@ -234,12 +236,16 @@ class ParamNN:
                 grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
                 
                 preParam = np.append(preParam, nextParam)
+                grads = np.append(grads, grad)
+                llosses = np.append(llosses, lloss)
                 
                 print('----')
                 print('exact lambda: %.8f predlambda: %.8f' % (self.testNU[self.index], pp))
                 print('lambda mse: %.10f' % (lloss))
                 print('v mse: %.10f' % (vloss))
                 print('gradient (closs/param): %f' % (grad))
+        
+        return [llosses], [grads]
         
     # ----
     
@@ -258,6 +264,9 @@ if __name__ == "__main__":
     parser.add_argument('--alpha', type=float, default=0.0001)
     # select fine-tuned model exact(only test data) == flag or train data
     parser.add_argument('--exactflag', action='store_true')
+    # select random param == flag or not random param
+    parser.add_argument('--randomflag', action='store_true')
+    
     # 引数展開
     args = parser.parse_args()
     
@@ -266,6 +275,7 @@ if __name__ == "__main__":
     index = args.index
     alpha = args.alpha
     isExactModel = args.exactflag
+    isRandomParam = args.randomflag
     # ----
     
     # path ----
@@ -282,5 +292,11 @@ if __name__ == "__main__":
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, index=index,
                     dataMode=dataMode, isExactModel=isExactModel)
-    model.train(nItr=nItr, alpha=alpha)
+    llosses, grads = model.train(nItr=nItr, alpha=alpha, isRandomParam=isRandomParam)
+    # ----
+    
+    # Plot ----
+    myPlot = pdeplot.Plot(dataMode=dataMode, trialID=index)
+    myPlot.Loss1(llosses, labels=['test'], savename='poNN_testloss')
+    myPlot.Loss1(grads, labels=['test'], savename='poNN_testgrad')
     # ----
