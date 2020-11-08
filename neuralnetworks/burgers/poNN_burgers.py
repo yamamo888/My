@@ -70,14 +70,14 @@ class ParamNN:
             
             lastmodel = ckpt.model_checkpoint_path
             self.saver.restore(self.sess, lastmodel)
-            print('>>> Restore model')
+            print('>>> Restore test model')
         else: 
             ckptpath = os.path.join('model', f'{dataMode}burgers')
             ckpt = tf.train.get_checkpoint_state(ckptpath)
             
             lastmodel = ckpt.model_checkpoint_path
             self.saver.restore(self.sess, lastmodel)
-            print('>>> Restore model')
+            print('>>> Restore train model')
         # ----
          
         # float32 -> float64
@@ -218,10 +218,22 @@ class ParamNN:
                            self.placeparam:np.array([0.05])[:,None], self.alpha:np.array([alpha])}
           
                 predParam = self.sess.run(self.predparam, feed_dict)
-                pdb.set_trace()
+                #pdb.set_trace()
                 if isRandomParam:
-                    randomarray = np.arange(0.005,3.05,0.0001)
-                    predParam = random.choice(randomarray)
+                    # 0.01
+                    #randomarray = np.arange(0.005,0.009,0.0001)
+                    #randomarray = np.arange(0.01,0.1,0.0001)
+                    #randomarray = np.arange(0.11,0.3,0.0001)
+                    
+                    #randomarray = np.arange(0.005,0.014,0.0001)
+                    #randomarray = np.arange(0.015,0.095,0.0001)
+                    #randomarray = np.arange(0.10,0.3,0.0001)
+                    
+                    #randomarray = np.arange(0.291,0.305,0.0001)
+                    #randomarray = np.arange(0.21,0.290,0.0001)
+                    randomarray = np.arange(0.20,0.005,0.0001)
+
+                    predParam = np.array([[random.choice(randomarray)]])
                     
                 preParam = [predParam[0][0]]
                           
@@ -245,7 +257,7 @@ class ParamNN:
                 print('v mse: %.10f' % (vloss))
                 print('gradient (closs/param): %f' % (grad))
         
-        return [llosses], [grads]
+        return [llosses], [grads], np.round(preParam[0],6)
         
     # ----
     
@@ -292,11 +304,11 @@ if __name__ == "__main__":
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, index=index,
                     dataMode=dataMode, isExactModel=isExactModel)
-    llosses, grads = model.train(nItr=nItr, alpha=alpha, isRandomParam=isRandomParam)
+    llosses, grads, preparam = model.train(nItr=nItr, alpha=alpha, isRandomParam=isRandomParam)
     # ----
     
     # Plot ----
     myPlot = pdeplot.Plot(dataMode=dataMode, trialID=index)
-    myPlot.Loss1(llosses, labels=['test'], savename='poNN_testloss')
-    myPlot.Loss1(grads, labels=['test'], savename='poNN_testgrad')
+    myPlot.Loss1(llosses, labels=[f'test_{preparam}'], savename=f'poNN_testloss_{preparam}')
+    myPlot.Loss1(grads, labels=[f'test_{preparam}'], savename='poNN_testgrad')
     # ----
