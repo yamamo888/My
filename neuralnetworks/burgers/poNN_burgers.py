@@ -205,7 +205,7 @@ class ParamNN:
     # ----
      
     # ----
-    def train(self, nItr=1000, alpha=0.01, isRandomParam=False):
+    def train(self, nItr=1000, alpha=0.01, isEveryRandomParam=False):
        
         grads = []
         llosses = []
@@ -219,16 +219,16 @@ class ParamNN:
           
                 predParam = self.sess.run(self.predparam, feed_dict)
                 #pdb.set_trace()
-                if isRandomParam:
+                if isEveryRandomParam:
                     # 0.01
                     #randomarray = np.arange(0.005,0.009,0.0001)
                     #randomarray = np.arange(0.01,0.1,0.0001)
                     #randomarray = np.arange(0.11,0.3,0.0001)
-                    
+                    # 0.005
                     #randomarray = np.arange(0.005,0.014,0.0001)
                     #randomarray = np.arange(0.015,0.095,0.0001)
                     #randomarray = np.arange(0.10,0.3,0.0001)
-                    
+                    # 0.30
                     #randomarray = np.arange(0.291,0.305,0.0001)
                     #randomarray = np.arange(0.21,0.290,0.0001)
                     randomarray = np.arange(0.20,0.005,0.0001)
@@ -246,6 +246,26 @@ class ParamNN:
                            self.placeparam:pp, self.alpha:np.array([alpha])}
                 
                 grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
+                
+                pdb.set_trace()
+                if isEveryRandomParam:
+                    # 0.01
+                    #randomarray = np.arange(0.005,0.009,0.0001)
+                    #randomarray = np.arange(0.01,0.1,0.0001)
+                    #randomarray = np.arange(0.11,0.3,0.0001)
+                    # 0.005
+                    #randomarray = np.arange(0.005,0.014,0.0001)
+                    #randomarray = np.arange(0.015,0.095,0.0001)
+                    #randomarray = np.arange(0.10,0.3,0.0001)
+                    # 0.30
+                    #randomarray = np.arange(0.291,0.305,0.0001)
+                    #randomarray = np.arange(0.21,0.290,0.0001)
+                    randomarray = np.arange(0.20,0.005,0.0001)
+                    
+                    # all
+                    randomarray = np.arange(0.005,0.305,0.0001)
+                    
+                    nextParam = np.array([[random.choice(randomarray)]])
                 
                 preParam = np.append(preParam, nextParam)
                 grads = np.append(grads, grad)
@@ -277,7 +297,8 @@ if __name__ == "__main__":
     # select fine-tuned model exact(only test data) == flag or train data
     parser.add_argument('--exactflag', action='store_true')
     # select random param == flag or not random param
-    parser.add_argument('--randomflag', action='store_true')
+    parser.add_argument('--evaryrandomflag', action='store_true')
+    
     
     # 引数展開
     args = parser.parse_args()
@@ -287,8 +308,10 @@ if __name__ == "__main__":
     index = args.index
     alpha = args.alpha
     isExactModel = args.exactflag
-    isRandomParam = args.randomflag
+    isEveryRandomParam = args.everyrandomflag
     # ----
+    
+    print(f'random mode >>> {isEveryRandomParam}')
     
     # path ----
     modelPath = "model"
@@ -304,11 +327,11 @@ if __name__ == "__main__":
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, index=index,
                     dataMode=dataMode, isExactModel=isExactModel)
-    llosses, grads, preparam = model.train(nItr=nItr, alpha=alpha, isRandomParam=isRandomParam)
+    llosses, grads, preparam = model.train(nItr=nItr, alpha=alpha, isEveryRandomParam=isEveryRandomParam)
     # ----
     
     # Plot ----
     myPlot = pdeplot.Plot(dataMode=dataMode, trialID=index)
-    myPlot.Loss1(llosses, labels=[f'test_{preparam}'], savename=f'poNN_testloss_{preparam}')
-    myPlot.Loss1(grads, labels=[f'test_{preparam}'], savename='poNN_testgrad')
+    myPlot.Loss1(llosses, labels=[f'test'], savename=f'poNN_testloss_{preparam}')
+    #myPlot.Loss1(grads, labels=[f'test'], savename='poNN_testgrad')
     # ----
