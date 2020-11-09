@@ -198,9 +198,7 @@ class ParamNN:
            
             y = self.fc(fc1,w6,b6)
             
-            # 0.005 < y < 0.304
-            #y = self.outputthes(y)
-            
+         
             return y
     # ----
      
@@ -218,25 +216,7 @@ class ParamNN:
                            self.placeparam:np.array([0.05])[:,None], self.alpha:np.array([alpha])}
           
                 predParam = self.sess.run(self.predparam, feed_dict)
-                #pdb.set_trace()
-                if isEveryRandomParam:
-                    # 0.01
-                    #randomarray = np.arange(0.005,0.009,0.0001)
-                    #randomarray = np.arange(0.01,0.1,0.0001)
-                    #randomarray = np.arange(0.11,0.3,0.0001)
-                    # 0.005
-                    #randomarray = np.arange(0.005,0.014,0.0001)
-                    #randomarray = np.arange(0.015,0.095,0.0001)
-                    #randomarray = np.arange(0.10,0.3,0.0001)
-                    # 0.30
-                    #randomarray = np.arange(0.291,0.305,0.0001)
-                    #randomarray = np.arange(0.21,0.290,0.0001)
-                    #randomarray = np.arange(0.005,0.20,0.0001)
-                    # all
-                    randomarray = np.arange(0.005,0.305,0.0001)
-                    
-                    predParam = np.array([[random.choice(randomarray)]])
-                    
+                
                 preParam = [predParam[0][0]]
                           
             else:
@@ -248,27 +228,9 @@ class ParamNN:
                            self.placeparam:pp, self.alpha:np.array([alpha])}
                 
                 grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
-                if isEveryRandomParam and itr % 5 == 0:
-                #if isEveryRandomParam:
-                    # 0.01
-                    #randomarray = np.arange(0.005,0.009,0.0001)
-                    #randomarray = np.arange(0.01,0.1,0.0001)
-                    #randomarray = np.arange(0.11,0.3,0.0001)
-                    # 0.005
-                    #randomarray = np.arange(0.005,0.014,0.0001)
-                    #randomarray = np.arange(0.015,0.095,0.0001)
-                    #randomarray = np.arange(0.10,0.3,0.0001)
-                    # 0.30
-                    #randomarray = np.arange(0.291,0.305,0.0001)
-                    #randomarray = np.arange(0.21,0.290,0.0001)
-                    #randomarray = np.arange(0.005,0.20,0.0001)
-                    #pdb.set_trace()
-                    # all
-                    randomarray = np.arange(0.005,0.305,0.0001)
-                    
-                    nextParam = np.array([[random.choice(randomarray)]])
                 
-                #pdb.set_trace()
+                
+                pdb.set_trace()
                 preParam = np.append(preParam, nextParam)
                 grads = np.append(grads, grad)
                 llosses = np.append(llosses, lloss)
@@ -300,6 +262,8 @@ if __name__ == "__main__":
     parser.add_argument('--exactflag', action='store_true')
     # select random param == flag or not random param
     parser.add_argument('--everyrandomflag', action='store_true')
+    # classification param == flag
+    parser.add_argument('--clsflag', action='store_true')
     
     
     # 引数展開
@@ -312,8 +276,7 @@ if __name__ == "__main__":
     isExactModel = args.exactflag
     isEveryRandomParam = args.everyrandomflag
     # ----
-    
-    print(f'random mode >>> {isEveryRandomParam}')
+   
     
     # path ----
     modelPath = "model"
