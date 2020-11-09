@@ -43,7 +43,9 @@ class ParamNN:
         # [xDim,1], [100,1], [data, xDim, 100], [data,] 
         self.alltestX, self.testX, self.testT, self.testU, self.testNU, self.idx = self.myData.traintest()
         # ----
-         
+        
+        dummy = tf.Variable([10], tf.float64)
+
         # Placeholder ----
         # u
         self.outobs = tf.compat.v1.placeholder(tf.float64,shape=[None, self.xDim, self.tDim])
@@ -76,6 +78,10 @@ class ParamNN:
         
         self.nextparam = self.placeparam - (self.gradnu * self.alpha)
         # ----
+        
+        config = tf.compat.v1.ConfigProto(gpu_options=tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.1,allow_growth=True)) 
+        self.saver = tf.compat.v1.train.Saver()
+        self.sess = tf.compat.v1.Session(config=config)
 
     # ----
     def train(self, nItr=1000, alpha=0.01, isEveryRandomParam=False):
@@ -106,7 +112,7 @@ class ParamNN:
         for itr in range(nItr):
                 
                 if itr == 0:
-                    predParam = np.array([[random.choice(randomarray)]])
+                    predParam = random.choice(randomarray)
                 else:
                     predParam = preParam[itr-1]
                 
@@ -114,12 +120,14 @@ class ParamNN:
                            self.indx:self.idx[:,np.newaxis], 
                            self.placeparam:np.array([predParam])[:,None], self.alpha:np.array([alpha])}
   
-                grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
+                grad, nextParam, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss], feed_dict)
+                #pdb.set_trace() 
+                lloss = np.square(self.testNU[self.index] - nextParam)
+
+                if itr % 10 == 0:
+                    nextParam = np.array([[random.choice(randomarray)]])
                 
-                # if itr % 10 == 0
-                #nextParam = np.array([[random.choice(randomarray)]])
-                
-                preParam = np.append(preParam, nextParam)
+                preParam = np.append(preParam, nextParam[0][0])
                 grads = np.append(grads, grad)
                 llosses = np.append(llosses, lloss)
                 
