@@ -229,44 +229,34 @@ class ParamNN:
         
         for itr in range(nItr):
             
-            if itr == 0:
-                
-                if isEveryRandomParam:
-                    predParam = random.choice(randomarray)
-                else:
-                    predParam = 0.05
-                
-                feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
-                           self.outobs:self.testU[self.index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
-                           self.placeparam:np.array([predParam])[:,None], self.alpha:np.array([alpha])}
-          
-                nextParam = self.sess.run(self.predparam, feed_dict)
-                
-                          
-            else:
-        
-                pp = np.array([preParam[itr-1]])[:,None]
-                
-                feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
-                           self.outobs:self.testU[self.index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
-                           self.placeparam:pp, self.alpha:np.array([alpha])}
-                
-                grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
-                
-                # if isEveryRandomParam and itr % 10 == 0
-                #nextParam = np.array([[random.choice(randomarray)]])
-                
-                #pdb.set_trace()
-                preParam = np.append(preParam, nextParam)
-                grads = np.append(grads, grad)
-                llosses = np.append(llosses, lloss)
-                
-                print('----')
-                print('exact lambda: %.8f predlambda: %.8f' % (self.testNU[self.index], pp))
-                print('lambda mse: %.10f' % (lloss))
-                print('v mse: %.10f' % (vloss))
-                print('gradient (closs/param): %f' % (grad))
-        
+            if isEveryRandomParam and itr == 0:
+                predParam = random.choice(randomarray)
+            if isEveryRandomParam and itr > 0:
+                predParam = preParam[itr-1]
+            if not isEveryRandomParam and itr == 0:
+                predParam = 0.05
+            
+            
+            feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
+                       self.outobs:self.testU[self.index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
+                       self.placeparam:np.array([predParam])[:,None], self.alpha:np.array([alpha])}
+      
+            
+            grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
+            
+            # if isEveryRandomParam and itr % 10 == 0
+            #nextParam = np.array([[random.choice(randomarray)]])
+            
+            preParam = np.append(preParam, nextParam)
+            grads = np.append(grads, grad)
+            llosses = np.append(llosses, lloss)
+            
+            print('----')
+            print('exact lambda: %.8f predlambda: %.8f' % (self.testNU[self.index], preParam[itr-1]))
+            print('lambda mse: %.10f' % (lloss))
+            print('v mse: %.10f' % (vloss))
+            print('gradient (closs/param): %f' % (grad))
+    
         return [llosses], [grads], np.round(preParam[0],6)
         
     # ----
