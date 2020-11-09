@@ -207,6 +207,26 @@ class ParamNN:
        
         grads = []
         llosses = []
+        
+        if isEveryRandomParam:
+            
+            print('>>> random mode')
+    
+            # 0.01
+            randomarray = np.arange(0.005,0.009,0.0001)
+            #randomarray = np.arange(0.01,0.1,0.0001)
+            #randomarray = np.arange(0.11,0.3,0.0001)
+            # 0.005
+            #randomarray = np.arange(0.005,0.014,0.0001)
+            #randomarray = np.arange(0.015,0.095,0.0001)
+            #randomarray = np.arange(0.10,0.3,0.0001)
+            # 0.30
+            #randomarray = np.arange(0.291,0.305,0.0001)
+            #randomarray = np.arange(0.21,0.290,0.0001)
+            #randomarray = np.arange(0.005,0.20,0.0001)
+            # all
+            #randomarray = np.arange(0.005,0.305,0.0001)
+        
         for itr in range(nItr):
             
             if itr == 0:
@@ -217,7 +237,10 @@ class ParamNN:
           
                 predParam = self.sess.run(self.predparam, feed_dict)
                 
-                preParam = [predParam[0][0]]
+                if isEveryRandomParam:
+                    predParam = np.array([[random.choice(randomarray)]])
+                else:
+                    preParam = [predParam[0][0]]
                           
             else:
         
@@ -229,6 +252,8 @@ class ParamNN:
                 
                 grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
                 
+                # if isEveryRandomParam and itr % 10 == 0
+                #nextParam = np.array([[random.choice(randomarray)]])
                 
                 pdb.set_trace()
                 preParam = np.append(preParam, nextParam)
