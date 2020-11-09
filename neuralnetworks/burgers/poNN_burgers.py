@@ -207,7 +207,7 @@ class ParamNN:
        
         grads = []
         llosses = []
-        
+        preParam = [] 
         if isEveryRandomParam:
             
             print('>>> random mode')
@@ -231,16 +231,17 @@ class ParamNN:
             
             if itr == 0:
                 
+                if isEveryRandomParam:
+                    predParam = random.choice(randomarray)
+                else:
+                    predParam = 0.05
+                
                 feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
                            self.outobs:self.testU[self.index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
-                           self.placeparam:np.array([0.05])[:,None], self.alpha:np.array([alpha])}
+                           self.placeparam:np.array([predParam])[:,None], self.alpha:np.array([alpha])}
           
-                predParam = self.sess.run(self.predparam, feed_dict)
+                nextParam = self.sess.run(self.predparam, feed_dict)
                 
-                if isEveryRandomParam:
-                    predParam = np.array([[random.choice(randomarray)]])
-                else:
-                    preParam = [predParam[0][0]]
                           
             else:
         
@@ -255,7 +256,7 @@ class ParamNN:
                 # if isEveryRandomParam and itr % 10 == 0
                 #nextParam = np.array([[random.choice(randomarray)]])
                 
-                pdb.set_trace()
+                #pdb.set_trace()
                 preParam = np.append(preParam, nextParam)
                 grads = np.append(grads, grad)
                 llosses = np.append(llosses, lloss)
