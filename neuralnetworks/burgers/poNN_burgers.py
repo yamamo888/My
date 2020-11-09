@@ -231,8 +231,10 @@ class ParamNN:
                     # 0.30
                     #randomarray = np.arange(0.291,0.305,0.0001)
                     #randomarray = np.arange(0.21,0.290,0.0001)
-                    randomarray = np.arange(0.20,0.005,0.0001)
-
+                    #randomarray = np.arange(0.005,0.20,0.0001)
+                    # all
+                    randomarray = np.arange(0.005,0.305,0.0001)
+                    
                     predParam = np.array([[random.choice(randomarray)]])
                     
                 preParam = [predParam[0][0]]
@@ -246,9 +248,8 @@ class ParamNN:
                            self.placeparam:pp, self.alpha:np.array([alpha])}
                 
                 grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
-                
-                pdb.set_trace()
-                if isEveryRandomParam:
+                if isEveryRandomParam and itr % 5 == 0:
+                #if isEveryRandomParam:
                     # 0.01
                     #randomarray = np.arange(0.005,0.009,0.0001)
                     #randomarray = np.arange(0.01,0.1,0.0001)
@@ -260,13 +261,14 @@ class ParamNN:
                     # 0.30
                     #randomarray = np.arange(0.291,0.305,0.0001)
                     #randomarray = np.arange(0.21,0.290,0.0001)
-                    randomarray = np.arange(0.20,0.005,0.0001)
-                    
+                    #randomarray = np.arange(0.005,0.20,0.0001)
+                    #pdb.set_trace()
                     # all
                     randomarray = np.arange(0.005,0.305,0.0001)
                     
                     nextParam = np.array([[random.choice(randomarray)]])
                 
+                #pdb.set_trace()
                 preParam = np.append(preParam, nextParam)
                 grads = np.append(grads, grad)
                 llosses = np.append(llosses, lloss)
@@ -297,7 +299,7 @@ if __name__ == "__main__":
     # select fine-tuned model exact(only test data) == flag or train data
     parser.add_argument('--exactflag', action='store_true')
     # select random param == flag or not random param
-    parser.add_argument('--evaryrandomflag', action='store_true')
+    parser.add_argument('--everyrandomflag', action='store_true')
     
     
     # 引数展開
@@ -332,6 +334,6 @@ if __name__ == "__main__":
     
     # Plot ----
     myPlot = pdeplot.Plot(dataMode=dataMode, trialID=index)
-    myPlot.Loss1(llosses, labels=[f'test'], savename=f'poNN_testloss_{preparam}')
-    #myPlot.Loss1(grads, labels=[f'test'], savename='poNN_testgrad')
+    myPlot.Loss1(llosses, labels=['test'], savename=f'poNN_testloss_{preparam}')
+    myPlot.Loss1(grads, labels=['test'], savename=f'poNN_testgrad_{preparam}')
     # ----
