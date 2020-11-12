@@ -31,9 +31,7 @@ class ParamNN:
         elif dataMode == 'small':
             self.xDim = 10
         
-        #self.xDim = 256 
         self.tDim = 100
-        
         self.index = index
         self.yDim = 1
         # ----
@@ -112,7 +110,8 @@ class ParamNN:
         
         self.nextparam = self.placeparam - (self.gradnu * self.alpha)
         # ----
-
+        
+        
     # ----
     def weight_variable(self, name, shape, trainable=True):
          return tf.compat.v1.get_variable(name,shape,initializer=tf.random_normal_initializer(stddev=0.1),trainable=trainable)
@@ -203,35 +202,99 @@ class ParamNN:
     # ----
      
     # ----
-    def train(self, nItr=1000, alpha=0.01, isEveryRandomParam=False):
+    def clstrain(self, nItr=1000, nEpoch=3, alpha=0.01, nCls=0):
        
-        grads = []
-        llosses = []
-        preParam = [] 
-        if isEveryRandomParam:
+        pmin = 0.005
+        pmax = 0.305
+        clsWidth = (pmax - pmin) / nCls
+        firstClsCenter = pmin + (clsWidth / 2)
+       
+        totalgrads,totalllosses,totalpreParam = [],[],[]
+        for epoch in range(nEpoch):
             
-            print('>>> random mode')
-    
-            # 0.01
-            randomarray = np.arange(0.005,0.009,0.0001)
-            #randomarray = np.arange(0.01,0.1,0.0001)
-            #randomarray = np.arange(0.11,0.3,0.0001)
-            # 0.005
-            #randomarray = np.arange(0.005,0.014,0.0001)
-            #randomarray = np.arange(0.015,0.095,0.0001)
-            #randomarray = np.arange(0.10,0.3,0.0001)
-            # 0.30
-            #randomarray = np.arange(0.291,0.305,0.0001)
-            #randomarray = np.arange(0.21,0.290,0.0001)
-            #randomarray = np.arange(0.005,0.20,0.0001)
-            # all
-            #randomarray = np.arange(0.005,0.305,0.0001)
+            #pdb.set_trace()
+            
+            if pmin == pmax:
+                break
+            
+            # paramters ----
+            pcls = np.arange(pmin, pmax, clsWidth)
+            pcls = np.append(pcls, pmax+0.001)
+            # ----
+            
+            grads,llosses,preParam = [],[],[]
+            for itr in range(nItr):
+                
+                if itr == 0:
+                    predParam = 0.05
+                elif itr > 0:
+                    #pdb.set_trace()
+                    predParam = preParam[itr-1]
+               
+                feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
+                           self.outobs:self.testU[self.index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
+                           self.placeparam:np.array([predParam])[:,None], self.alpha:np.array([alpha])}
+          
+                grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
+                
+                # start 0,1,2.. cnt == num. of class 
+                cntNum = [cnt for cnt in range(pcls.shape[0]-1) if pcls[cnt] <= nextParam < pcls[cnt+1]]
+                
+                # nextParam < 0.005 or nextParam > 0.305 -> 1 or -1 class
+                if nextParam < pmin:
+                    cntNum = [0]
+                elif nextParam > pmax:
+                    cntNum = [pcls.shape[0]-2]
+                
+                # ※ 4 調整要るかも
+                nextParam = np.round(cntNum[0] * clsWidth + firstClsCenter,4)
+                
+                preParam = np.append(preParam, nextParam)
+                
+                # if Stop update nextParam
+                if itr > 1 and preParam[itr-2] == preParam[itr]:
+                    #pdb.set_trace()
+                    # ※ 4 ちょうせいいるかも
+                    pmin = np.round(nextParam - (clsWidth/2), 6)
+                    pmax = np.round(nextParam + (clsWidth/2), 6)
+                    
+                    print('Fin update lambda...')
+                    break
+                
+                grads = np.append(grads, grad)
+                llosses = np.append(llosses, lloss)
+                
+                print('----')
+                print('exact lambda: %.8f predlambda: %.8f' % (self.testNU[self.index], preParam[itr-1]))
+                print('lambda mse: %.10f' % (lloss))
+                print('v mse: %.10f' % (vloss))
+                print('gradient (closs/param): %f' % (grad))
         
+            totalgrads = np.append(totalgrads,grads)
+            totalllosses = np.append(totalllosses, llosses)
+            totalpreParam = np.append(totalpreParam, preParam)
+        
+        return [llosses], [grads], np.round(preParam[0],6)
+    # ----
+    
+    # ----
+    def randomtrain(self, nItr=1000, alpha=0.01):
+       
+        # paramters ----
+        pmin = 0.005
+        pmax = 0.305
+        print('>>> random mode')
+        # all
+        randomarray = np.arange(pmin,pmax,0.0001)
+        # ----
+        
+        grads,llosses,preParam = [],[],[]
         for itr in range(nItr):
             
             if isEveryRandomParam and itr == 0:
                 predParam = random.choice(randomarray)
-            if isEveryRandomParam and itr > 0:
+            if (isEveryRandomParam and itr > 0) or (isCls and itr > 0):
+                #pdb.set_trace()
                 predParam = preParam[itr-1]
             if not isEveryRandomParam and itr == 0:
                 predParam = 0.05
@@ -244,10 +307,12 @@ class ParamNN:
             
             grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
             
-            # if isEveryRandomParam and itr % 10 == 0
-            #nextParam = np.array([[random.choice(randomarray)]])
+            if itr % 10 == 0:
+                nextParam = np.array([[random.choice(randomarray)]])
             
             preParam = np.append(preParam, nextParam)
+            
+       
             grads = np.append(grads, grad)
             llosses = np.append(llosses, lloss)
             
@@ -258,8 +323,8 @@ class ParamNN:
             print('gradient (closs/param): %f' % (grad))
     
         return [llosses], [grads], np.round(preParam[0],6)
-        
     # ----
+   
     
 if __name__ == "__main__":
     
@@ -280,6 +345,8 @@ if __name__ == "__main__":
     parser.add_argument('--everyrandomflag', action='store_true')
     # classification param == flag
     parser.add_argument('--clsflag', action='store_true')
+    # num of class
+    parser.add_argument('--nCls', type=int, choices=[10, 50, 100])
     
     
     # 引数展開
@@ -291,6 +358,8 @@ if __name__ == "__main__":
     alpha = args.alpha
     isExactModel = args.exactflag
     isEveryRandomParam = args.everyrandomflag
+    isCls = args.clsflag
+    nCls = args.nCls
     # ----
    
     
@@ -308,11 +377,15 @@ if __name__ == "__main__":
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, index=index,
                     dataMode=dataMode, isExactModel=isExactModel)
-    llosses, grads, preparam = model.train(nItr=nItr, alpha=alpha, isEveryRandomParam=isEveryRandomParam)
+    
+    if isEveryRandomParam:
+        llosses, grads, preparam = model.clstrain(nItr=nItr, alpha=alpha, nCls=nCls)    
+    elif isCls: 
+        llosses, grads, preparam = model.clstrain(nItr=nItr, alpha=alpha, nCls=nCls)
     # ----
     
     # Plot ----
     myPlot = pdeplot.Plot(dataMode=dataMode, trialID=index)
-    myPlot.Loss1(llosses, labels=['test'], savename=f'poNN_testloss_{preparam}')
-    myPlot.Loss1(grads, labels=['test'], savename=f'poNN_testgrad_{preparam}')
+    myPlot.Loss1(llosses, labels=['test'], savename=f'poNN_testloss_cls_{preparam}')
+    myPlot.Loss1(grads, labels=['test'], savename=f'poNN_testgrad_cls_{preparam}')
     # ----
