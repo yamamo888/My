@@ -82,41 +82,31 @@ class ParamNN:
         # PDE ----
         # output: u
         self.predu = pdeburgers.burgers(self.placeparam)
-        self.predu_first = pdeburgers.burgers(self.predparam)
         # ----
         
         # space data -> [none, self.xDim, t] ----
         self.indx = tf.compat.v1.placeholder(tf.int32,shape=[self.xDim,1])
         trans_predu = tf.transpose(self.predu, perm=[1,0,2])
-        trans_predu_first = tf.transpose(self.predu_first, perm=[1,0,2])
         # [100(x),data,t]
         gather_predu = tf.gather_nd(trans_predu, self.indx)
-        gather_predu_first = tf.gather_nd(trans_predu_first, self.indx)
         # [data,self.xDim,t]
         space_predu = tf.transpose(gather_predu, perm=[1,0,2])
-        space_predu_first = tf.transpose(gather_predu_first, perm=[1,0,2])
         # ----
 
         # loss param ----
         self.loss_nu = tf.reduce_mean(tf.square(tf.cast(self.y, tf.float64) - self.placeparam))
-        self.loss_nu_first = tf.reduce_mean(tf.square(tf.cast(self.y, tf.float64) - self.predparam))
         # ----
         
         # loss u ----   
         self.loss = tf.reduce_mean(tf.square(self.outobs - space_predu))
-        self.loss_first = tf.reduce_mean(tf.square(self.outobs - space_predu_first))
         # ----
         
         # gradient ----
         self.alpha = tf.compat.v1.placeholder(tf.float64, shape=[1])
         self.gradnu = tf.gradients(self.loss, self.placeparam)[0]
-        self.gradnu_first = tf.gradients(self.loss_first, self.predparam)[0] # for first time(use predict parameter)
-        #pdb.set_trace()
         
         self.nextparam = self.placeparam - (self.gradnu * self.alpha)
-        self.nextparam_first = self.predparam - (self.gradnu_first * self.alpha) # for first time
         # ----
-        
         
     # ----
     def weight_variable(self, name, shape, trainable=True):
@@ -206,25 +196,147 @@ class ParamNN:
          
             return y
     # ----
+     
+    # ----
+    def everyclstrain(self, nItr=1000, nEpoch=3, alpha=0.01, nCls=0):
+       
+        pmin = 0.005
+        pmax = 0.305
+        
+        totalgrads,totalllosses,totalpreParam = [],[],[]
+        for epoch in range(nEpoch):
+            
+            #pdb.set_trace()
+            
+            if pmin == pmax:
+                break
+            
+            # paramters ----
+            clsWidth = (pmax - pmin) / nCls
+            firstClsCenter = pmin + (clsWidth / 2)
+           
+            pcls = np.arange(pmin, pmax, clsWidth)
+            pcls = np.append(pcls, pmax+0.001)
+            # ----
+            
+            grads,llosses,preParam = [],[],[]
+            for itr in range(nItr):
+                #pdb.set_trace()
+                if itr == 0 and epoch == 0:
+                    # ※dummy for placeparam
+                    predParam = 0.03
+                    
+                    feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
+                               self.outobs:self.testU[self.index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
+                               self.placeparam:np.array([predParam])[:,None], self.alpha:np.array([alpha])}
+                    
+                    # call *_fitst
+                    grad, nextParam, lloss, vloss = self.sess.run([self.gradnu_first, self.nextparam_first, self.loss_nu_first, self.loss_first], feed_dict)
+                
+                elif itr == 0 and epoch > 0:
+                    predParam = totalpreParam[-1]
+               
+                    feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
+                               self.outobs:self.testU[self.index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
+                               self.placeparam:np.array([predParam])[:,None], self.alpha:np.array([alpha])}
+                    
+                    grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
+                
+                elif itr > 0:
+                    #pdb.set_trace()
+                    predParam = preParam[itr-1]
+                
+                    feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
+                               self.outobs:self.testU[self.index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
+                               self.placeparam:np.array([predParam])[:,None], self.alpha:np.array([alpha])}
+              
+                    grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
+                
+                # start 0,1,2.. cnt == num. of class 
+                cntNum = [cnt for cnt in range(pcls.shape[0]-1) if pcls[cnt] <= nextParam < pcls[cnt+1]]
+                
+                # nextParam < 0.005 or nextParam > 0.305 -> 1 or -1 class
+                if nextParam < pmin:
+                    cntNum = [0]
+                elif nextParam > pmax:
+                    cntNum = [pcls.shape[0]-2]
+                
+                # ※ 4 調整要るかも
+                nextParam = np.round(cntNum[0] * clsWidth + firstClsCenter,4)
+                
+                preParam = np.append(preParam, nextParam)
+                
+                # if Stop update nextParam
+                if itr > 1 and preParam[itr-2] == preParam[itr]:
+                    #pdb.set_trace()
+                    # ※ 4 ちょうせいいるかも
+                    pmin = np.round(nextParam - (clsWidth/2), 6)
+                    pmax = np.round(nextParam + (clsWidth/2), 6)
+                    
+                    print('Fin update lambda...')
+                    break
+                
+                grads = np.append(grads, grad)
+                llosses = np.append(llosses, lloss)
+                
+                print('----')
+                print('exact lambda: %.8f predlambda: %.8f' % (self.testNU[self.index], nextParam))
+                print('lambda mse: %.10f' % (lloss))
+                print('v mse: %.10f' % (vloss))
+                print('gradient (closs/param): %f' % (grad))
+        
+            totalgrads = np.append(totalgrads,grads)
+            totalllosses = np.append(totalllosses, llosses)
+            totalpreParam = np.append(totalpreParam, preParam)
+        
+        return [totalllosses], [totalgrads], np.round(totalpreParam[0],6)
+    # ----
     
     # ----
-    def train(self, nItr=1000, alpha=0.01):
+    def clstrain(self, nItr=1000, alpha=0.01, nCls=0):
        
-        grads,llosses,vlosses,preParam = [],[],[],[]
+        pmin = 0.005
+        pmax = 0.305
+         
+        # paramters ----
+        clsWidth = (pmax - pmin) / nCls
+        firstClsCenter = pmin + (clsWidth / 2)
+           
+        pcls = np.arange(pmin, pmax, clsWidth)
+        pcls = np.append(pcls, pmax+0.001)
+        # ----
+        
+        grads,llosses,preParam = [],[],[]
         for itr in range(nItr):
+            #pdb.set_trace()
             
             if itr == 0:
-                # ※dummy for placeparam
                 predParam = 0.03
-                
+                    
                 feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
                            self.outobs:self.testU[self.index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
                            self.placeparam:np.array([predParam])[:,None], self.alpha:np.array([alpha])}
                 
-                # call *_fitst only NN
-                grad, nextParam, lloss, vloss = self.sess.run([self.gradnu_first, self.nextparam_first, self.loss_nu_first, self.loss_first], feed_dict)
-              
+                # call *_fitst
+                nextParam = self.sess.run(self.predparam, feed_dict)
+                #pdb.set_trace()
+                # start 0,1,2.. cnt == num. of class 
+                cntNum = [cnt for cnt in range(pcls.shape[0]-1) if pcls[cnt] <= nextParam < pcls[cnt+1]]
+                
+                # nextParam < 0.005 or nextParam > 0.305 -> 1 or -1 class
+                if nextParam < pmin:
+                    cntNum = [0]
+                elif nextParam > pmax:
+                    cntNum = [pcls.shape[0]-2]
+                
+                # ※ 4 調整要るかも
+                nextParam = np.round(cntNum[0] * clsWidth + firstClsCenter,4)
+                
+                print('----')
+                print('itr: %d exact lambda: %.8f predlambda: %.8f' % (itr, self.testNU[self.index], nextParam))
+                
             elif itr > 0:
+                #pdb.set_trace()
                 predParam = preParam[itr-1]
             
                 feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
@@ -233,10 +345,49 @@ class ParamNN:
           
                 grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
             
+                grads = np.append(grads, grad)
+                llosses = np.append(llosses, lloss)
+            
+                print('----')
+                print('itr: %d exact lambda: %.8f predlambda: %.8f' % (itr, self.testNU[self.index], nextParam))
+                print('lambda mse: %.10f' % (lloss))
+                print('v mse: %.10f' % (vloss))
+                print('gradient (closs/param): %f' % (grad))
+        
+            preParam = np.append(preParam, nextParam)
+            
+        return [llosses], [grads], [preParam], [self.testNU[self.index]]
+    # ----
+    
+    # ----
+    def randomtrain(self, nItr=1000, alpha=0.01):
+       
+        # paramters ----
+        pmin = 0.005
+        pmax = 0.305
+        print('>>> random mode')
+        # all
+        randomarray = np.arange(pmin,pmax,0.0001)
+        # ----
+        
+        grads,llosses,preParam = [],[],[]
+        for itr in range(nItr):
+            
+            if itr == 0:
+                predParam = random.choice(randomarray)
+            elif itr > 0:
+                predParam = preParam[itr-1]
+            
+            feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
+                       self.outobs:self.testU[self.index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
+                       self.placeparam:np.array([predParam])[:,None], self.alpha:np.array([alpha])}
+      
+            
+            grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
+            
             preParam = np.append(preParam, nextParam)
             grads = np.append(grads, grad)
             llosses = np.append(llosses, lloss)
-            vlosses = np.append(vlosses, vloss)
             
             print('----')
             print('exact lambda: %.8f predlambda: %.8f' % (self.testNU[self.index], preParam[itr-1]))
@@ -244,10 +395,10 @@ class ParamNN:
             print('v mse: %.10f' % (vloss))
             print('gradient (closs/param): %f' % (grad))
     
-        return [llosses], [grads]
+        return [llosses], [grads], [preParam], [self.testNU[self.index]]
     # ----
+   
     
-  
 if __name__ == "__main__":
     
     # command argment ----
@@ -261,6 +412,13 @@ if __name__ == "__main__":
     parser.add_argument('--index', type=int, default=2)
     # alpha * grad
     parser.add_argument('--alpha', type=float, default=0.0001)
+    # select random param == flag or not random param
+    parser.add_argument('--randomflag', action='store_true')
+    # classification param == flag
+    parser.add_argument('--clsflag', action='store_true')
+    # num of class
+    parser.add_argument('--nCls', type=int, choices=[10, 50, 100])
+    
     
     # 引数展開
     args = parser.parse_args()
@@ -269,6 +427,9 @@ if __name__ == "__main__":
     dataMode = args.dataMode
     index = args.index
     alpha = args.alpha
+    isRandomParam = args.randomflag
+    isCls = args.clsflag
+    nCls = args.nCls
     # ----
    
     
@@ -286,11 +447,24 @@ if __name__ == "__main__":
     # Training ----
     model = ParamNN(rateTrain=rateTrain, lr=lr, index=index, dataMode=dataMode)
     
-    llosses, grads = model.train(nItr=nItr, alpha=alpha)
-    
-    # Plot ----
-    myPlot = burgersplot.Plot(dataMode=dataMode, trialID=index)
-    myPlot.Loss1(llosses, labels=['test'], savename=f'poNN_testloss')
-    myPlot.Loss1(grads, labels=['test'], savename=f'poNN_testgrad')
-    # ----
+    if isRandomParam:
+        llosses, grads, preparam, exactparam = model.randomtrain(nItr=nItr, alpha=alpha)    
+        
+        # Plot ----
+        myPlot = burgersplot.Plot(dataMode=dataMode, trialID=index)
+        myPlot.param(preparam, exactparam, savename=f'poNN_testparam_random')
+        myPlot.Loss1(llosses, labels=['test'], savename=f'poNN_testloss_random')
+        myPlot.Loss1(grads, labels=['test'], savename=f'poNN_testgrad_random')
+        # ----
 
+    elif isCls: 
+        llosses, grads, preparam, exactparam = model.clstrain(nItr=nItr, alpha=alpha, nCls=nCls)
+        # Plot ----
+        myPlot = burgersplot.Plot(dataMode=dataMode, trialID=index)
+        #pdb.set_trace()
+        myPlot.param(preparam, exactparam, savename=f'poNN_testparam_{nCls}cls')
+        myPlot.Loss1(llosses, labels=['test'], savename=f'poNN_testloss_{nCls}cls')
+        myPlot.Loss1(grads, labels=['test'], savename=f'poNN_testgrad_{nCls}cls')
+        # ----
+
+    

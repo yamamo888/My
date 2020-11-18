@@ -41,8 +41,8 @@ class Plot:
 
           sns.set_style('dark')
 
-          plt.plot(data[0], linewidth=2, label=labels[0])
-          plt.plot(data[1], linewidth=2, label=labels[1])
+          plt.plot(data[0], linewidth=5, color='navy', label=labels[0])
+          plt.plot(data[1], linewidth=3, color='black', label=labels[1])
 
           plt.title('trLoss, teLoss: %f %f' % (data[0][-1], data[1][-1]))
 
@@ -60,19 +60,38 @@ class Plot:
 
           sns.set_style('dark')
 
-          plt.plot(data[0], linewidth=2, label=labels[0])
-         
-          plt.title('Loss: %.16f' % (data[0][-1]))
+          plt.plot(data[0], linewidth=5, color='dimgrey', label=labels[0])
+          #pdb.set_trace()
+          plt.title('lLoss: %.10f, vLoss: %.10f' % (data[0][-1], data[0][0]))
 
-          plt.xlabel('iteration')
-          plt.ylabel('# of data')
-          plt.legend()
+          plt.xlabel('iteration',fontsize='18')
+          plt.ylabel('loss',fontsize='18')
+          plt.legend(fontsize='18')
 
           losspath = os.path.join(self.figurePath, 'loss', f'{savename}_{self.dataMode}_{self.trialID}.png')
           plt.savefig(losspath)
           plt.close()
       # ----
       
+      # predict parameter & exact parameter ----
+      def param(self, pred, exact, savename='param'):
+          
+          sns.set_style('dark')
+          
+          plt.plot(pred[0], linewidth=5, color='dimgrey', label='predict')
+          plt.hlines(exact[0], xmin=0, xmax=pred[0].shape[0], linewidth=5, color='coral', label='exact')
+          
+          plt.title('lpred: %.5f, vpred: %.5f, exact: %.5f' % (pred[0][0], pred[0][-1], exact[0][0]))
+          
+          plt.xlabel('iteration',fontsize='18')
+          plt.ylabel('parameter',fontsize='18')
+          plt.legend(fontsize='18')
+
+          losspath = os.path.join(self.figurePath, 'loss', f'{savename}_{self.dataMode}_{self.trialID}.png')
+          plt.savefig(losspath)
+          plt.close()
+      # ----
+     
       # nu -> u(t,x) ----
       def paramToU(self, params, xNum=256, tNum=100):
           
