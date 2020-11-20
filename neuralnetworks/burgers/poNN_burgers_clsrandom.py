@@ -294,7 +294,9 @@ class ParamNN:
     
     # ----
     def clstrain(self, nItr=1000, alpha=0.01, nCls=0):
-       
+        
+        print('>>> class mode')
+
         pmin = 0.005
         pmax = 0.305
          
@@ -361,15 +363,18 @@ class ParamNN:
     
     # ----
     def randomtrain(self, nItr=1000, alpha=0.01):
-       
+        
         # paramters ----
-        pmin = 0.005
-        pmax = 0.305
+        #pmin = 0.005
+        #pmax = 0.305
+        pmin = 0.291
+        pmax = 0.295
         print('>>> random mode')
         # all
         randomarray = np.arange(pmin,pmax,0.0001)
         # ----
         
+        #pdb.set_trace() 
         grads,llosses,preParam = [],[],[]
         for itr in range(nItr):
             
@@ -390,7 +395,7 @@ class ParamNN:
             llosses = np.append(llosses, lloss)
             
             print('----')
-            print('exact lambda: %.8f predlambda: %.8f' % (self.testNU[self.index], preParam[itr-1]))
+            print('itr: %d exact lambda: %.8f predlambda: %.8f' % (itr, self.testNU[self.index], preParam[itr-1]))
             print('lambda mse: %.10f' % (lloss))
             print('v mse: %.10f' % (vloss))
             print('gradient (closs/param): %f' % (grad))
@@ -449,12 +454,12 @@ if __name__ == "__main__":
     
     if isRandomParam:
         llosses, grads, preparam, exactparam = model.randomtrain(nItr=nItr, alpha=alpha)    
-        
+        #pdb.set_trace()
         # Plot ----
         myPlot = burgersplot.Plot(dataMode=dataMode, trialID=index)
-        myPlot.param(preparam, exactparam, savename=f'poNN_testparam_random')
-        myPlot.Loss1(llosses, labels=['test'], savename=f'poNN_testloss_random')
-        myPlot.Loss1(grads, labels=['test'], savename=f'poNN_testgrad_random')
+        myPlot.param(preparam, exactparam, savename=f'poNN_testparam_random_{np.round(preparam[0][0],5)}')
+        myPlot.Loss1(llosses, labels=['test'], savename=f'poNN_testloss_random_{np.round(preparam[0][0],5)}')
+        myPlot.Loss1(grads, labels=['test'], savename=f'poNN_testgrad_random_{np.round(preparam[0][0],5)}')
         # ----
 
     elif isCls: 
