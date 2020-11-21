@@ -310,37 +310,66 @@ class ParamNN:
         #pdb.set_trace()
            
         grads,llosses,preParam = [],[],[]
+        flag = False
         for itr in range(nItr):
             #pdb.set_trace()
             
             if itr == 0:
+                # class center mean
                 predParam = np.mean(pcls[:-1] + (clsWidth/2))
+                # class center
+                fpredParam = pcls[:-1] + (clsWidth/2)
+                
+                np.savetxt(os.path.join('savetxt', 'poNN', f'first_{nCls}.txt'), fpredParam, delimiter=',')
+            
+                for fp in fpredParam:
+                    """
+                    # start 0,1,2.. cnt == num. of class 
+                    cntNum = [cnt for cnt in range(pcls.shape[0]-1) if pcls[cnt] <= nextParam < pcls[cnt+1]]
+                    # nextParam < 0.005 or nextParam > 0.305 -> 1 or -1 class
+                    if nextParam < pmin:
+                        cntNum = [0]
+                    elif nextParam > pmax:
+                        cntNum = [pcls.shape[0]-2]
+                    # ※ 4 調整要るかも
+                    nextParam = np.round(cntNum[0] * clsWidth + firstClsCenter,4)
+                    """
+              
+                    feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
+                               self.outobs:self.testU[self.index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
+                               self.placeparam:np.array([fp])[:,None], self.alpha:np.array([alpha])}
+          
+                    grad_, nextParam_, lloss_, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
+                
+                    if not flag:
+                        nextParams_ = nextParam_
+                        grads_ = grad_
+                        llosses_ = lloss_ 
+                        flag = True
+                    else:
+                        nextParams_ = np.hstack([nextParams_, nextParam_])
+                        grads_ = np.hstack([grads_, grad_])
+                        llosses_ = np.hstack([llosses_, lloss_])
+                
+                np.savetxt(os.path.join('savetxt', 'poNN', f'first_nextparam_{nCls}.txt'), nextParams_, delimiter=',')
+                
+                nextParam = np.mean(nextParams_)
+                grad = np.mean(grads_)
+                lloss = np.mean(llosses_)
+                        
+                        
             elif itr > 0:
                 predParam = preParam[itr-1]
-                
-                """
-                # start 0,1,2.. cnt == num. of class 
-                cntNum = [cnt for cnt in range(pcls.shape[0]-1) if pcls[cnt] <= nextParam < pcls[cnt+1]]
-                # nextParam < 0.005 or nextParam > 0.305 -> 1 or -1 class
-                if nextParam < pmin:
-                    cntNum = [0]
-                elif nextParam > pmax:
-                    cntNum = [pcls.shape[0]-2]
-                # ※ 4 調整要るかも
-                nextParam = np.round(cntNum[0] * clsWidth + firstClsCenter,4)
-                """
-                
             
-            feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
-                       self.outobs:self.testU[self.index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
-                       self.placeparam:np.array([predParam])[:,None], self.alpha:np.array([alpha])}
-      
-            grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
-        
+                feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
+                           self.outobs:self.testU[self.index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
+                           self.placeparam:np.array([predParam])[:,None], self.alpha:np.array([alpha])}
+          
+                grad, nextParam, lloss, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
+                
             preParam = np.append(preParam, nextParam)    
             grads = np.append(grads, grad)
             llosses = np.append(llosses, lloss)
-            
             
             if itr % 5 == 0:
                 print('----')
