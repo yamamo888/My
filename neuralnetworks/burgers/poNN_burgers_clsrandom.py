@@ -217,6 +217,83 @@ class ParamNN:
         flag = False
         for itr in range(nItr):
             #pdb.set_trace()
+            
+            if itr == 0:
+                # class center mean
+                firstParam = np.mean(pcls[:-1] + (clsWidth/2))
+                # class center
+                fpredParam = pcls[:-1] + (clsWidth/2)
+                
+                preParam = np.append(preParam, firstParam)
+                nextParams_ = fpredParam
+                
+            elif itr > 0:
+                #pdb.set_trace()
+                sInd = nCls*itr
+                fpredParam = nextParams_[sInd:]
+                print('----')
+                print(fpredParam)
+                
+            for fp in fpredParam:
+                
+                feed_dict={self.y:self.testNU[self.index,np.newaxis], self.inobs:self.testU[self.index,np.newaxis], 
+                           self.outobs:self.testU[self.index,np.newaxis,:,:,0], self.indx:self.idx[:,np.newaxis], 
+                           self.placeparam:np.array([fp])[:,None], self.alpha:np.array([alpha])}
+      
+                grad_, nextParam_, lloss_, vloss = self.sess.run([self.gradnu, self.nextparam, self.loss_nu, self.loss], feed_dict)
+                
+                if not flag:
+                    nextParams_ = np.hstack([nextParams_, nextParam_[0]])
+                    grads_ = grad_
+                    llosses_ = lloss_ 
+                    flag = True
+                else:
+                    nextParams_ = np.hstack([nextParams_, nextParam_[0]])
+                    grads_ = np.hstack([grads_, grad_])
+                    llosses_ = np.hstack([llosses_, lloss_])
+            
+            np.savetxt(os.path.join('savetxt', 'poNN', f'predparams_{self.testNU[self.index]}_{nCls}_{itr}.txt'), fpredParam, fmt='%.5f', delimiter=',')
+            
+            nextParam = np.mean(nextParams_)
+            grad = np.mean(grads_)
+            lloss = np.mean(llosses_)
+            
+            preParam = np.append(preParam, nextParam)    
+            grads = np.append(grads, grad)
+            llosses = np.append(llosses, lloss)
+           
+            if itr % 5 == 0:
+                print('----')
+                print('itr: %d exact lambda: %.8f predlambda: %.8f' % (itr, self.testNU[self.index], nextParam))
+                print('lambda mse: %.10f' % (lloss))
+                print('v mse: %.10f' % (vloss))
+                print('gradient (closs/param): %f' % (grad))
+        
+            
+        return [llosses], [grads], [preParam], [self.testNU[self.index]]
+                
+    # ----
+    
+    # ----
+    def everynormalclstrain(self, nItr=1000, alpha=0.01, nCls=0):
+       
+        print('>>> every update class mode')
+        
+        pmin = 0.005
+        pmax = 0.305
+        
+        # paramters ----
+        clsWidth = (pmax - pmin) / nCls
+        firstClsCenter = pmin + (clsWidth / 2)
+       
+        pcls = np.arange(pmin, pmax, clsWidth)
+        pcls = np.append(pcls, pmax+0.001)
+        # ----
+        
+        grads,llosses,preParam = [],[],[]
+        flag = False
+        for itr in range(nItr):
+            #pdb.set_trace()
             '''
             # if Stop update nextParam
             if itr > 1 and preParam[itr-2] == preParam[itr]:
