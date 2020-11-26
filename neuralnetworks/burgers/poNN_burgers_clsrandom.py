@@ -260,7 +260,7 @@ class ParamNN:
                     grads_ = np.hstack([grads_, grad_])
                     llosses_ = np.hstack([llosses_, lloss_])
             
-            np.savetxt(os.path.join('savetxt', 'poNN', f'predparams_{nCls}_{itr}.txt'), fpredParam, fmt='%.5f', delimiter=',')
+            np.savetxt(os.path.join('savetxt', 'poNN', f'predparams_{self.testNU[self.index]}_{nCls}_{itr}.txt'), fpredParam, fmt='%.5f', delimiter=',')
             #np.savetxt(os.path.join('savetxt', 'poNN', f'first_nextparam_{nCls}.txt'), nextParams_, delimiter=',')
             #pdb.set_trace()
             nextParam = np.mean(nextParams_)
@@ -484,6 +484,11 @@ if __name__ == "__main__":
         myPlot.param(preparam, exactparam, savename=f'poNN_testparam_{nCls}cls')
         myPlot.Loss1(llosses, labels=['test'], savename=f'poNN_testloss_{nCls}cls')
         myPlot.Loss1(grads, labels=['test'], savename=f'poNN_testgrad_{nCls}cls')
+
+
+        np.savetxt(os.path.join('savetxt', 'poNN', f'pred_{exactparam[0]}_{nCls}.txt'), preparam, delimiter=',')
+        np.savetxt(os.path.join('savetxt', 'poNN', f'grad_{exactparam[0]}_{nCls}.txt'), grads, delimiter=',')
+        np.savetxt(os.path.join('savetxt', 'poNN', f'loss_{exactparam[0]}_{nCls}.txt'), llosses, delimiter=',')
         # ----
 
     
