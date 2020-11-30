@@ -101,7 +101,7 @@ class ParamNN:
         self.loss = tf.reduce_mean(tf.square(self.outobs - space_predu))
         # ----
 
-        pdb.set_trace()
+        #pdb.set_trace()
         
         # gradient ----
         self.alpha = tf.compat.v1.placeholder(tf.float64, shape=[1])
@@ -279,10 +279,19 @@ class ParamNN:
     def randomtrain(self, nItr=1000, alpha=0.01):
         
         # paramters ----
+        pmin = 0.0105
+        pmax = 0.011
+        #pmin = 0.105
+        #pmax = 0.109
+        #pmin = 0.2
+        #pmax = 0.205
+        #pmin = 0.06
+        #pmax = 0.09
         #pmin = 0.005
+        #pmax = 0.009
+        #pmin = 0.255
         #pmax = 0.305
-        pmin = 0.291
-        pmax = 0.295
+        
         print('>>> random mode')
         # all
         randomarray = np.arange(pmin,pmax,0.0001)
@@ -308,11 +317,13 @@ class ParamNN:
             grads = np.append(grads, grad)
             llosses = np.append(llosses, lloss)
             
-            print('----')
-            print('itr: %d exact lambda: %.8f predlambda: %.8f' % (itr, self.testNU[self.index], preParam[itr-1]))
-            print('lambda mse: %.10f' % (lloss))
-            print('v mse: %.10f' % (vloss))
-            print('gradient (closs/param): %f' % (grad))
+            
+            if itr % 5 == 0:
+                print('----')
+                print('itr: %d exact lambda: %.8f predlambda: %.8f' % (itr, self.testNU[self.index], preParam[itr-1]))
+                print('lambda mse: %.10f' % (lloss))
+                print('v mse: %.10f' % (vloss))
+                print('gradient (closs/param): %f' % (grad))
     
         return [llosses], [grads], [preParam], [self.testNU[self.index]]
     # ----
@@ -324,7 +335,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # iteration of training
-    parser.add_argument('--nItr', type=int, default=100)
+    parser.add_argument('--nItr', type=int, default=1000)
     # datamode (pkl)
     parser.add_argument('--dataMode', required=True, choices=['large', 'middle', 'small'])
     # index test 2=0.01
@@ -336,7 +347,7 @@ if __name__ == "__main__":
     # classification param == flag
     parser.add_argument('--clsflag', action='store_true')
     # num of class
-    parser.add_argument('--nCls', type=int, choices=[10, 50, 100])
+    parser.add_argument('--nCls', type=int, choices=[10, 25, 50, 100])
     
     
     # 引数展開
