@@ -19,7 +19,6 @@ import cv2
 
 import tensorflow as tf
 
-import plot
 
 np.random.seed(1234)
 

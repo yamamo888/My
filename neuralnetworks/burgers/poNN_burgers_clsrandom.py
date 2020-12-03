@@ -14,7 +14,7 @@ import pdb
 
 import matplotlib.pylab as plt
 
-import pdedata
+import burgersdata
 import pdeburgers
 import burgersplot
 
@@ -37,7 +37,7 @@ class ParamNN:
         # ----
     
         # Dataset ----
-        self.myData = pdedata.pdeData(pdeMode='burgers', dataMode=dataMode)
+        self.myData = burgersdata.Data(pdeMode='burgers', dataMode=dataMode)
         # [xDim,1], [100,1], [data, xDim, 100], [data,] 
         self.alltestX, self.testX, self.testT, self.testU, self.testNU, self.idx = self.myData.traintest()
         # ----
@@ -215,23 +215,24 @@ class ParamNN:
         pcls = np.append(pcls, pmax+0.001)
         # ----
         
-        grads,llosses,preParam = [],[],[]
+        grads,llosses,preParam,preParams = [],[],[],[]
         flag = False
         for itr in range(nItr):
             #pdb.set_trace()
             
             if itr == 0:
                 # class center mean
-                firstParam = np.mean(pcls[:-1] + (clsWidth/2))
+                meanParam = np.mean(pcls[:-1] + (clsWidth/2))
                 # class center
                 fpredParam = pcls[:-1] + (clsWidth/2)
                 
-                preParam = np.append(preParam, firstParam)
                 nextParams_ = fpredParam
                 
             elif itr > 0:
                 sInd = nCls*itr
                 fpredParam = nextParams_[sInd:]
+                
+                meanParam = np.hstack([meanParam, np.mean(fpredParam)])
                 
             for fp in fpredParam:
                 
@@ -253,28 +254,24 @@ class ParamNN:
             
             np.savetxt(os.path.join('savetxt', 'poNN', f'predparams_{self.testNU[self.index]}_{nCls}_{itr}.txt'), fpredParam, fmt='%.5f', delimiter=',')
             
-            nextParam = np.mean(nextParams_)
+            # mean params, gradient loss
             grad = np.mean(grads_)
             lloss = np.mean(llosses_)
             
-            preParam = np.append(preParam, nextParam)    
             grads = np.append(grads, grad)
             llosses = np.append(llosses, lloss)
-           
-            if itr % 5 == 0:
+            
+            if itr > 0 and itr % 5 == 0:
                 print('----')
-                print('itr: %d exact lambda: %.8f predlambda: %.8f' % (itr, self.testNU[self.index], nextParam))
+                print('itr: %d exact lambda: %.8f predlambda: %.8f' % (itr, self.testNU[self.index], meanParam[-1]))
                 print('lambda mse: %.10f' % (lloss))
                 print('v mse: %.10f' % (vloss))
                 print('gradient (closs/param): %f' % (grad))
         
-            
-        return [llosses], [grads], [preParam], [self.testNU[self.index]]
+        return [llosses], [grads], [meanParam, nextParams_[:-nCls]], [self.testNU[self.index]]
                 
     # ----
-    
-    
-    
+
     # ----
     def randomtrain(self, nItr=1000, alpha=0.01):
         
@@ -382,7 +379,7 @@ if __name__ == "__main__":
         
         # Plot ----
         myPlot = burgersplot.Plot(dataMode=dataMode, trialID=index)
-        myPlot.param(preparam, exactparam, savename=f'poNN_testparam_random_{np.round(preparam[0][0],5)}')
+        myPlot.paramCls(preparam, exactparam, savename=f'poNN_testparam_random_{np.round(preparam[0][0],5)}')
         myPlot.Loss1(llosses, labels=['test'], savename=f'poNN_testloss_random_{np.round(preparam[0][0],5)}')
         myPlot.Loss1(grads, labels=['test'], savename=f'poNN_testgrad_random_{np.round(preparam[0][0],5)}')
         # ----
@@ -392,15 +389,16 @@ if __name__ == "__main__":
         
         # Plot ----
         myPlot = burgersplot.Plot(dataMode=dataMode, trialID=index)
-        myPlot.param(preparam, exactparam, savename=f'poNN_testparam_{nCls}cls')
+        myPlot.paramCls(preparam, exactparam, llosses, savename=f'poNN_testparam_{nCls}cls')
+        myPlot.paramCls(preparam, exactparam, llosses, savename=f'poNN_testparamscatter_{nCls}cls', isScatter=True)
         myPlot.Loss1(llosses, labels=['test'], savename=f'poNN_testloss_{nCls}cls')
         myPlot.Loss1(grads, labels=['test'], savename=f'poNN_testgrad_{nCls}cls')
         # ----
         
         # save text ----
-        np.savetxt(os.path.join('savetxt', 'poNN', f'pred_{exactparam[0]}_{nCls}.txt'), preparam, delimiter=',')
-        np.savetxt(os.path.join('savetxt', 'poNN', f'grad_{exactparam[0]}_{nCls}.txt'), grads, delimiter=',')
-        np.savetxt(os.path.join('savetxt', 'poNN', f'loss_{exactparam[0]}_{nCls}.txt'), llosses, delimiter=',')
+        #np.savetxt(os.path.join('savetxt', 'poNN', f'pred_{exactparam[0]}_{nCls}.txt'), preparam, delimiter=',')
+        #np.savetxt(os.path.join('savetxt', 'poNN', f'grad_{exactparam[0]}_{nCls}.txt'), grads, delimiter=',')
+        #np.savetxt(os.path.join('savetxt', 'poNN', f'loss_{exactparam[0]}_{nCls}.txt'), llosses, delimiter=',')
         # ----
 
     

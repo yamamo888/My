@@ -19,22 +19,17 @@ warnings.simplefilter('ignore')
 
 import pdb
 
-import burgersdata
+#import burgersdata
 
 
 class Plot:
       def __init__(self, figurepath='figure', dataMode='test', trialID=0):
 
-          # cell index
-          self.ntI = 0
-          self.tntI = 1
-          self.ttI = 2
-
           self.figurePath = figurepath
           self.dataMode = dataMode
           self.trialID = trialID
 
-          self.myData = burgersdata.Data(pdeMode='burgers', dataMode=dataMode)
+          #self.myData = burgersdata.Data(pdeMode='burgers', dataMode=dataMode)
 
       # Plot loss (two data)----
       def Loss(self, data, labels, savename='loss'):
@@ -73,16 +68,36 @@ class Plot:
           plt.close()
       # ----
       
-      # predict parameter & exact parameter ----
-      def param(self, pred, exact, savename='param'):
+      
+      
+      # ----
+      def paramCls(self, pred, exact, loss, savename='loss', isScatter=False):
           
           sns.set_style('dark')
+         
+          if isScatter:
+              nItr = pred[0].shape[0]
+              # [nCls, itr]
+              ppred = np.reshape(pred[1], [-1, pred[0].shape[0]])
+              
+              fig, ax = plt.subplots()
+              for i in np.arange(nItr): 
+                  ax.plot(ppred[:,i], color='steelblue', linestyle='None', markersize=5, marker='.')
+              
+              ax.plot(pred[0], linewidth=5, color='dimgrey', label='predict')
+              ax.hlines(exact[0], xmin=0, xmax=pred[0].shape[0], linewidth=5, color='coral', label='exact')
+            
+              plt.title('lpred: %.5f, vpred: %.5f, exact: %.5f \n lvar: %.8f, vvar: %.8f ' % 
+                        (pred[0][0], pred[0][-1], exact[0][0], np.var(ppred[:,0]), np.var(ppred[:,-1])))
           
-          plt.plot(pred[0], linewidth=5, color='dimgrey', label='predict')
-          plt.hlines(exact[0], xmin=0, xmax=pred[0].shape[0], linewidth=5, color='coral', label='exact')
+          else:
+              plt.plot(pred[0], linewidth=5, color='dimgrey', label='predict')
+              plt.hlines(exact[0], xmin=0, xmax=pred[0].shape[0], linewidth=5, color='coral', label='exact')
           
-          plt.title('lpred: %.5f, vpred: %.5f, exact: %.5f' % (pred[0][0], pred[0][-1], exact[0][0]))
-          
+              plt.title('lpred: %.5f, vpred: %.5f, exact: %.5f' % (pred[0][0], pred[0][-1], exact[0][0]))
+        
+          #pdb.set_trace()
+        
           plt.xlabel('iteration',fontsize='18')
           plt.ylabel('parameter',fontsize='18')
           plt.legend(fontsize='18')
@@ -91,50 +106,7 @@ class Plot:
           plt.savefig(losspath)
           plt.close()
       # ----
-     
-      # nu -> u(t,x) ----
-      def paramToU(self, params, xNum=256, tNum=100):
-          
-          x = params[0]
-          t = params[1]
-          nus = params[2]
-          
-          
-          # 0.01 < x < 5.0
-          nus = np.where(np.round(nus,3)<0.01, 0.01, np.where(np.round(nus,3)>5.0, 5.0, nus))
-          
-          if any(nus) < 0.01:
-              pdb.set_trace()
-          
-          flag = False
-          for nu in nus:
-              #print(f'start param nu:{nu} -> inv u')
-              # observation
-              obsu = np.zeros([xNum, tNum])
-    
-              for j in range (0, tNum):
-                  for i in range (0, xNum):
-                      a = ( x[i] - 4.0 * t[j] )
-                      b = ( x[i] - 4.0 * t[j] - 2.0 * np.pi )
-                      
-                      c = 4.0 * nu * ( t[j] + 1.0 )
-    
-                      phi = np.exp ( - a * a / c ) + np.exp ( - b * b / c )
-                      dphi = - 2.0 * a * np.exp ( - a * a / c ) / c \
-                             - 2.0 * b * np.exp ( - b * b / c ) / c
-    
-                      obsu[i,j] = 4.0 - 2.0 * nu * dphi / phi
-            
-              # for pNN_burgers
-              if not flag:
-                  predobsu = obsu[np.newaxis]
-                  flag = True
-              else:
-                  predobsu = np.vstack([predobsu, obsu[np.newaxis]])
 
-          return predobsu
-      # ----
-      
       # nu -> u(t,x) burgers2 var. ----
       def paramToU2(self, params, xNum=100, tNum=100):
           
