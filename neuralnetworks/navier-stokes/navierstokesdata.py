@@ -306,13 +306,13 @@ class Data:
     # ----
     def maketraintest(self, name):
         
-        nData = 1000
+        nData = 260
         
         ind = np.ones(nData, dtype=bool)
         # train data index
         trainidx = np.random.choice(nData, int(nData*0.8), replace=False)
-        # del 0.005 0.01 0.02 0.03
-        trainidx = [s for s in trainidx if s not in [0, 5, 15, 95, 295]]
+        # ※index変更? del 100
+        trainidx = [s for s in trainidx if s not in [100]]
         ind[trainidx] = False
         vec = np.arange(nData)
         # test data index
@@ -324,59 +324,74 @@ class Data:
             allX = pickle.load(fp)
             allY = pickle.load(fp)
             allT = pickle.load(fp)
-            X = pickle.load(fp)
-            Y = pickle.load(fp)
-            T = pickle.load(fp)
             U = pickle.load(fp)
             V = pickle.load(fp)
             P = pickle.load(fp)
-            NU = pickle.load(fp)
-           
-            
-            
+            Re = pickle.load(fp)            
+            idx = pickle.load(fp)
+            idy = pickle.load(fp)
+
+        trU = U[trainidx]
+        teU = U[testidx]
+        trV = V[trainidx]
+        teV = V[testidx]
+        trP = P[trainidx]
+        teP = P[testidx]  
+        trRe = Re[trainidx]
+        teRe = Re[testidx]
+    
+        # save train & test
         with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtrainXYTUVPNU_{name}.pkl'), 'wb') as fp:
             pickle.dump(allX, fp)
-            pickle.dump(T, fp)
+            pickle.dump(allY, fp)
+            pickle.dump(allT, fp)
             pickle.dump(trU, fp)
-            pickle.dump(trNU, fp)
-            pickle.dump(X, fp)
-            pickle.dump(trallU, fp)
+            pickle.dump(trV, fp)
+            pickle.dump(trP, fp)
+            pickle.dump(trRe, fp)
             pickle.dump(idx, fp)
+            pickle.dump(idy, fp)
             
         with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtestXYTUVPNU_{name}.pkl'), 'wb') as fp:
             pickle.dump(allX, fp)
-            pickle.dump(T, fp)
+            pickle.dump(allY, fp)
+            pickle.dump(allT, fp)
             pickle.dump(teU, fp)
-            pickle.dump(teNU, fp)
-            pickle.dump(X, fp)
-            pickle.dump(teallU, fp)
+            pickle.dump(teV, fp)
+            pickle.dump(teP, fp)
+            pickle.dump(teRe, fp)
             pickle.dump(idx, fp)
+            pickle.dump(idy, fp)
     # ----
     
     # ----    
     def traintest(self):
         
         # train data
-        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtrainXTUNU2_{self.dataMode}.pkl'), 'rb') as fp:
-            self.alltrainX = pickle.load(fp) #[xDim,]
-            self.trainT = pickle.load(fp) #[100,]
-            self.trainU = pickle.load(fp) #[256,100]
-            self.trainNU = pickle.load(fp) #[data]
-            self.trainX = pickle.load(fp) #[xDim,]
-        
+        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtrainXYTUVPNU_{self.dataMode}.pkl'), 'rb') as fp:
+            self.alltrainX = pickle.load(fp) 
+            self.alltrainY = pickle.load(fp) 
+            self.alltrainT = pickle.load(fp) 
+            self.trainU = pickle.load(fp) 
+            self.trainV = pickle.load(fp) 
+            self.trainP = pickle.load(fp) 
+            self.trainRe = pickle.load(fp) 
+            self.trainX = pickle.load(fp)
+            self.trainY = pickle.load(fp)
+            
         # test data
-        # testX,testT: 同じX,Tがtestデータ分
-        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtestXTUNU2_{self.dataMode}.pkl'), 'rb') as fp:
+        with open(os.path.join(self.modelPath, self.pdeMode, f'IMGtestXYTUVPNU_{self.dataMode}.pkl'), 'rb') as fp:
             alltestX = pickle.load(fp)
-            testT = pickle.load(fp)
+            alltestY = pickle.load(fp)
+            alltestT = pickle.load(fp)
             testU = pickle.load(fp)
-            testNU = pickle.load(fp)
+            testV = pickle.load(fp)
+            testP = pickle.load(fp)
+            testRe = pickle.load(fp)
             testX = pickle.load(fp)
-            _ = pickle.load(fp)
-            idx = pickle.load(fp)
-        
-        # [100,1] [100,1] [data,100,100,1]
-        return alltestX, testX, testT, testU[:,:,:,np.newaxis], testNU[:,np.newaxis], idx
+            testY = pickle.load(fp)
+            
+        return alltestX,alltestY,alltestT, testX,testY, testU,testV,testP, testRe
     # ----
     
     # ----
@@ -400,9 +415,9 @@ name = 'small'
 myData = Data(pdeMode='nv', dataMode=name)
 
 #[1]
-myData.saveXYTUVP()
+#myData.saveXYTUVP()
 
-'''
+
 #[2]
 with open(os.path.join('model','nv','XYTUVP.pkl'), 'rb') as fp:
     X = pickle.load(fp)
@@ -411,57 +426,49 @@ with open(os.path.join('model','nv','XYTUVP.pkl'), 'rb') as fp:
     U = pickle.load(fp)
     V = pickle.load(fp)
     P = pickle.load(fp)
-    NU = pickle.load(fp)
+    Re = pickle.load(fp)
 
 # making space X (large, middle small)
 if name == 'large':
-    xSize = 50
-    
+    xSize = 46
+    ySize = 31
 elif name == 'middle':
-    xSize = 25
+    xSize = 23
+    ySize = 15
 elif name == 'small':
-    xSize = 10
+    xSize = 9
+    ySize = 6
 
 # ※ok?                
 tmpidx = np.random.choice(X.shape[0], xSize, replace=False)
-tmpidy = np.random.choice(Y.shape[0], xSize, replace=False)
+tmpidy = np.random.choice(Y.shape[0], ySize, replace=False)
 
 idx = np.sort(tmpidx)
 idy = np.sort(tmpidy)
 
-# for train & test ----
-flag = False
-for i in np.arange(NU.shape[0]):
-  
-    label = np.round(NU[i],5).astype(str)
-    
-    if not flag:
-        pU = U[i,idy,idx,idt][np.newaxis] # [x,y,t]
-        pV = V[i,idy,idx,idt][np.newaxis]
-        pP = P[i,idy,idx,idt][np.newaxis]
-        flag = True
-    else:
-        pU = np.vstack([pU, U[i,idy,idx,idt][np.newaxis]])
-        pV = np.vstack([pV, V[i,idy,idx,idt][np.newaxis]])
-        pP = np.vstack([pP, P[i,idy,idx,idt][np.newaxis]])
+# make space data
+pUy = U[:,idy,:,:] # [y,x,t]
+pVy = V[:,idy,:,:]
+pPy = P[:,idy,:,:]
 
-        
+pU = pUy[:,:,idx,:]
+pV = pVy[:,:,idx,:]
+pP = pPy[:,:,idx,:]
+
 with open(os.path.join('model', 'nv', f'IMGXYTUVP_{name}.pkl'), 'wb') as fp:
      pickle.dump(X[:,None], fp)
      pickle.dump(Y[:,None], fp)
      pickle.dump(T[:,None], fp)
-     pickle.dump(X[idx,None], fp)
-     pickle.dump(Y[idy,None], fp)
      pickle.dump(pU, fp)
      pickle.dump(pV, fp)
      pickle.dump(pP, fp)
+     pickle.dump(Re, fp)
      pickle.dump(idx, fp)
      pickle.dump(idy, fp)
-     pickle.dump(idt, fp)
-'''
- 
+
+
 #[3]
-#myData.maketraintest(name=name)
+myData.maketraintest(name=name)
 
     
     
