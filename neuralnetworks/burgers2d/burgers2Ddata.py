@@ -40,10 +40,6 @@ class Data:
         NX = 101
         NY = 101
         
-        NT = 501
-        NX = 101
-        NY = 101
-        
         TMIN = 0.0
         TMAX = 0.5
         XMAX = 2
@@ -137,7 +133,10 @@ class Data:
         
         # parameters ----
         defaultnu = 0.1
-        minnu = 0.0001
+        #minnu = 0.0001
+        #minnu = 0.028
+        #minnu = 0.058
+        minnu = 0.088
         maxnu = 0.1101
         swnu = 0.0001
        
@@ -167,7 +166,7 @@ class Data:
             cnt += 1
             print(cnt)
             
-            obsu, obsv = self.burgers2D(NU=nu)
+            obsu, obsv = self.burgers2D(NU=np.around(nu,5))
             
             if not flag:
                 U = obsu[np.newaxis]
@@ -188,7 +187,7 @@ class Data:
            y[j] = j*DY
          
         #pdb.set_trace()
-        with open(os.path.join(self.modelPath, self.pdeMode, 'XYTUVNU.pkl'), 'wb') as fp:
+        with open(os.path.join(self.modelPath, self.pdeMode, f'XYTUVNU_{maxnu}.pkl'), 'wb') as fp:
             pickle.dump(x, fp)
             pickle.dump(y, fp)
             pickle.dump(t, fp)
@@ -260,7 +259,7 @@ myData.burgers2D()
 
 #[1]
 myData.saveXYTUV()
-
+'''
 #[2]
 print(name)
 with open(os.path.join(myData.modelPath, myData.pdeMode, 'XYTUVNU.pkl'), 'rb') as fp:
@@ -309,3 +308,4 @@ with open(os.path.join(myData.modelPath, myData.pdeMode, f'SparseXYTUVNU_{name}.
 
 #[3]
 myData.maketraintest(name=name)
+'''
