@@ -232,7 +232,8 @@ class Data:
                 nus = nu[None]
                 flag = True
             else:
-		us = np.vstack([us, u[None]])
+                pdb.set_trace()
+                us = np.vstack([us, u[None]])
                 vs = np.vstack([vs, v[None]])
                 nus = np.vstack([nus, nu[None]])
 
