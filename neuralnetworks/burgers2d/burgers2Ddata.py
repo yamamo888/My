@@ -36,9 +36,13 @@ class Data:
     def burgers2D(self, NU=0.1):
         
         # parameters ----
-        NT = 501
-        NX = 101
-        NY = 101
+        #NT = 501
+        #NX = 101
+        #NY = 101
+        
+        NT = 301
+        NX = 81
+        NY = 81
         
         TMIN = 0.0
         TMAX = 0.5
@@ -137,12 +141,20 @@ class Data:
         #minnu = 0.028
         #minnu = 0.058
         minnu = 0.088
+        #maxnu = 0.028
+        #maxnu = 0.058
+        #maxnu = 0.088
         maxnu = 0.1101
+
         swnu = 0.0001
        
-        NT = 501
-        NX = 101
-        NY = 101
+        #NT = 501
+        #NX = 101
+        #NY = 101
+        
+        NT = 301
+        NX = 81
+        NY = 81
         
         TMIN = 0.0
         TMAX = 0.5
@@ -188,13 +200,52 @@ class Data:
          
         #pdb.set_trace()
         with open(os.path.join(self.modelPath, self.pdeMode, f'XYTUVNU_{maxnu}.pkl'), 'wb') as fp:
-            pickle.dump(x, fp)
-            pickle.dump(y, fp)
-            pickle.dump(t, fp)
-            pickle.dump(U, fp)
-            pickle.dump(V, fp)
-            pickle.dump(NU, fp)
+            pickle.dump(x, fp, protocol=4)
+            pickle.dump(y, fp, protocol=4)
+            pickle.dump(t, fp, protocol=4)
+            pickle.dump(U, fp, protocol=4)
+            pickle.dump(V, fp, protocol=4)
+            pickle.dump(NU, fp, protocol=4)
     # ----
+
+    def concatdata(self):
+
+        data = glob.glob(os.path.join('model','burgers2d','*pkl'))
+        
+        flag = False
+        for i in [1,2,3,4]:
+            f = data[i]
+            print(f)
+            #pdb.set_trace()
+
+            with open(f, 'rb') as fp:
+                x = pickle.load(fp)
+                y = pickle.load(fp)
+                t = pickle.load(fp)
+                u = pickle.load(fp)
+                v = pickle.load(fp)
+                nu = pickle.load(fp)
+
+            if not flag:
+                us = u[None]
+                vs = v[None]
+                nus = nu[None]
+                flag = True
+            else:
+		us = np.vstack([us, u[None]])
+                vs = np.vstack([vs, v[None]])
+                nus = np.vstack([nus, nu[None]])
+
+        pdb.set_trace()
+        with open(os.path.join(self.modelPath, self.pdeMode, f'XYTUVNU.pkl'), 'wb') as fp:
+            pickle.dump(x, fp, protocol=4)
+            pickle.dump(y, fp, protocol=4)
+            pickle.dump(t, fp, protocol=4)
+            pickle.dump(us, fp, protocol=4)
+            pickle.dump(vs, fp, protocol=4)
+            pickle.dump(nus, fp, protocol=4)
+
+
     
     # ----
     def maketraintest(self, name):
@@ -232,22 +283,22 @@ class Data:
         
         
         with open(os.path.join(self.modelPath, self.pdeMode, f'SparsetrainXYTUVNU_{name}.pkl'), 'wb') as fp:
-            pickle.dump(allX, fp)
-            pickle.dump(T, fp)
-            pickle.dump(trU, fp)
-            pickle.dump(trNU, fp)
-            pickle.dump(X, fp)
-            pickle.dump(trallU, fp)
-            pickle.dump(idx, fp)
+            pickle.dump(allX, fp, protocol=4)
+            pickle.dump(T, fp, protocol=4)
+            pickle.dump(trU, fp, protocol=4)
+            pickle.dump(trNU, fp, protocol=4)
+            pickle.dump(X, fp, protocol=4)
+            pickle.dump(trallU, fp, protocol=4)
+            pickle.dump(idx, fp, protocol=4)
             
         with open(os.path.join(self.modelPath, self.pdeMode, f'SparsetestXYTUVNU_{name}.pkl'), 'wb') as fp:
-            pickle.dump(allX, fp)
-            pickle.dump(T, fp)
-            pickle.dump(teU, fp)
-            pickle.dump(teNU, fp)
-            pickle.dump(X, fp)
-            pickle.dump(teallU, fp)
-            pickle.dump(idx, fp)
+            pickle.dump(allX, fp, protocol=4)
+            pickle.dump(T, fp, protocol=4)
+            pickle.dump(teU, fp, protocol=4)
+            pickle.dump(teNU, fp, protocol=4)
+            pickle.dump(X, fp, protocol=4)
+            pickle.dump(teallU, fp, protocol=4)
+            pickle.dump(idx, fp, protocol=4)
     # ----
    
 name = 'small'
@@ -255,10 +306,14 @@ name = 'middle'
 name = 'large'
 myData = Data(pdeMode='burgers2d', dataMode=name)
 
-myData.burgers2D()
+#myData.burgers2D()
 
 #[1]
-myData.saveXYTUV()
+#myData.saveXYTUV()
+
+#[2]'
+myData.concatdata()
+
 '''
 #[2]
 print(name)
@@ -296,14 +351,14 @@ pV = pV[:,idx,:,:]
 
 pdb.set_trace()
 with open(os.path.join(myData.modelPath, myData.pdeMode, f'SparseXYTUVNU_{name}.pkl'), 'wb') as fp:
-    pickle.dump(X[:,None], fp)
-    pickle.dump(Y[:,None], fp)
-    pickle.dump(T[:,None], fp)
-    pickle.dump(pU, fp)
-    pickle.dump(pV, fp)
-    pickle.dump(NU, fp)
-    pickle.dump(idx, fp)
-    pickle.dump(idy, fp)
+    pickle.dump(X[:,None], fp, protocol=4)
+    pickle.dump(Y[:,None], fp, protocol=4)
+    pickle.dump(T[:,None], fp, protocol=4)
+    pickle.dump(pU, fp, protocol=4)
+    pickle.dump(pV, fp, protocol=4)
+    pickle.dump(NU, fp, protocol=4)
+    pickle.dump(idx, fp, protocol=4)
+    pickle.dump(idy, fp, protocol=4)
 #----
 
 #[3]
