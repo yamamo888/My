@@ -210,10 +210,10 @@ class Data:
 
     def concatdata(self):
 
-        data = glob.glob(os.path.join('model','burgers2d','*pkl'))
+        data = glob.glob(os.path.join('model','burgers2d_small','*pkl'))
         
         flag = False
-        for i in [1,2,3,4]:
+        for i in [2,0,1,3]:
             f = data[i]
             print(f)
             #pdb.set_trace()
@@ -225,20 +225,19 @@ class Data:
                 u = pickle.load(fp)
                 v = pickle.load(fp)
                 nu = pickle.load(fp)
-
+            #pdb.set_trace()
             if not flag:
-                us = u[None]
-                vs = v[None]
-                nus = nu[None]
+                us = u
+                vs = v
+                nus = nu
                 flag = True
             else:
-                pdb.set_trace()
-                us = np.vstack([us, u[None]])
-                vs = np.vstack([vs, v[None]])
-                nus = np.vstack([nus, nu[None]])
+                us = np.concatenate([us, u], 0)
+                vs = np.concatenate([vs, v], 0)
+                nus = np.concatenate([nus, nu],0)
 
-        pdb.set_trace()
-        with open(os.path.join(self.modelPath, self.pdeMode, f'XYTUVNU.pkl'), 'wb') as fp:
+        #pdb.set_trace()
+        with open(os.path.join(self.modelPath, self.pdeMode, f'XYTUVNU_small.pkl'), 'wb') as fp:
             pickle.dump(x, fp, protocol=4)
             pickle.dump(y, fp, protocol=4)
             pickle.dump(t, fp, protocol=4)
@@ -251,59 +250,69 @@ class Data:
     # ----
     def maketraintest(self, name):
     
-        nData = 1000
+        nData = 1101
         ind = np.ones(nData, dtype=bool)
         # train data index
         trainidx = np.random.choice(nData, int(nData*0.8), replace=False)
         # del 0.0001 0.001 0.01 0.1
-        trainidx = [s for s in trainidx if s not in [0]]
+        trainidx = [s for s in trainidx if s not in [0,9,99,999]]
         ind[trainidx] = False
         vec = np.arange(nData)
         # test data index
         testidx = vec[ind]
-        pdb.set_trace()
+        
         # loading sparse data 
         sparsepath = glob.glob(os.path.join(self.modelPath, self.pdeMode, f'SparseXYTUVNU_{name}.pkl'))
         # space data, 256 -> xDim
-        with open(sparsepath, 'rb') as fp:
-            allX = pickle.load(fp)
-            T = pickle.load(fp)
-            U = pickle.load(fp)
-            NU = pickle.load(fp)
-            X = pickle.load(fp)
-            allU = pickle.load(fp)
+        with open(sparsepath[0], 'rb') as fp:
+            x = pickle.load(fp)
+            y = pickle.load(fp)
+            t = pickle.load(fp)
+            pu = pickle.load(fp)
+            pv = pickle.load(fp)
+            nu = pickle.load(fp)
             idx = pickle.load(fp)
+            idy = pickle.load(fp)
              
         #pdb.set_trace()
-        trU = U[trainidx,:]
-        teU = U[testidx,:]
-        trallU = allU[trainidx,:]
-        teallU = allU[testidx,:]
-        trNU = NU[trainidx]
-        teNU = NU[testidx]
+        trU = pu[trainidx,:]
+        teU = pu[testidx,:]
+        trV = pv[trainidx,:]
+        teV = pv[testidx,:]
+        trNU = nu[trainidx]
+        teNU = nu[testidx]
         
         
         with open(os.path.join(self.modelPath, self.pdeMode, f'SparsetrainXYTUVNU_{name}.pkl'), 'wb') as fp:
-            pickle.dump(allX, fp, protocol=4)
-            pickle.dump(T, fp, protocol=4)
+            pickle.dump(x, fp, protocol=4)
+            pickle.dump(y, fp, protocol=4)
+            pickle.dump(t, fp, protocol=4)
             pickle.dump(trU, fp, protocol=4)
+            pickle.dump(trV, fp, protocol=4)
             pickle.dump(trNU, fp, protocol=4)
-            pickle.dump(X, fp, protocol=4)
-            pickle.dump(trallU, fp, protocol=4)
             pickle.dump(idx, fp, protocol=4)
+            pickle.dump(idy, fp, protocol=4)
             
         with open(os.path.join(self.modelPath, self.pdeMode, f'SparsetestXYTUVNU_{name}.pkl'), 'wb') as fp:
-            pickle.dump(allX, fp, protocol=4)
-            pickle.dump(T, fp, protocol=4)
+            pickle.dump(x, fp, protocol=4)
+            pickle.dump(y, fp, protocol=4)
+            pickle.dump(t, fp, protocol=4)
             pickle.dump(teU, fp, protocol=4)
+            pickle.dump(teV, fp, protocol=4)
             pickle.dump(teNU, fp, protocol=4)
-            pickle.dump(X, fp, protocol=4)
-            pickle.dump(teallU, fp, protocol=4)
             pickle.dump(idx, fp, protocol=4)
+            pickle.dump(idy, fp, protocol=4)
     # ----
+
+    # ----
+    def miniBatch(self, index):
+        
+        batchX = self.train
+
+
    
-name = 'small'
-name = 'middle'
+#name = 'small'
+#name = 'middle'
 name = 'large'
 myData = Data(pdeMode='burgers2d', dataMode=name)
 
@@ -313,7 +322,7 @@ myData = Data(pdeMode='burgers2d', dataMode=name)
 #myData.saveXYTUV()
 
 #[2]'
-myData.concatdata()
+#myData.concatdata()
 
 '''
 #[2]
@@ -328,14 +337,20 @@ with open(os.path.join(myData.modelPath, myData.pdeMode, 'XYTUVNU.pkl'), 'rb') a
 
 # making space X (large, middle small)
 if name == 'large':
-    xSize = 50
-    ySize = 50
+    xSize = 40
+    ySize = 40
+    #xSize = 25
+    #ySize = 25
 elif name == 'middle':
-    xSize = 25
-    ySize = 25
+    xSize = 20
+    ySize = 20
+    #xSize = 12
+    #ySize = 12
 elif name == 'small':
-    xSize = 10
-    ySize = 10
+    xSize = 8
+    ySize = 8
+    #xSize = 5
+    #ySize = 5
 
 tmpidx = np.random.choice(X.shape[0], xSize, replace=False)
 tmpidy = np.random.choice(Y.shape[0], ySize, replace=False)
@@ -350,8 +365,8 @@ pV = V[:,:,idy,:]
 pU = pU[:,idx,:,:]
 pV = pV[:,idx,:,:]
 
-pdb.set_trace()
-with open(os.path.join(myData.modelPath, myData.pdeMode, f'SparseXYTUVNU_{name}.pkl'), 'wb') as fp:
+#pdb.set_trace()
+with open(os.path.join(myData.modelPath, myData.pdeMode, f'SparseXYTUVNU_{name}_.pkl'), 'wb') as fp:
     pickle.dump(X[:,None], fp, protocol=4)
     pickle.dump(Y[:,None], fp, protocol=4)
     pickle.dump(T[:,None], fp, protocol=4)
@@ -361,7 +376,7 @@ with open(os.path.join(myData.modelPath, myData.pdeMode, f'SparseXYTUVNU_{name}.
     pickle.dump(idx, fp, protocol=4)
     pickle.dump(idy, fp, protocol=4)
 #----
-
+'''
 #[3]
 myData.maketraintest(name=name)
-'''
+
