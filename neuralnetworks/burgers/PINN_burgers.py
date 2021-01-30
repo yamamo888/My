@@ -20,7 +20,11 @@ import burgersdata
 
 
 np.random.seed(1234)
-tf.set_random_seed(1234)
+#tf.set_random_seed(1234)
+#tf.set_random_seed(0)
+#tf.set_random_seed(1)
+#tf.set_random_seed(550)
+tf.set_random_seed(5)
 
 class PhysicsInformedNN:
     # Initialize the class
@@ -54,10 +58,13 @@ class PhysicsInformedNN:
         
         self.loss = tf.reduce_mean(tf.square(self.u_tf - self.u_pred)) + \
                     tf.reduce_mean(tf.square(self.f_pred))
+
+        self.uloss = tf.reduce_mean(tf.square(self.u_tf - self.u_pred))
+        self.floss = tf.reduce_mean(tf.square(self.f_pred))
         
         self.optimizer = tf.contrib.opt.ScipyOptimizerInterface(self.loss, 
                                                                 method = 'L-BFGS-B', 
-                                                                options = {'maxiter': 100, # 学習回数？
+                                                                options = {'maxiter': 50000, # 学習回数？
                                                                            'maxfun': 50000,
                                                                            'maxcor': 50,
                                                                            'maxls': 50,
@@ -91,6 +98,7 @@ class PhysicsInformedNN:
         num_layers = len(weights) + 1
         
         H = 2.0*(X - self.lb)/(self.ub - self.lb) - 1.0
+        #pdb.set_trace() 
         for l in range(0,num_layers-2):
             W = weights[l]
             b = biases[l]
@@ -113,7 +121,6 @@ class PhysicsInformedNN:
         
         lambda1 = tf.exp(self.lambda1)
         u = self.net_u(x,t)
-        
         u_t = tf.gradients(u, t)[0]
         u_x = tf.gradients(u, x)[0]
         u_xx = tf.gradients(u_x, x)[0]
@@ -131,25 +138,44 @@ class PhysicsInformedNN:
             
         tf_dict = {self.x_tf:self.x[:,None], self.t_tf:self.t[:,None], self.u_tf:self.u}
         
+        self.optimizer.minimize(self.sess,
+                                feed_dict = tf_dict,
+                                fetches = [self.loss, self.lambda1],
+                                loss_callback = self.callback)
+        
         losses = []
+        ulosses = []
+        flosses = []
         for it in range(nItr):
             
             #self.sess.run(self.train_op_Adam, tf_dict)
             
             self.optimizer.minimize(self.sess, feed_dict = tf_dict)
                 
-            loss_value = self.sess.run(self.loss, tf_dict)
-            lambda_1_value = self.sess.run(self.lambda1)
-                
-            print('It: %d, Loss: %.3e, Lambda_1: %.6f' % (it, loss_value, np.exp(lambda_1_value)))
-                              
+                  
             # Print
-            #if it % 100 == 0:
+            if it % 100 == 0:
                 
+                loss_value, uloss_value, floss_value = self.sess.run([self.loss, self.uloss, self.floss], tf_dict)
+                lambda_1_value = self.sess.run(self.lambda1)
+                print('It: %d, Loss: %.3e, Lambda_1: %.6f' % (it, loss_value, np.exp(lambda_1_value)))
                 #losses = np.append(losses, loss_value)
+                #ulosses = np.append(ulosses, uloss_value)
+                #losses = np.append(flosses, floss_value)
+        '''
+        plt.plot(losses)
+        plt.savefig('losses.png')
+        plt.close()
         
+        plt.plot(ulosses)
+        plt.savefig('ulosses.png')
+        plt.close()
         
-        pdb.set_trace()
+        plt.plot(flosses)
+        plt.savefig('plosses.png')
+        plt.close()
+        '''
+        #pdb.set_trace()
         #self.optimizer.minimize(self.sess,
                                 #feed_dict = tf_dict,
                                 #fetches = [self.loss, self.lambda1],
@@ -190,19 +216,17 @@ if __name__ == "__main__":
     # ----
 
     
-    layers = [2, 40, 40, 40, 40, 40, 40, 40, 40, 1]
-    #layers = [2, 20, 20, 20, 20, 20, 20, 20, 20, 1]
+    #layers = [2, 40, 40, 40, 40, 40, 40, 40, 40, 1]
+    layers = [2, 20, 20, 20, 20, 20, 20, 20, 20, 1]
     
     # Dataset ----
     myData = burgersdata.Data(pdeMode='burgers', dataMode=dataMode)
     allx, partx, allt, testU, testNU, idx = myData.traintest()
-    #pdb.set_trace()
     # select nu & u
     nu = testNU[index]
     exactU = testU[index]
     
     X, T = np.meshgrid(partx,allt) #[100,256]
-    #X, T = np.meshgrid(allx,allt) #[100,256]
     
     X_star = np.hstack((X.flatten()[:,None], T.flatten()[:,None])) # [xDim*t,2]
     u_star = exactU.flatten()[:,None] # [xDim*t,1]
@@ -211,17 +235,14 @@ if __name__ == "__main__":
     lb = X_star.min(0)
     ub = X_star.max(0)       
     # ----
-    #pdb.set_trace()
     # train ----
     model = PhysicsInformedNN(X_star, u_star, layers, lb, ub)
     model.train(nItr=nItr)
     # -----
     
-    # predict ----
-    u_pred, f_pred = model.predict(X_star)
-            
-    error_u = np.linalg.norm(u_star-u_pred,2)/np.linalg.norm(u_star,2)
-    
+    # predict(※trainで直接テスト) ----
+    #u_pred, f_pred = model.predict(X_star)
+
     lambda_value = model.sess.run(model.lambda1)
     lambda_value = np.exp(lambda_value)
     
@@ -230,6 +251,6 @@ if __name__ == "__main__":
     
     print('Exact lambda: %.3f, Predict lambda: %f' %(nu, lambda_value))
     print('TestPLoss: %.10f' %(mse_lambda))
-    print('Error u: %e' % (error_u))
+    #print('Error u: %e' % (error_u))
     print('Error l1: %.5f%%' % (error_lambda))                          
     # ----
