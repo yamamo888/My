@@ -207,7 +207,8 @@ class Data:
             pickle.dump(V, fp, protocol=4)
             pickle.dump(NU, fp, protocol=4)
     # ----
-
+    
+    # ----
     def concatdata(self):
 
         data = glob.glob(os.path.join('model','burgers2d_small','*pkl'))
@@ -244,8 +245,7 @@ class Data:
             pickle.dump(us, fp, protocol=4)
             pickle.dump(vs, fp, protocol=4)
             pickle.dump(nus, fp, protocol=4)
-
-
+    # ----
     
     # ----
     def maketraintest(self, name):
@@ -304,17 +304,54 @@ class Data:
             pickle.dump(idy, fp, protocol=4)
     # ----
 
+    # ----    
+    def traintest(self):
+        
+        # train data
+        with open(os.path.join(self.modelPath, self.pdeMode, f'SparsetrainXYTUVNU_{self.dataMode}.pkl'), 'rb') as fp:
+            self.x = pickle.load(fp) #[xdim,]
+            self.y = pickle.load(fp) #[ydim,]
+            self.t = pickle.load(fp) #[tdim,]
+            self.trainU = pickle.load(fp) #[data,x,y,t]
+            self.trainV = pickle.load(fp) #[data,x,y,t]
+            self.trainNU = pickle.load(fp) #[data]
+            self.idx = pickle.load(fp) #[xDim,]
+            self.idy = pickle.load(fp) #[yDim,]
+            
+        
+        partx = self.x[self.idx]
+        party = self.y[self.idy]
+        
+        # test data (x,y,t,idx,idyは同じ)
+        with open(os.path.join(self.modelPath, self.pdeMode, f'SparsetestXYTUVNU_{self.dataMode}.pkl'), 'rb') as fp:
+            _ = pickle.load(fp)
+            _ = pickle.load(fp)
+            _ = pickle.load(fp)
+            testU = pickle.load(fp)
+            testV = pickle.load(fp)
+            testNU = pickle.load(fp)
+            _ = pickle.load(fp)
+            _ = pickle.load(fp)
+        
+        return self.x, self.y, self.t, partx, party, testU, testV, testNU, self.idx, self.idy
+    # ----
+    
     # ----
     def miniBatch(self, index):
         
-        batchX = self.train
-
+        batchU = self.trainU[index]
+        batchV = self.trainV[index]
+        batchNU = self.trainNU[index]
+        
+        return batchU, batchV, batchNU
+    # ----
+     
 
    
 #name = 'small'
 #name = 'middle'
-name = 'large'
-myData = Data(pdeMode='burgers2d', dataMode=name)
+#name = 'large'
+#myData = Data(pdeMode='burgers2d', dataMode=name)
 
 #myData.burgers2D()
 
@@ -378,5 +415,5 @@ with open(os.path.join(myData.modelPath, myData.pdeMode, f'SparseXYTUVNU_{name}_
 #----
 '''
 #[3]
-myData.maketraintest(name=name)
+#myData.maketraintest(name=name)
 
