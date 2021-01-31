@@ -183,7 +183,7 @@ class ParamNN:
         testPeriod = 5
         savemodelPeriod = 100
         batchCnt = 0
-        nTrain = 880
+        nTrain = 876
         batchRandInd = np.random.permutation(nTrain)
         # for random t index -> select 1/201
         tRandInd = np.random.permutation(self.tDim)
@@ -193,8 +193,10 @@ class ParamNN:
         # Start training
         trPL1,trPL2,tePL1,tePL2 = [],[],[],[]
         flag = False
-        for itr in range(nItr):
+        
+        for epoch in range(nItr):
             
+            trainLosses1,trainLosses2 = 0,0
             # index
             sInd = self.nBatch * batchCnt
             eInd = sInd + self.nBatch
@@ -206,13 +208,18 @@ class ParamNN:
             
             # [batch,2]
             batchParam = np.vstack([batchLambda1, batchNU]).T
-            
-
-            feed_dict = {self.y:batchParam, self.inobsu:batchU[:,:,:,1,None], self.inobsv:batchV[:,:,:,np.newaxis]}
-            
-            _, trainParam, trainLoss1, trainLoss1, trainLoss2 =\
-            self.sess.run([self.opt, self.predy, self.loss1, self.loss2], feed_dict)
-            
+           
+            for itr in range(self.tDim):
+                
+                feed_dict = {self.y:batchParam, self.inobsu:batchU[:,:,:,tRandInd[itr],None], self.inobsv:batchV[:,:,:,tRandInd[itr],None]}
+                
+                _, trainParam, trainLoss1, trainLoss2 =\
+                self.sess.run([self.opt, self.predy, self.loss1, self.loss2], feed_dict)
+                
+                # loss^n_t1 + loss^n_t2 + ...
+                trainLosses1 += trainLoss1
+                trainLosses2 += trainLoss2
+                
             if eInd + self.nBatch > nTrain:
                 batchCnt = 0
                 batchRandInd = np.random.permutation(nTrain)
@@ -222,19 +229,23 @@ class ParamNN:
             # Test & Varidation
             if itr % testPeriod == 0:
 
-                self.test(itr=itr)
+                self.test(epoch=epoch, tRandInd=tRandInd)
                 
-                print('----')
-                print('itr: %d, trainLoss1:%f, trainLoss2:%f' % (itr, trainLoss1, trainLoss2))
+                trainLosses1 = trainLosses1 / self.tDim
+                trainLosses2 = trainLosses2 / self.tDim
                 
                 # param loss
-                trPL1 = np.append(trPL1,trainLoss1)
-                trPL2 = np.append(trPL2,trainLoss2)
+                trPL1 = np.append(trPL1,trainLosses1)
+                trPL2 = np.append(trPL2,trainLosses2)
                 
-                tePL1 = np.append(tePL1,self.testLoss1)
-                tePL1 = np.append(tePL2,self.testLoss2)
+                tePL1 = np.append(tePL1,self.testLosses1)
+                tePL1 = np.append(tePL2,self.testLosses2)
+                
+                print('----')
+                print('epoch: %d, trainLoss1:%f, trainLoss2:%f' % (epoch, trainLosses1, trainLosses2))
                 
                 
+                '''
                 if not flag:
                     trP = trainParam
                     teP = self.testParam
@@ -242,11 +253,11 @@ class ParamNN:
                 else:
                     trP = np.hstack([trP, trainParam])
                     teP = np.hstack([teP, self.testParam])
-
+                '''
             if itr % savemodelPeriod == 0:
                 # Save model
-                self.saver.save(self.sess, os.path.join('model', f'{dataMode}burgers', f'first_{dataMode}'), global_step=itr)
-        pdb.set_trace()
+                self.saver.save(self.sess, os.path.join('model', f'{dataMode}burgers2d', f'first_{dataMode}'), global_step=itr)
+    
         
         paramlosses1 = [trPL1,tePL1]
         paramlosses2 = [trPL2,tePL2]
@@ -255,18 +266,30 @@ class ParamNN:
     # ----
     
     # ----
-    def test(self,itr=0):
+    # all t
+    def test(self, epoch=0, tRandInd=0):
         
-        testParam = np.concatenate([np.array([1.0])[None], self.testNU[None]], 0)
+        testLambda1 = np.repeat(np.array([1.0]), self.testNU.shape[0])
+        testParam = np.vstack([testLambda1, self.testNU]).T
+        pdb.set_trace()
         
-        feed_dict={self.y:testParam, self.inobsu:self.testU, self.inobsv:self.testV}    
-         
-        self.testParam, self.testLoss1, self.testLoss2 =\
-        self.sess.run([self.predy_test, self.loss1_test, self.loss2_test], feed_dict)
+        testLosses1,testLosses2 = 0,0
         
-        print('itr: %d, testLoss1:%f, testLoss2:%f' % (itr, self.testLoss1, self.testLoss2))
+        for itr in range(self.tDim):
+        
+            feed_dict={self.y:testParam, self.inobsu:self.testU[:,:,:,tRandInd[itr],None], self.inobsv:self.testV[:,:,:,tRandInd[itr],None]}    
+             
+            testParam, testLoss1, testLoss2 =\
+            self.sess.run([self.predy_test, self.loss1_test, self.loss2_test], feed_dict)
+            
+            testLosses1 += testLoss1
+            testLosses2 += testLoss2
+        
+        self.testLosses1 = testLosses1 / self.tDim
+        self.testLosses2 = testLosses2 / self.tDim
+        
+        print('epoch: %d, testLoss1:%f, testLoss2:%f' % (epoch, self.testLossse1, self.testLosses2))
     # ----
-    
      
 if __name__ == "__main__":
     
