@@ -14,8 +14,8 @@ import pdb
 
 import matplotlib.pylab as plt
 
-import burgers2ddata
-import burgers2dplot
+import burgers2Ddata
+import burgers2Dplot
 
 
 class ParamNN:
@@ -33,36 +33,36 @@ class ParamNN:
             self.xDim = 5
             self.yDim = 5
             
-        tDim = 201
+        self.tDim = 201
         self.nBatch = nBatch
         self.trialID = trialID
-        self.yDim = 2
+        self.lambdaDim = 2
         # ----
         
         # for plot
-        self.myPlot = burgers2dplot.Plot(dataMode=dataMode, trialID=trialID)
+        self.myPlot = burgers2Dplot.Plot(dataMode=dataMode, trialID=trialID)
     
         # Dataset ----
-        self.myData = burgers2ddata.Data(pdeMode='burgers2d', dataMode=dataMode)
-        
+        self.myData = burgers2Ddata.Data(pdeMode='burgers2d', dataMode=dataMode)
+        # all x,y[51,1] t[201,1]  & x,y,t[xdim or ydim,1] u,v[data,xdim,ydim,tdim] nu[data,]
         self.alltestX, self.alltestY, self.testT, self.testX, self.testY, self.testU, self.testV, self.testNU, self.idx, self.idy = self.myData.traintest()
-        pdb.set_trace()
+        #pdb.set_trace()
         # ----        
 
         # Placeholder ----
-        # input u
-        self.inobsu = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDim, self.yDim, tDim, 1])
-        self.inobsv = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDim, self.yDim, tDim, 1])
+        # input u, v (one time) [xdim, ydim, t1]
+        self.inobsu = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDim, self.yDim, 1])
+        self.inobsv = tf.compat.v1.placeholder(tf.float32,shape=[None, self.xDim, self.yDim, 1])
         self.inobs = tf.concat([self.inobsu, self.inobsv], -1)
         # output param b
-        self.y = tf.compat.v1.placeholder(tf.float32,shape=[None, self.yDim])
+        self.y = tf.compat.v1.placeholder(tf.float32,shape=[None, self.lambdaDim])
         # ----
         
         # neural network ----
         self.predy = self.lambdaNN(self.inobs, rate=rateTrain)
         self.predy_test = self.lambdaNN(self.inobs, reuse=True)
         # ----
-
+        
         # loss ----
         # param loss
         self.loss1 = tf.reduce_mean(tf.square(self.y[:,0] - self.predy[:,0]))
@@ -71,6 +71,8 @@ class ParamNN:
         self.loss1_test = tf.reduce_mean(tf.square(self.y[:,0] - self.predy_test[:,0]))
         self.loss2_test = tf.reduce_mean(tf.square(self.y[:,1] - self.predy_test[:,1]))
         # ----
+        
+        self.loss = self.loss1 + self.loss2
 
         # Optimizer ----
         self.opt = tf.compat.v1.train.AdamOptimizer(lr).minimize(self.loss)
@@ -129,8 +131,11 @@ class ParamNN:
             if reuse:
                 scope.reuse_variables()
             #pdb.set_trace() 
+
+            indim = x.get_shape().as_list()[-1]
+
             # 1st conv layer
-            w1 = self.weight_variable('w1', [3,3,1,nHidden1], trainable=trainable)
+            w1 = self.weight_variable('w1', [3,3,indim,nHidden1], trainable=trainable)
             b1 = self.bias_variable('b1', [nHidden1], trainable=trainable)
             conv1 = self.conv2d(x, w1, b1, strides=1)
         
@@ -163,8 +168,8 @@ class ParamNN:
             fc1 = self.fc_relu(reshape_conv4,w5,b5)
             
             # 2nd full-layer
-            w6 = self.weight_variable('w6', [nHidden5,self.yDim], trainable=trainable)
-            b6 = self.bias_variable('b6', [self.yDim], trainable=trainable)
+            w6 = self.weight_variable('w6', [nHidden5,self.lambdaDim], trainable=trainable)
+            b6 = self.bias_variable('b6', [self.lambdaDim], trainable=trainable)
            
             y = self.fc(fc1,w6,b6)
             
@@ -180,6 +185,9 @@ class ParamNN:
         batchCnt = 0
         nTrain = 880
         batchRandInd = np.random.permutation(nTrain)
+        # for random t index -> select 1/201
+        tRandInd = np.random.permutation(self.tDim)
+        lambda1 = np.array([1.0])
         # ----
         
         # Start training
@@ -192,13 +200,15 @@ class ParamNN:
             eInd = sInd + self.nBatch
             index = batchRandInd[sInd:eInd]
             
-            # Get train data           
+            # Get train data       
             batchU, batchV, batchNU = self.myData.miniBatch(index)
+            batchLambda1 = np.repeat(lambda1, batchNU.shape[0])
             
-            batchParam = np.concatenate([np.array([1.0])[None], batchNU[None]])
+            # [batch,2]
+            batchParam = np.vstack([batchLambda1, batchNU]).T
             
-            # y: prameter b
-            feed_dict = {self.y:batchParam, self.inobsu:batchU[:,:,:,np.newaxis], self.inobsv:batchV[:,:,:,np.newaxis]}
+
+            feed_dict = {self.y:batchParam, self.inobsu:batchU[:,:,:,1,None], self.inobsv:batchV[:,:,:,np.newaxis]}
             
             _, trainParam, trainLoss1, trainLoss1, trainLoss2 =\
             self.sess.run([self.opt, self.predy, self.loss1, self.loss2], feed_dict)
